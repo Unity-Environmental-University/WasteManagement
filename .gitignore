@@ -1,3 +1,15 @@
+# Meta Files aren't Needed Here
+*.meta
+*.meta.*
+
+# Ignore Setup Scripts
+Git-Setup.bat
+Git-Setup.sh
+
+# Un-Needed Files
+Scripts.asmdef
+/package.json
+
 # OS
 .DS_Store
 Thumbs.db
@@ -7,20 +19,15 @@ Desktop.ini
 .idea/
 .vs/
 .vscode/
-*.user
-*.userprefs
-*.DotSettings
 
 # Build artifacts
 *.dll
 *.pdb
 *.mdb
 
-# Unity
-*.private
-*.private.meta
-
 # Misc
 *.tmp
+*.private
+*.private.*
 .qodo/
 .utmp/
