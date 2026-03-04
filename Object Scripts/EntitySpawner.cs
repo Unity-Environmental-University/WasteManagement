@@ -7,10 +7,10 @@ namespace _project.Scripts.Object_Scripts
     {
         [SerializeField] private GameObject spawnerObject;
         [SerializeField] private Transform spawnPoint;
-        [SerializeField] private WaypointPath path;
+        [SerializeField] private WaypointPath[] paths;
 
         public float spawnInterval;
-        
+
         private void Awake()
         {
             spawnPoint = spawnPoint?.transform;
@@ -34,8 +34,8 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!spawnerObject) return;
             var obj = Instantiate(spawnableObject, spawnPoint.position, spawnPoint.rotation);
-            if (obj.TryGetComponent<IssueObject>(out var issue))
-                issue.SetPath(path);
+            if (obj.TryGetComponent<IssueObject>(out var issue) && paths.Length > 0)
+                issue.SetPath(paths[Random.Range(0, paths.Length)]);
         }
     }
 }
