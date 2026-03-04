@@ -1,0 +1,26 @@
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vs/
+.vscode/
+*.user
+*.userprefs
+*.DotSettings
+
+# Build artifacts
+*.dll
+*.pdb
+*.mdb
+
+# Unity
+*.private
+*.private.meta
+
+# Misc
+*.tmp
+.qodo/
+.utmp/
