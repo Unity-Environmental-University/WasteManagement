@@ -13,15 +13,9 @@ namespace _project.Scripts.Card_Core
     public class GameMaster : MonoBehaviour
     {
         [Header("Major Game Components")]
-        //public DeckManager deckManager;
+        // public DeckManager deckManager;
         // public ScoreManager scoreManager;
         public TurnController turnController;
-
-        // [Header("UI Text")]
-        // public TextMeshProUGUI resourceText;
-        // public TextMeshProUGUI turnText;
-        // public TextMeshProUGUI waveText;
-        //
 
         [Header("Debug")] public bool debugging;
 
