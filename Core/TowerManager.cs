@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace _project.Scripts.Card_Core
+namespace _project.Scripts.Core
 {
     public class TowerManager : MonoBehaviour
     {

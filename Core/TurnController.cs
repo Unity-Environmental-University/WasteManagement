@@ -1,8 +1,7 @@
-using System;
 using System.Collections;
 using UnityEngine;
 
-namespace _project.Scripts.Card_Core
+namespace _project.Scripts.Core
 {
 
     public class TurnController : MonoBehaviour

@@ -1,7 +1,7 @@
 using System.Linq;
 using UnityEngine;
 
-namespace _project.Scripts.Card_Core
+namespace _project.Scripts.Core
 {
     public class TowerController : MonoBehaviour
     {

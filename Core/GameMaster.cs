@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using _project.Scripts.UI;
 using UnityEngine;
 
-namespace _project.Scripts.Card_Core
+namespace _project.Scripts.Core
 {
     /// <summary>
     ///     Central coordinator for the card game system. Manages integration between
