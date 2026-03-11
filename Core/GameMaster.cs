@@ -18,6 +18,9 @@ namespace _project.Scripts.Core
         
         [Header("Debug")] public bool debugging;
 
+        public ICard SelectedCard;
+        
+
         public static GameMaster Instance { get; private set; }
 
         private void Awake()
