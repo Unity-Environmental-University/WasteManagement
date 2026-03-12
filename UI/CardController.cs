@@ -7,8 +7,6 @@ namespace _project.Scripts.UI
 {
     public class CardController : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
-        public ICard Card;
-        
         private GameMaster _gm;
         private RectTransform _rectTransform;
         private Vector2 _initAnchoredPosition;
@@ -29,13 +27,21 @@ namespace _project.Scripts.UI
 
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (_gm.SelectedCard == this) return;
+
             _rectTransform.DOLocalMoveY(_initAnchoredPosition.y, 0.1f);
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (_gm.SelectedCard is not null) _gm.SelectedCard = null;
-            _gm.SelectedCard = Card;
+            if (_gm.SelectedCard == this)
+            {
+                _gm.SelectedCard = null;
+                _rectTransform.DOLocalMoveY(_initAnchoredPosition.y, 0.1f);
+                return;
+            }
+
+            _gm.SelectedCard = this;
         }
     }
 }
