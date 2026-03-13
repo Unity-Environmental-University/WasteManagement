@@ -62,4 +62,14 @@ namespace _project.Scripts.Core
     }
 
     #endregion
+    
+    //TODO Delete Me
+    public class TestCard : ICard
+    {
+        public string Name => "Test Card";
+        public ICard Clone()
+        {
+            return new TestCard();
+        }
+    }
 }

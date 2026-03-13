@@ -12,11 +12,21 @@ namespace _project.Scripts.UI
         private Vector2 _initAnchoredPosition;
         private const float JumpHeightFraction = 0.8f;
 
+        public ICard interFaceCard;
+
         private void Start()
         {
             _gm = GameMaster.Instance;
             _rectTransform = GetComponent<RectTransform>();
             _initAnchoredPosition = _rectTransform.anchoredPosition;
+            
+            //TODO Delete Me
+            AssignCard(new TestCard());
+        }
+
+        public void AssignCard(ICard card)
+        {
+            interFaceCard = card;
         }
 
         public void OnPointerEnter(PointerEventData eventData)

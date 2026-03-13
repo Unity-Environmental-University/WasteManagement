@@ -9,17 +9,21 @@ namespace _project.Scripts.Core
         
         public ICard[] GetCurrentUpgrades() => _upgrades;
         
-        public ICard[] AddUpgrade(ICard upgrade)
+        public void AddUpgrade(ICard upgrade)
         {
-            if (_upgrades == null || _upgrades.Contains(upgrade) || _upgrades.Length >= 6)
-                return _upgrades;
+            if (_upgrades == null || _upgrades.Contains(upgrade) || _upgrades.Count(u => u != null) >= 6)
+                return;
             for (var i = 0; i < _upgrades.Length; i++)
             {
                 if (_upgrades[i] != null) continue;
                 _upgrades[i] = upgrade;
-                return _upgrades;
+
+                //Todo move the card back down
+                GameMaster.Instance.SelectedCard = null;
+                Debug.Log("Adding upgrade: " + upgrade);
+                Debug.Log("Upgrades: " + _upgrades.Length);
+                return;
             }
-            return _upgrades;
         }
         
         public bool ValidateUpgrades()
