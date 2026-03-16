@@ -15,6 +15,7 @@ namespace _project.Scripts.Core
         public TurnController turnController;
         public TowerManager towerManager;
         public InterfaceManager interfaceManager;
+        public DeckManager deckManager;
         
         [Header("Debug")] public bool debugging;
 
@@ -36,6 +37,7 @@ namespace _project.Scripts.Core
             if (!turnController) turnController = GetComponent<TurnController>();
             if (!towerManager) towerManager = GetComponent<TowerManager>();
             if (!interfaceManager) interfaceManager = GetComponentInChildren<InterfaceManager>();
+            if (!deckManager) deckManager = GetComponentInChildren<DeckManager>();
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));

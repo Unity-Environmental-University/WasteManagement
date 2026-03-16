@@ -1,16 +1,22 @@
-using System.Collections;
+using System;
 using UnityEngine;
 
 namespace _project.Scripts.Core
 {
+    public enum GamePhase
+    {
+        Card,
+        Tower
+    }
 
     public class TurnController : MonoBehaviour
     {
-        private static TurnController Instance { get; set; }
         private GameMaster _gm = GameMaster.Instance;
         
         [Header("State")] public int currentTurn;
-        [Header("State")] public string currentPhase;
+        [Header("State")] public GamePhase currentPhase;
+        
+        private static TurnController Instance { get; set; }
 
         private void Awake()
         {
@@ -28,46 +34,60 @@ namespace _project.Scripts.Core
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
         }
-
-        private void Update()
-        {
-        }
-
+        
         /// <summary>
         ///     This should initialize game variables and set up the game state for a new game/run.
         /// </summary>
         private void GameStartSequence()
         {
             if (_gm.debugging) Debug.Log("Game Sequence Started!");
-            
+            EnterCardSequence();
         }
 
-        private void OnDestroy()
+        private void EnterCardSequence()
         {
+            //TODO draw cards with DeckManager 
+            currentPhase = GamePhase.Card;
+            Debug.Log("Entering Card Sequence!");
+            throw new NotImplementedException();
         }
 
-        public IEnumerator BeginWaveSequence()
+        public void EndPhase(GamePhase phase)
         {
-            return null;
+            switch (phase)
+            {
+                case GamePhase.Card:
+                    BeginWaveSequence();
+                    break;
+                case GamePhase.Tower:
+                    EnterCardSequence();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(phase), phase, null);
+            }
         }
 
-        /// <summary>
-        ///     Called when the player ends their turn (e.g. pressing an End Turn button).
-        /// </summary>
-        public void EndTurn()
+        private void BeginWaveSequence()
         {
+            currentPhase = GamePhase.Tower;
+            Debug.Log("Beginning Wave!");
+            //TODO - Hide Cards, start sending waves
+            throw new NotImplementedException();
         }
 
         private void PrepareNextWave(int score)
         {
+            throw new NotImplementedException();
         }
 
         private void WinGame()
         {
+            throw new NotImplementedException();
         }
 
         private void GameLost()
         {
+            throw new NotImplementedException();
         }
     }
 }
