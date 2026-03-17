@@ -31,3 +31,9 @@ Desktop.ini
 *.private.*
 .qodo/
 .utmp/
+
+# Temp React project
+tmp/node_modules/
+tmp/dist/
+tmp/.env
+tmp/.env.local
