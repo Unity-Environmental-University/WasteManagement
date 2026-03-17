@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Events;
 
 namespace _project.Scripts.Core
 {
@@ -16,7 +17,7 @@ namespace _project.Scripts.Core
         [Header("State")] public int currentTurn;
         [Header("State")] public GamePhase currentPhase;
         
-        private static TurnController Instance { get; set; }
+        public static TurnController Instance { get; private set; }
 
         private void Awake()
         {
@@ -52,9 +53,9 @@ namespace _project.Scripts.Core
             throw new NotImplementedException();
         }
 
-        public void EndPhase(GamePhase phase)
+        public void EndPhase()
         {
-            switch (phase)
+            switch (currentPhase)
             {
                 case GamePhase.Card:
                     BeginWaveSequence();
@@ -63,7 +64,7 @@ namespace _project.Scripts.Core
                     EnterCardSequence();
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(phase), phase, null);
+                    throw new ArgumentOutOfRangeException(nameof(currentPhase), currentPhase, null);
             }
         }
 
