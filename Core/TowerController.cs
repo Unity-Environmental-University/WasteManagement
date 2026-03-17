@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using _project.Scripts.Object_Scripts;
 using UnityEngine;
 
 namespace _project.Scripts.Core
@@ -6,8 +8,14 @@ namespace _project.Scripts.Core
     public class TowerController : MonoBehaviour
     {
         private readonly ICard[] _upgrades = new ICard[6];
-        
+        private const float BaseHealth = 100f;
+        private const float BaseOrganicProcessPower = 1f;
+        private const float BaseChemicalProcessPower = 1f;
+
         public ICard[] GetCurrentUpgrades() => _upgrades;
+        public float maintenanceHealth = BaseHealth;
+        public float organicProcessPower = BaseOrganicProcessPower;
+        public float chemicalProcessPower = BaseChemicalProcessPower;
         
         public void AddUpgrade(ICard upgrade)
         {
@@ -22,13 +30,43 @@ namespace _project.Scripts.Core
                 GameMaster.Instance.selectedCard = null;
                 Debug.Log("Adding upgrade: " + upgrade);
                 Debug.Log("Upgrades: " + _upgrades.Length);
+                Debug.Log("Are Upgrades Valid: " + ValidateUpgrades());
                 return;
             }
         }
-        
-        public bool ValidateUpgrades()
+
+        private bool ValidateUpgrades()
         {
             return _upgrades.Length <= 5;
+        }
+
+        // TODO: make this consider the type of issue and the tower's upgrades to determine the maintenance cost
+        public void ProcessLoad(IssueObject issueObject)
+        {
+            var iType = issueObject.GetIssueType();
+            var maintenanceDmg = GetProcessPowerByType(iType);
+
+            maintenanceHealth -= maintenanceDmg;
+            maintenanceHealth = Mathf.Clamp(maintenanceHealth, 0f, BaseHealth);
+            if (maintenanceHealth <= 0f)
+            {
+                DeactivateTower();
+            }
+        }
+
+        private float GetProcessPowerByType(IssueType type)
+        {
+            return type switch
+            {
+                IssueType.Organic => organicProcessPower,
+                IssueType.Chemical => chemicalProcessPower,
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+            };
+        }
+
+        private void DeactivateTower()
+        {
+            throw new NotImplementedException();
         }
     }
 }

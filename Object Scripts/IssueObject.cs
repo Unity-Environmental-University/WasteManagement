@@ -3,13 +3,23 @@ using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
+    public enum IssueType
+    {
+        Organic,
+        Chemical
+    }
+    
     public class IssueObject : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 2f;
-        private WaypointPath _path;
-
+        [SerializeField] private IssueType type;
+        [SerializeField] private WaypointPath path;
+        
+        private const float BaseProcessCost = 1f;
         private Transform _startPoint;
         private int _waypointIndex;
+
+        public float processCost = BaseProcessCost;
 
         private void Awake()
         {
@@ -19,23 +29,34 @@ namespace _project.Scripts.Object_Scripts
 
         private void Update()
         {
-            if (!_path || _waypointIndex >= _path.Count)
+            if (!path || _waypointIndex >= path.Count)
             {
                 ReachEnd();
                 return;
             }
 
-            var target = _path.GetPosition(_waypointIndex);
+            var target = path.GetPosition(_waypointIndex);
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
 
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)
                 _waypointIndex++;
         }
 
-        public void SetPath(WaypointPath path)
+        public void AssignType()
         {
-            _path = path;
+            var rand = UnityEngine.Random.Range(0, 2);
+
+            type = rand switch
+            {
+                0 => IssueType.Organic,
+                1 => IssueType.Chemical,
+                _ => IssueType.Chemical
+            };
         }
+        
+        public IssueType GetIssueType() => type;
+
+        public void SetPath(WaypointPath p) => path = p;
 
         public static event Action OnReachedEnd;
 
