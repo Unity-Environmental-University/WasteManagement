@@ -41,6 +41,10 @@ namespace _project.Scripts.Core
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));
+            if (!towerManager) missing.Add(nameof(towerManager));
+            if (!interfaceManager) missing.Add(nameof(interfaceManager));
+            if (!deckManager) missing.Add(nameof(deckManager));
+
             if (missing.Count > 0)
                 Debug.LogWarning($"[CardGameMaster] Missing components: {string.Join(", ", missing)}");
         }
