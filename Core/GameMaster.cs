@@ -19,7 +19,7 @@ namespace _project.Scripts.Core
         
         [Header("Debug")] public bool debugging;
 
-        public CardController SelectedCard;
+        public CardController selectedCard;
         
 
         public static GameMaster Instance { get; private set; }

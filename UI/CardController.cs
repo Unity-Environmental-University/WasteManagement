@@ -37,21 +37,21 @@ namespace _project.Scripts.UI
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (_gm.SelectedCard == this) return;
+            if (_gm.selectedCard == this) return;
 
             _rectTransform.DOLocalMoveY(_initAnchoredPosition.y, 0.1f);
         }
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (_gm.SelectedCard == this)
+            if (_gm.selectedCard == this)
             {
-                _gm.SelectedCard = null;
+                _gm.selectedCard = null;
                 _rectTransform.DOLocalMoveY(_initAnchoredPosition.y, 0.1f);
                 return;
             }
 
-            _gm.SelectedCard = this;
+            _gm.selectedCard = this;
         }
     }
 }

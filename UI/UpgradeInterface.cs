@@ -28,7 +28,7 @@ namespace _project.Scripts.UI
         
         public void OnPointerClick(PointerEventData eventData)
         {
-            towerController.AddUpgrade(GameMaster.Instance.SelectedCard.interFaceCard);
+            towerController.AddUpgrade(GameMaster.Instance.selectedCard.interFaceCard);
         }
     }
 }

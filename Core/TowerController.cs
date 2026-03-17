@@ -19,7 +19,7 @@ namespace _project.Scripts.Core
                 _upgrades[i] = upgrade;
 
                 //Todo move the card back down
-                GameMaster.Instance.SelectedCard = null;
+                GameMaster.Instance.selectedCard = null;
                 Debug.Log("Adding upgrade: " + upgrade);
                 Debug.Log("Upgrades: " + _upgrades.Length);
                 return;
