@@ -18,7 +18,16 @@ namespace _project.Scripts.Object_Scripts
 
         private void Start()
         {
+        }
+
+        public void StartSpawner()
+        {
             StartCoroutine(SpawnTimer(spawnInterval));
+        }
+
+        public void StopSpawner()
+        {
+            StopCoroutine(SpawnTimer(spawnInterval));
         }
 
         private IEnumerator SpawnTimer(float interval)

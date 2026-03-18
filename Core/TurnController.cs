@@ -73,6 +73,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Tower;
             Debug.Log("Beginning Wave!");
             //TODO - Hide Cards, start sending waves
+            //TODO make list of spawners in GameMaster and call to tell them to start spawning.
             throw new NotImplementedException();
         }
 

@@ -1,4 +1,3 @@
-using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.UI;
 

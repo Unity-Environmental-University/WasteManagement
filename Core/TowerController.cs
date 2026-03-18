@@ -37,7 +37,7 @@ namespace _project.Scripts.Core
 
         private bool ValidateUpgrades()
         {
-            return _upgrades.Length <= 5;
+            return _upgrades.Count(u => u != null) <= 5;
         }
 
         // TODO: make this consider the type of issue and the tower's upgrades to determine the maintenance cost
@@ -64,9 +64,10 @@ namespace _project.Scripts.Core
             };
         }
 
+        //TODO
         private void DeactivateTower()
         {
-            throw new NotImplementedException();
+            Debug.LogWarning("Tower Deactivated!");
         }
     }
 }
