@@ -28,6 +28,7 @@ namespace _project.Scripts.UI
         
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (GameMaster.Instance.selectedCard is null) return;
             towerController.AddUpgrade(GameMaster.Instance.selectedCard.interFaceCard);
         }
     }

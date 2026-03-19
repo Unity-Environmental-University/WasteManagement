@@ -8,7 +8,8 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private GameObject spawnerObject;
         [SerializeField] private Transform spawnPoint;
         [SerializeField] private WaypointPath[] paths;
-
+        private Coroutine _spawnCoroutine;
+        
         public float spawnInterval;
 
         private void Awake()
@@ -22,12 +23,13 @@ namespace _project.Scripts.Object_Scripts
 
         public void StartSpawner()
         {
-            StartCoroutine(SpawnTimer(spawnInterval));
+            _spawnCoroutine = StartCoroutine(SpawnTimer(spawnInterval));
         }
 
         public void StopSpawner()
         {
-            StopCoroutine(SpawnTimer(spawnInterval));
+            if (_spawnCoroutine != null)
+                StopCoroutine(_spawnCoroutine);
         }
 
         private IEnumerator SpawnTimer(float interval)

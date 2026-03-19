@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
+using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.Events;
+using Debug = UnityEngine.Debug;
 
 namespace _project.Scripts.Core
 {
@@ -12,12 +15,12 @@ namespace _project.Scripts.Core
 
     public class TurnController : MonoBehaviour
     {
+        public static TurnController Instance { get; private set; }
         private GameMaster _gm = GameMaster.Instance;
-        
         [Header("State")] public int currentTurn;
         [Header("State")] public GamePhase currentPhase;
-        
-        public static TurnController Instance { get; private set; }
+
+        public float waveDuration = 60;
 
         private void Awake()
         {
@@ -50,7 +53,6 @@ namespace _project.Scripts.Core
             //TODO draw cards with DeckManager 
             currentPhase = GamePhase.Card;
             Debug.Log("Entering Card Sequence!");
-            throw new NotImplementedException();
         }
 
         public void EndPhase()
@@ -68,13 +70,28 @@ namespace _project.Scripts.Core
             }
         }
 
+        //TODO - Hide Cards
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            foreach (var s in _gm.entitySpawners) s.StartSpawner();
+
+            StartCoroutine(WaveTimer(waveDuration));
+            
             Debug.Log("Beginning Wave!");
-            //TODO - Hide Cards, start sending waves
-            //TODO make list of spawners in GameMaster and call to tell them to start spawning.
-            throw new NotImplementedException();
+        }
+
+        private IEnumerator WaveTimer(float waveDuration)
+        {
+            var wait = new WaitForSeconds(waveDuration);
+            yield return wait;
+            foreach (var spawner in _gm.entitySpawners)
+            {
+                spawner.StopSpawner();
+                Debug.Log("STOPPING WAVE!");
+            }
+
+            yield return null;
         }
 
         private void PrepareNextWave(int score)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
 using UnityEngine;
 
@@ -20,6 +21,7 @@ namespace _project.Scripts.Core
         [Header("Debug")] public bool debugging;
 
         public CardController selectedCard;
+        public List<EntitySpawner> entitySpawners;
         
 
         public static GameMaster Instance { get; private set; }
