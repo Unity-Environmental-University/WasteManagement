@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
-using System.Diagnostics;
 using UnityEngine;
-using UnityEngine.Events;
 using Debug = UnityEngine.Debug;
 
 namespace _project.Scripts.Core
@@ -15,7 +13,7 @@ namespace _project.Scripts.Core
 
     public class TurnController : MonoBehaviour
     {
-        public static TurnController Instance { get; private set; }
+        private static TurnController Instance { get; set; }
         private GameMaster _gm = GameMaster.Instance;
         [Header("State")] public int currentTurn;
         [Header("State")] public GamePhase currentPhase;
@@ -81,9 +79,9 @@ namespace _project.Scripts.Core
             Debug.Log("Beginning Wave!");
         }
 
-        private IEnumerator WaveTimer(float waveDuration)
+        private IEnumerator WaveTimer(float duration)
         {
-            var wait = new WaitForSeconds(waveDuration);
+            var wait = new WaitForSeconds(duration);
             yield return wait;
             foreach (var spawner in _gm.entitySpawners)
             {
