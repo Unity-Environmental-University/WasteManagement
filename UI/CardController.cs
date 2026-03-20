@@ -19,9 +19,6 @@ namespace _project.Scripts.UI
             _gm = GameMaster.Instance;
             _rectTransform = GetComponent<RectTransform>();
             _initAnchoredPosition = _rectTransform.anchoredPosition;
-            
-            //TODO Delete Me
-            AssignCard(new TestCard());
         }
 
         public void AssignCard(ICard card)

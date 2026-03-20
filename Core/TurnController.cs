@@ -48,9 +48,12 @@ namespace _project.Scripts.Core
 
         private void EnterCardSequence()
         {
-            //TODO draw cards with DeckManager 
             currentPhase = GamePhase.Card;
-            Debug.Log("Entering Card Sequence!");
+            
+            _gm.deckManager.DrawNewHand();
+            _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
+            
+            if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
         }
 
         public void EndPhase()
@@ -81,15 +84,15 @@ namespace _project.Scripts.Core
 
         private IEnumerator WaveTimer(float duration)
         {
-            var wait = new WaitForSeconds(duration);
-            yield return wait;
-            foreach (var spawner in _gm.entitySpawners)
-            {
-                spawner.StopSpawner();
-                Debug.Log("STOPPING WAVE!");
-            }
+            yield return new WaitForSeconds(duration);
 
-            yield return null;
+            foreach (var spawner in _gm.entitySpawners)
+                spawner.StopSpawner();
+
+            if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
+
+            currentTurn++;
+            EnterCardSequence();
         }
 
         private void PrepareNextWave(int score)
