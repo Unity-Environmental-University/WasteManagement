@@ -1,4 +1,3 @@
-using System;
 using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -28,8 +27,14 @@ namespace _project.Scripts.UI
         
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (GameMaster.Instance.selectedCard is null) return;
-            towerController.AddUpgrade(GameMaster.Instance.selectedCard.interFaceCard);
+            var gm = GameMaster.Instance;
+            var selected = gm.selectedCard;
+            if (selected is null) return;
+
+            towerController.AddUpgrade(selected.interFaceCard);
+
+            gm.deckManager.DiscardCard(selected.interFaceCard);
+            Destroy(selected.gameObject);
         }
     }
 }

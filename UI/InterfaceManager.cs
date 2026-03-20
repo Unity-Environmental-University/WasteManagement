@@ -16,6 +16,7 @@ namespace _project.Scripts.UI
         [Header("Hand")]
         [SerializeField] private Transform handContainer;
         [SerializeField] private CardController cardPrefab;
+        [SerializeField] private float cardSpacing = 200f;
 
         private void Start()
         {
@@ -25,10 +26,16 @@ namespace _project.Scripts.UI
         public void PopulateHand(IReadOnlyList<ICard> hand)
         {
             ClearHand();
-            foreach (var card in hand)
+            var count = hand.Count;
+            var totalWidth = (count - 1) * cardSpacing;
+
+            for (var i = 0; i < count; i++)
             {
                 var cardController = Instantiate(cardPrefab, handContainer);
-                cardController.AssignCard(card);
+                cardController.AssignCard(hand[i]);
+
+                var rt = cardController.GetComponent<RectTransform>();
+                rt.anchoredPosition = new Vector2(-totalWidth / 2f + i * cardSpacing, 0f);
             }
         }
 
