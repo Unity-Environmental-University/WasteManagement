@@ -40,10 +40,6 @@ namespace _project.Scripts.Core
             }
 
             Instance = this;
-        }
-
-        private void Start()
-        {
             InitializeDeck();
         }
 

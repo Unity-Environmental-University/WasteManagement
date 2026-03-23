@@ -9,10 +9,12 @@ namespace _project.Scripts.UI
     {
         [SerializeField] private Image highlight;
         [SerializeField] private TowerController towerController;
+        [SerializeField] private Image[] upgradeSlots;
 
         private void Start()
         {
             if (towerController == null) Debug.LogError("Tower Controller not found!");
+            RefreshDisplay();
         }
 
         public void OnPointerEnter(PointerEventData eventData)
@@ -24,7 +26,7 @@ namespace _project.Scripts.UI
         {
             highlight.gameObject.SetActive(false);
         }
-        
+
         public void OnPointerClick(PointerEventData eventData)
         {
             var gm = GameMaster.Instance;
@@ -32,9 +34,24 @@ namespace _project.Scripts.UI
             if (selected is null) return;
 
             towerController.AddUpgrade(selected.interFaceCard);
-
             gm.deckManager.DiscardCard(selected.interFaceCard);
             Destroy(selected.gameObject);
+
+            RefreshDisplay();
+        }
+
+        private void RefreshDisplay()
+        {
+            if (upgradeSlots == null || towerController == null) return;
+
+            var upgrades = towerController.GetCurrentUpgrades();
+            for (var i = 0; i < upgradeSlots.Length; i++)
+            {
+                if (upgradeSlots[i] == null) continue;
+                var upgrade = i < upgrades.Length ? upgrades[i] : null;
+                upgradeSlots[i].sprite = upgrade?.CardImage?.sprite;
+                upgradeSlots[i].enabled = upgrade != null;
+            }
         }
     }
 }
