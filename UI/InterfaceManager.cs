@@ -39,7 +39,13 @@ namespace _project.Scripts.UI
             }
         }
 
-        private void ClearHand()
+        public void NextButtonPressed()
+        {
+            if (GameMaster.Instance.turnController.currentPhase == GamePhase.Tower) return;
+            GameMaster.Instance.turnController.EndPhase();
+        }
+
+        public void ClearHand()
         {
             for (var i = handContainer.childCount - 1; i >= 0; i--)
                 Destroy(handContainer.GetChild(i).gameObject);

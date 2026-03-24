@@ -75,6 +75,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            _gm.interfaceManager.ClearHand();
             foreach (var s in _gm.entitySpawners) s.StartSpawner();
 
             StartCoroutine(WaveTimer(waveDuration));
@@ -88,6 +89,7 @@ namespace _project.Scripts.Core
 
             foreach (var spawner in _gm.entitySpawners)
                 spawner.StopSpawner();
+            EndPhase();
 
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 

@@ -19,23 +19,24 @@ namespace _project.Scripts.Core
         public float organicProcessPower = BaseOrganicProcessPower;
         public float chemicalProcessPower = BaseChemicalProcessPower;
         
-        public void AddUpgrade(ICard upgrade)
+        public bool AddUpgrade(ICard upgrade)
         {
             if (_upgrades.Contains(upgrade) || _upgrades.Count(u => u != null) >= 6)
-                return;
+                return false;
             for (var i = 0; i < _upgrades.Length; i++)
             {
                 if (_upgrades[i] != null) continue;
                 _upgrades[i] = upgrade;
-                
+
                 upgrade.ProcessEffect(this);
-                
+
                 GameMaster.Instance.selectedCard = null;
                 Debug.Log("Adding upgrade: " + upgrade);
                 Debug.Log("Upgrades: " + _upgrades.Length);
                 Debug.Log("Are Upgrades Valid: " + ValidateUpgrades());
-                return;
+                return true;
             }
+            return false;
         }
 
         private bool ValidateUpgrades()

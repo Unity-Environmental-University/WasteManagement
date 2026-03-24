@@ -35,9 +35,9 @@ namespace _project.Scripts.UI
         {
             var gm = GameMaster.Instance;
             var selected = gm.selectedCard;
-            if (selected is null) return;
+            if (selected == null) return;
 
-            towerController.AddUpgrade(selected.InterFaceCard);
+            if (!towerController.AddUpgrade(selected.InterFaceCard)) return;
             gm.deckManager.DiscardCard(selected.InterFaceCard);
             Destroy(selected.gameObject);
 
