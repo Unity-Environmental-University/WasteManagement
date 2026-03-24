@@ -13,6 +13,7 @@ namespace _project.Scripts.Core
         Material Material => null;
         
         ICard Clone();
+        public void ProcessEffect(TowerController tC);
         void Selected() { }
     }
 
@@ -30,6 +31,8 @@ namespace _project.Scripts.Core
 
         public ICard Clone() => new FoilCard(Inner.Clone());
         
+        public void ProcessEffect(TowerController tC) => Inner.ProcessEffect(tC);
+
         public void Selected() => Inner.Selected();
     }
 
@@ -70,6 +73,61 @@ namespace _project.Scripts.Core
         public ICard Clone()
         {
             return new TestCard();
+        }
+        public void ProcessEffect(TowerController tC){}
+    }
+
+    public class ChemicalSolvent : ICard
+    {
+        public string Name => "Chemical Solvent";
+        public ICard Clone()
+        {
+            return new ChemicalSolvent();
+        }
+
+        public void ProcessEffect(TowerController tC)
+        {
+            var baseP = tC.chemicalProcessPower;
+            baseP += (float)(baseP * .15);
+            
+            tC.chemicalProcessPower = baseP;
+        }
+    }
+
+    public class UpgradedMeshNet : ICard
+    {
+        public string Name => "Upgraded Mesh Net";
+        public ICard Clone()
+        {
+            return new UpgradedMeshNet();
+        }
+
+        public void ProcessEffect(TowerController tC)
+        {
+            var baseP = tC.organicProcessPower;
+            baseP += (float)(baseP * .15);
+            
+            tC.organicProcessPower = baseP;
+        }
+    }
+
+    public class SuperiorMaintenance : ICard
+    {
+        public string Name => "Superior Maintenance";
+        public ICard Clone()
+        {
+            return new SuperiorMaintenance();
+        }
+
+        public void ProcessEffect(TowerController tC)
+        {
+            var baseRegen = tC.maintenanceRegen;
+            var baseChemPower = tC.chemicalProcessPower;
+            baseRegen += (float)(baseRegen * .35);
+            baseChemPower -= (float)(baseChemPower * .25);
+            
+            tC.maintenanceRegen = baseRegen;
+            tC.chemicalProcessPower = baseChemPower;
         }
     }
 }
