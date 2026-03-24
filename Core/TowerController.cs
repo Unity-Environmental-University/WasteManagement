@@ -27,8 +27,9 @@ namespace _project.Scripts.Core
             {
                 if (_upgrades[i] != null) continue;
                 _upgrades[i] = upgrade;
-
-                //Todo move the card back down
+                
+                upgrade.ProcessEffect(this);
+                
                 GameMaster.Instance.selectedCard = null;
                 Debug.Log("Adding upgrade: " + upgrade);
                 Debug.Log("Upgrades: " + _upgrades.Length);

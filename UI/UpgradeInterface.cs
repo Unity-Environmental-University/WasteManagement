@@ -1,4 +1,5 @@
 using _project.Scripts.Core;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -11,6 +12,7 @@ namespace _project.Scripts.UI
         [SerializeField] private TowerController towerController;
         [SerializeField] private Image[] upgradeSlots;
         [SerializeField] private CardSpriteLibrary spriteLibrary;
+        [SerializeField] private TextMeshProUGUI statsPanel;
 
         private void Start()
         {
@@ -20,6 +22,7 @@ namespace _project.Scripts.UI
 
         public void OnPointerEnter(PointerEventData eventData)
         {
+            statsPanel.text = BuildStatsString();
             highlight.gameObject.SetActive(true);
         }
 
@@ -39,6 +42,7 @@ namespace _project.Scripts.UI
             Destroy(selected.gameObject);
 
             RefreshDisplay();
+            statsPanel.text = BuildStatsString();
         }
 
         private void RefreshDisplay()
@@ -53,6 +57,12 @@ namespace _project.Scripts.UI
                 upgradeSlots[i].sprite = upgrade != null ? spriteLibrary?.GetSprite(upgrade.Name) : null;
                 upgradeSlots[i].enabled = upgrade != null;
             }
+        }
+
+        private string BuildStatsString()
+        {
+            var tc = towerController;
+            return $"HP: {tc.maintenanceHealth:F0}  Regen: {tc.maintenanceRegen:F1}  Organic: {tc.organicProcessPower:F2}  Chemical: {tc.chemicalProcessPower:F2}";
         }
     }
 }
