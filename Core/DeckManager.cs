@@ -20,11 +20,12 @@ namespace _project.Scripts.Core
         // Prototype decks
         private readonly List<ICard> _startingDeck = new()
         {
-            new TestCard(),
-            new TestCard(),
-            new TestCard(),
-            new TestCard(),
-            new TestCard()
+            new ChemicalSolvent(),
+            new ChemicalSolvent(),
+            new SuperiorMaintenance(),
+            new SuperiorMaintenance(),
+            new UpgradedMeshNet(),
+            new UpgradedMeshNet()
         };
 
         public IReadOnlyList<ICard> Hand => _hand;

@@ -2,6 +2,7 @@ using _project.Scripts.Core;
 using DG.Tweening;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace _project.Scripts.UI
 {
@@ -12,7 +13,10 @@ namespace _project.Scripts.UI
         private Vector2 _initAnchoredPosition;
         private const float JumpHeightFraction = 0.8f;
 
-        public ICard interFaceCard;
+        [SerializeField] private Image artImage;
+        [SerializeField] private CardSpriteLibrary spriteLibrary;
+
+        public ICard InterFaceCard;
 
         private void Start()
         {
@@ -23,7 +27,10 @@ namespace _project.Scripts.UI
 
         public void AssignCard(ICard card)
         {
-            interFaceCard = card;
+            InterFaceCard = card;
+
+            if (artImage != null && spriteLibrary != null)
+                artImage.sprite = spriteLibrary.GetSprite(card.Name);
         }
 
         public void OnPointerEnter(PointerEventData eventData)

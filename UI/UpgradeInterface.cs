@@ -10,6 +10,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Image highlight;
         [SerializeField] private TowerController towerController;
         [SerializeField] private Image[] upgradeSlots;
+        [SerializeField] private CardSpriteLibrary spriteLibrary;
 
         private void Start()
         {
@@ -33,8 +34,8 @@ namespace _project.Scripts.UI
             var selected = gm.selectedCard;
             if (selected is null) return;
 
-            towerController.AddUpgrade(selected.interFaceCard);
-            gm.deckManager.DiscardCard(selected.interFaceCard);
+            towerController.AddUpgrade(selected.InterFaceCard);
+            gm.deckManager.DiscardCard(selected.InterFaceCard);
             Destroy(selected.gameObject);
 
             RefreshDisplay();
@@ -49,7 +50,7 @@ namespace _project.Scripts.UI
             {
                 if (upgradeSlots[i] == null) continue;
                 var upgrade = i < upgrades.Length ? upgrades[i] : null;
-                upgradeSlots[i].sprite = upgrade?.CardImage?.sprite;
+                upgradeSlots[i].sprite = upgrade != null ? spriteLibrary?.GetSprite(upgrade.Name) : null;
                 upgradeSlots[i].enabled = upgrade != null;
             }
         }

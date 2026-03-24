@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace _project.Scripts.Core
 {
@@ -9,9 +8,9 @@ namespace _project.Scripts.Core
         string Name { get; }
         string Description => null;
         bool IsFoil => false;
-        Image CardImage => null;
+        Sprite CardSprite => null;
         Material Material => null;
-        
+
         ICard Clone();
         public void ProcessEffect(TowerController tC);
         void Selected() { }
@@ -26,7 +25,7 @@ namespace _project.Scripts.Core
         public string Name => Inner.Name;
         public string Description => Inner.Description;
 
-        public Image CardImage => Inner.CardImage;
+        public Sprite CardSprite => Inner.CardSprite;
         public Material Material => Inner.Material;
 
         public ICard Clone() => new FoilCard(Inner.Clone());
@@ -66,16 +65,6 @@ namespace _project.Scripts.Core
 
     #endregion
     
-    //TODO Delete Me
-    public class TestCard : ICard
-    {
-        public string Name => "Test Card";
-        public ICard Clone()
-        {
-            return new TestCard();
-        }
-        public void ProcessEffect(TowerController tC){}
-    }
 
     public class ChemicalSolvent : ICard
     {
