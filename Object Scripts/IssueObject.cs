@@ -1,4 +1,5 @@
 using System;
+using _project.Scripts.Core;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -15,7 +16,9 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float moveSpeed = 2f;
         [SerializeField] private IssueType type;
         [SerializeField] private WaypointPath path;
-        
+
+        private static bool Debugging => GameMaster.Instance.debugging;
+
         private const float BaseProcessCost = 1f;
         private Transform _startPoint;
         private int _waypointIndex;
@@ -63,6 +66,10 @@ namespace _project.Scripts.Object_Scripts
 
         private void ReachEnd()
         {
+            var towerName = path && path.TargetTower ? path.TargetTower.name : "none";
+            if (Debugging)
+                Debug.Log($"[IssueObject] Reached end — type: {type} | target tower: {towerName}");
+
             if (path && path.TargetTower)
                 path.TargetTower.ProcessLoad(this);
 

@@ -13,6 +13,8 @@ namespace _project.Scripts.Core
         private const float BaseOrganicProcessPower = 1f;
         private const float BaseChemicalProcessPower = 1f;
 
+        private static bool Debugging => GameMaster.Instance.debugging;
+
         public ICard[] GetCurrentUpgrades() => _upgrades;
         public float maintenanceHealth = BaseHealth;
         public float maintenanceRegen = BaseMaintenanceRegen;
@@ -31,9 +33,9 @@ namespace _project.Scripts.Core
                 upgrade.ProcessEffect(this);
 
                 GameMaster.Instance.selectedCard = null;
-                Debug.Log("Adding upgrade: " + upgrade);
-                Debug.Log("Upgrades: " + _upgrades.Length);
-                Debug.Log("Are Upgrades Valid: " + ValidateUpgrades());
+                if (!Debugging) return true;
+                Debug.Log($"[{name}] AddUpgrade: {upgrade.Name} | organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
+                Debug.Log($"[{name}] Upgrades filled: {_upgrades.Count(u => u != null)}/6 | valid: {ValidateUpgrades()}");
                 return true;
             }
             return false;
@@ -49,9 +51,14 @@ namespace _project.Scripts.Core
         {
             var iType = issueObject.GetIssueType();
             var maintenanceDmg = GetProcessPowerByType(iType);
+            var healthBefore = maintenanceHealth;
 
             maintenanceHealth -= maintenanceDmg;
             maintenanceHealth = Mathf.Clamp(maintenanceHealth, 0f, BaseHealth);
+
+            if (Debugging)
+                Debug.Log($"[{name}] ProcessLoad — type: {iType} | dmg: {maintenanceDmg:F2} | health: {healthBefore:F2} → {maintenanceHealth:F2} / {BaseHealth}");
+
             if (maintenanceHealth <= 0f)
             {
                 DeactivateTower();
@@ -71,7 +78,8 @@ namespace _project.Scripts.Core
         //TODO
         private void DeactivateTower()
         {
-            Debug.LogWarning("Tower Deactivated!");
+            Debug.LogWarning(
+                $"[{name}] Tower Deactivated! organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
         }
     }
 }
