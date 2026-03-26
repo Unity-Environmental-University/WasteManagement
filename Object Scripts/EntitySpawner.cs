@@ -45,8 +45,9 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!spawnerObject) return;
             var obj = Instantiate(spawnableObject, spawnPoint.position, spawnPoint.rotation);
-            if (obj.TryGetComponent<IssueObject>(out var issue) && paths.Length > 0)
-                issue.SetPath(paths[Random.Range(0, paths.Length)]);
+            if (!obj.TryGetComponent<IssueObject>(out var issue) || paths.Length <= 0) return;
+            issue.AssignType();
+            issue.SetPath(paths[Random.Range(0, paths.Length)]);
         }
     }
 }

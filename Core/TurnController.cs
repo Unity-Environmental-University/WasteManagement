@@ -89,12 +89,11 @@ namespace _project.Scripts.Core
 
             foreach (var spawner in _gm.entitySpawners)
                 spawner.StopSpawner();
-            EndPhase();
-
-            if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 
             currentTurn++;
-            EnterCardSequence();
+            if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
+
+            EndPhase();
         }
 
         private void PrepareNextWave(int score)

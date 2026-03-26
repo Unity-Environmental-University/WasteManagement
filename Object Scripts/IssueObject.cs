@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -44,7 +45,7 @@ namespace _project.Scripts.Object_Scripts
 
         public void AssignType()
         {
-            var rand = UnityEngine.Random.Range(0, 2);
+            var rand = Random.Range(0, 2);
 
             type = rand switch
             {
@@ -62,6 +63,9 @@ namespace _project.Scripts.Object_Scripts
 
         private void ReachEnd()
         {
+            if (path && path.TargetTower)
+                path.TargetTower.ProcessLoad(this);
+
             OnReachedEnd?.Invoke();
             Destroy(gameObject);
         }
