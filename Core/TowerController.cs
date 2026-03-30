@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using _project.Scripts.Object_Scripts;
+using _project.Scripts.UI;
 using UnityEngine;
 
 namespace _project.Scripts.Core
@@ -12,6 +13,8 @@ namespace _project.Scripts.Core
         private const float BaseMaintenanceRegen = 15;
         private const float BaseOrganicProcessPower = 1f;
         private const float BaseChemicalProcessPower = 1f;
+
+        [SerializeField] private TowerHealthBar healthBar;
 
         private static bool Debugging => GameMaster.Instance.debugging;
 
@@ -56,6 +59,8 @@ namespace _project.Scripts.Core
             maintenanceHealth -= maintenanceDmg;
             maintenanceHealth = Mathf.Clamp(maintenanceHealth, 0f, BaseHealth);
 
+            healthBar?.SetHealth(maintenanceHealth, BaseHealth);
+
             if (Debugging)
                 Debug.Log($"[{name}] ProcessLoad — type: {iType} | dmg: {maintenanceDmg:F2} | health: {healthBefore:F2} → {maintenanceHealth:F2} / {BaseHealth}");
 
@@ -75,11 +80,10 @@ namespace _project.Scripts.Core
             };
         }
 
-        //TODO
         private void DeactivateTower()
         {
-            Debug.LogWarning(
-                $"[{name}] Tower Deactivated! organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
+            Debug.LogWarning($"[{name}] Tower Deactivated!");
+            GameMaster.Instance.turnController.GameLost();
         }
     }
 }

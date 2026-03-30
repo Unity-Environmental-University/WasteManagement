@@ -106,9 +106,9 @@ namespace _project.Scripts.Core
             throw new NotImplementedException();
         }
 
-        private void GameLost()
+        public void GameLost()
         {
-            throw new NotImplementedException();
+            Debug.Log("[TurnController] Game Lost!");
         }
     }
 }
