@@ -20,10 +20,12 @@ namespace _project.Scripts.Object_Scripts
         private static bool Debugging => GameMaster.Instance.debugging;
 
         private const float BaseProcessCost = 1f;
+        private const float BaseSiftCost = 5f;
         private Transform _startPoint;
         private int _waypointIndex;
 
         public float processCost = BaseProcessCost;
+        public float siftCost = BaseSiftCost;
 
         private void Awake()
         {

@@ -7,9 +7,17 @@ namespace _project.Scripts.UI
     {
         [SerializeField] private Slider slider;
 
-        public void SetHealth(float current, float max)
+        public bool SetHealth(float current, float max)
         {
-            slider.value = current / max;
+            slider.maxValue = max;
+            if (current <= 0)
+            {
+                slider.value = float.NaN;
+                return false;
+            }
+            
+            slider.value = current;
+            return true;
         }
     }
 }

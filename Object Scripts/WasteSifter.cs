@@ -1,3 +1,4 @@
+using System.Collections;
 using _project.Scripts.UI;
 using UnityEngine;
 
@@ -6,13 +7,36 @@ namespace _project.Scripts.Object_Scripts
     public class WasteSifter : MonoBehaviour
     {
         public HealthBar healthBar;
+        public float maxHealth;
         public float health;
+        public float defaultProcessCost = 5;
 
-        public void SetHealth(float newHealth)
+        private void Start()
         {
-            var cHealth = health;
+            healthBar.gameObject.SetActive(true);
+            health = maxHealth;
+            healthBar.SetHealth(health, maxHealth);
+        }
+
+        private void SetHealth(float newHealth)
+        {
             health = newHealth;
-            healthBar.SetHealth(cHealth, newHealth);
+            var survived = healthBar.SetHealth(newHealth, maxHealth);
+            if (!survived) StartCoroutine(BreakSifter());
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            if (!other.gameObject.CompareTag($"IssueObject")) return;
+            var newHealth = health - other.GetComponent<IssueObject>()?.siftCost ?? defaultProcessCost;
+            SetHealth(newHealth);
+        }
+
+        private IEnumerator BreakSifter()
+        {
+            yield return new WaitForSeconds(4f);
+            healthBar.gameObject.SetActive(false);
+            Destroy(gameObject);
         }
     }
 }
