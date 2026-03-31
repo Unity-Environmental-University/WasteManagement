@@ -59,21 +59,18 @@ namespace _project.Scripts.Object_Scripts
         }
         
         public IssueType GetIssueType() => type;
+        public WaypointPath GetPath() => path;
 
         public void SetPath(WaypointPath p) => path = p;
 
-        public static event Action OnReachedEnd;
+        public static event Action<IssueObject> OnReachedEnd;
 
         private void ReachEnd()
         {
-            var towerName = path && path.TargetTower ? path.TargetTower.name : "none";
             if (Debugging)
-                Debug.Log($"[IssueObject] Reached end — type: {type} | target tower: {towerName}");
+                Debug.Log($"[IssueObject] Reached end — type: {type}");
 
-            if (path && path.TargetTower)
-                path.TargetTower.ProcessLoad(this);
-
-            OnReachedEnd?.Invoke();
+            OnReachedEnd?.Invoke(this);
             Destroy(gameObject);
         }
     }

@@ -1,4 +1,3 @@
-using _project.Scripts.Core;
 using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
@@ -6,10 +5,8 @@ namespace _project.Scripts.Object_Scripts
     public class WaypointPath : MonoBehaviour
     {
         [SerializeField] private Transform[] waypoints;
-        [SerializeField] private TowerController targetTower;
 
         public int Count => waypoints.Length;
-        public TowerController TargetTower => targetTower;
 
         private void OnDrawGizmos()
         {

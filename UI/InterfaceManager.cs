@@ -39,18 +39,20 @@ namespace _project.Scripts.UI
             }
         }
 
-        public void HideUpgrades()
+        public void HidePrepUI()
         {
             lTowerUpgrades.gameObject.SetActive(false);
             mTowerUpgrades.gameObject.SetActive(false);
             rTowerUpgrades.gameObject.SetActive(false);
+            nextButton.gameObject.SetActive(false);
         }
 
-        public void ShowUpgrades()
+        public void ShowPrepUI()
         {
             lTowerUpgrades.gameObject.SetActive(true);
             mTowerUpgrades.gameObject.SetActive(true);
             rTowerUpgrades.gameObject.SetActive(true);
+            nextButton.gameObject.SetActive(true);
         }
 
         public void NextButtonPressed()

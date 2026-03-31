@@ -58,7 +58,7 @@ namespace _project.Scripts.Core
             
             _gm.deckManager.DrawNewHand();
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
-            _gm.interfaceManager.ShowUpgrades();
+            _gm.interfaceManager.ShowPrepUI();
             
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
         }
@@ -82,7 +82,7 @@ namespace _project.Scripts.Core
         {
             currentPhase = GamePhase.Tower;
             _gm.interfaceManager.ClearHand();
-            _gm.interfaceManager.HideUpgrades();
+            _gm.interfaceManager.HidePrepUI();
             foreach (var s in _gm.entitySpawners) s.StartSpawner();
 
             StartCoroutine(WaveTimer(waveDuration));

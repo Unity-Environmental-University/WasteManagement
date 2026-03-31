@@ -14,16 +14,32 @@ namespace _project.Scripts.Core
         private const float BaseOrganicProcessPower = 1f;
         private const float BaseChemicalProcessPower = 1f;
 
-        [SerializeField] private TowerHealthBar healthBar;
+        [SerializeField] private HealthBar healthBar;
+        [SerializeField] private WaypointPath[] incomingPaths;
 
         private static bool Debugging => GameMaster.Instance.debugging;
+
+        private void OnEnable() => IssueObject.OnReachedEnd += OnIssueReachedEnd;
+        private void OnDisable() => IssueObject.OnReachedEnd -= OnIssueReachedEnd;
+
+        private void OnIssueReachedEnd(IssueObject issue)
+        {
+            if (incomingPaths.Length == 0)
+            {
+                Debug.LogWarning($"[{name}] TowerController has no incomingPaths assigned — ignoring entity.");
+                return;
+            }
+            if (System.Array.IndexOf(incomingPaths, issue.GetPath()) < 0)
+                return;
+            ProcessLoad(issue);
+        }
 
         public ICard[] GetCurrentUpgrades() => _upgrades;
         public float maintenanceHealth = BaseHealth;
         public float maintenanceRegen = BaseMaintenanceRegen;
         public float organicProcessPower = BaseOrganicProcessPower;
         public float chemicalProcessPower = BaseChemicalProcessPower;
-        
+
         public bool AddUpgrade(ICard upgrade)
         {
             if (_upgrades.Contains(upgrade) || _upgrades.Count(u => u != null) >= 6)
@@ -37,10 +53,13 @@ namespace _project.Scripts.Core
 
                 GameMaster.Instance.selectedCard = null;
                 if (!Debugging) return true;
-                Debug.Log($"[{name}] AddUpgrade: {upgrade.Name} | organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
-                Debug.Log($"[{name}] Upgrades filled: {_upgrades.Count(u => u != null)}/6 | valid: {ValidateUpgrades()}");
+                Debug.Log(
+                    $"[{name}] AddUpgrade: {upgrade.Name} | organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
+                Debug.Log(
+                    $"[{name}] Upgrades filled: {_upgrades.Count(u => u != null)}/6 | valid: {ValidateUpgrades()}");
                 return true;
             }
+
             return false;
         }
 
@@ -49,8 +68,7 @@ namespace _project.Scripts.Core
             return _upgrades.Count(u => u != null) <= 6;
         }
 
-        // TODO: make this consider the type of issue and the tower's upgrades to determine the maintenance cost
-        public void ProcessLoad(IssueObject issueObject)
+        private void ProcessLoad(IssueObject issueObject)
         {
             var iType = issueObject.GetIssueType();
             var maintenanceDmg = GetProcessPowerByType(iType);
@@ -62,12 +80,10 @@ namespace _project.Scripts.Core
             healthBar?.SetHealth(maintenanceHealth, BaseHealth);
 
             if (Debugging)
-                Debug.Log($"[{name}] ProcessLoad — type: {iType} | dmg: {maintenanceDmg:F2} | health: {healthBefore:F2} → {maintenanceHealth:F2} / {BaseHealth}");
+                Debug.Log(
+                    $"[{name}] ProcessLoad — type: {iType} | dmg: {maintenanceDmg:F2} | health: {healthBefore:F2} → {maintenanceHealth:F2} / {BaseHealth}");
 
-            if (maintenanceHealth <= 0f)
-            {
-                DeactivateTower();
-            }
+            if (maintenanceHealth <= 0f) DeactivateTower();
         }
 
         private float GetProcessPowerByType(IssueType type)
