@@ -1,4 +1,4 @@
-# SludgeTowe
+# SludgeTower
 
 A Waste Management card game / tower defense hybrid built in Unity.
 
