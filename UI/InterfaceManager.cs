@@ -39,6 +39,20 @@ namespace _project.Scripts.UI
             }
         }
 
+        public void HideUpgrades()
+        {
+            lTowerUpgrades.gameObject.SetActive(false);
+            mTowerUpgrades.gameObject.SetActive(false);
+            rTowerUpgrades.gameObject.SetActive(false);
+        }
+
+        public void ShowUpgrades()
+        {
+            lTowerUpgrades.gameObject.SetActive(true);
+            mTowerUpgrades.gameObject.SetActive(true);
+            rTowerUpgrades.gameObject.SetActive(true);
+        }
+
         public void NextButtonPressed()
         {
             if (GameMaster.Instance.turnController.currentPhase == GamePhase.Tower) return;

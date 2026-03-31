@@ -35,6 +35,12 @@ namespace _project.Scripts.Core
         {
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
+            if (currentTurn == 0) SpawnEarlyObjects();
+        }
+
+        private void SpawnEarlyObjects()
+        {
+            Instantiate(_gm.wasteSifter, _gm.sifterSpawnLocation1);
         }
         
         /// <summary>
@@ -52,6 +58,7 @@ namespace _project.Scripts.Core
             
             _gm.deckManager.DrawNewHand();
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
+            _gm.interfaceManager.ShowUpgrades();
             
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
         }
@@ -70,12 +77,12 @@ namespace _project.Scripts.Core
                     throw new ArgumentOutOfRangeException(nameof(currentPhase), currentPhase, null);
             }
         }
-
-        //TODO - Hide Cards
+        
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
             _gm.interfaceManager.ClearHand();
+            _gm.interfaceManager.HideUpgrades();
             foreach (var s in _gm.entitySpawners) s.StartSpawner();
 
             StartCoroutine(WaveTimer(waveDuration));

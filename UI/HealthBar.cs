@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 namespace _project.Scripts.UI
 {
-    public class TowerHealthBar : MonoBehaviour
+    public class HealthBar : MonoBehaviour
     {
         [SerializeField] private Slider slider;
 
