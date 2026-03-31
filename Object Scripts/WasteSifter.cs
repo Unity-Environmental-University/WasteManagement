@@ -1,4 +1,3 @@
-using System;
 using _project.Scripts.UI;
 using UnityEngine;
 
@@ -8,11 +7,6 @@ namespace _project.Scripts.Object_Scripts
     {
         public HealthBar healthBar;
         public float health;
-
-        private void Start()
-        {
-            throw new NotImplementedException();
-        }
 
         public void SetHealth(float newHealth)
         {

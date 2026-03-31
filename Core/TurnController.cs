@@ -40,7 +40,7 @@ namespace _project.Scripts.Core
 
         private void SpawnEarlyObjects()
         {
-            Instantiate(_gm.wasteSifter, _gm.sifterSpawnLocation1);
+            _gm.pipCompMan.SpawnOpeningSifter();
         }
         
         /// <summary>

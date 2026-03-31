@@ -17,14 +17,12 @@ namespace _project.Scripts.Core
         public TowerManager towerManager;
         public InterfaceManager interfaceManager;
         public DeckManager deckManager;
+        public PipelineComponentManager pipCompMan;
         
         [Header("Debug")] public bool debugging;
 
         public CardController selectedCard;
         public List<EntitySpawner> entitySpawners;
-        public GameObject wasteSifter;
-        public Transform sifterSpawnLocation1;
-        public Transform sifterSpawnLocation2;
         
 
         public static GameMaster Instance { get; private set; }
