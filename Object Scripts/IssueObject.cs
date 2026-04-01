@@ -61,6 +61,7 @@ namespace _project.Scripts.Object_Scripts
         }
         
         public IssueType GetIssueType() => type;
+        public void SetType(IssueType t) => type = t;
         public WaypointPath GetPath() => path;
 
         public void SetPath(WaypointPath p) => path = p;
