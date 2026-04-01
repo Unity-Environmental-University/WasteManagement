@@ -6,19 +6,36 @@ namespace _project.Scripts.Core
 {
     public class IssuePreview : MonoBehaviour
     {
-        public List<IssueObject> upcomingIssues;
+        // Arbitrary nums TODO Balance this
+        [SerializeField] private int minSpawnCount = 10;
+        [SerializeField] private int maxSpawnCount = 20;
 
-        public List<IssueObject> GetUpcomingIssues()
+        private Queue<IssueType> _upcoming;
+
+        public Queue<IssueType> GetUpcomingIssues()
         {
-            return upcomingIssues is { Count: > 0 } ? upcomingIssues : GenerateUpcoming();
+            if (_upcoming is { Count: > 0 })
+                return _upcoming;
+
+            _upcoming = GenerateUpcoming();
+            return _upcoming;
         }
 
-        private static List<IssueObject> GenerateUpcoming()
-        {
-            var newList = new List<IssueObject>();
-            //TODO Generate a list of IssueObjects
+        public IssueType Dequeue() => _upcoming.Dequeue();
 
-            return newList;
+        public bool HasNext() => _upcoming is { Count: > 0 };
+
+        private Queue<IssueType> GenerateUpcoming()
+        {
+            var queue = new Queue<IssueType>();
+            var count = Random.Range(minSpawnCount, maxSpawnCount + 1);
+
+            for (var i = 0; i < count; i++)
+            {
+                queue.Enqueue(Random.Range(0, 2) == 0 ? IssueType.Organic : IssueType.Chemical);
+            }
+
+            return queue;
         }
     }
 }
