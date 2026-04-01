@@ -14,11 +14,14 @@ namespace _project.Scripts.Object_Scripts
         private void Start()
         {
             healthBar.gameObject.SetActive(true);
+            /*
+            This is being set inside the inspector- may lead to issues but maybe not?
             health = maxHealth;
+            */
             healthBar.SetHealth(health, maxHealth);
         }
 
-        private void SetHealth(float newHealth)
+        public void SetHealth(float newHealth)
         {
             health = newHealth;
             var survived = healthBar.SetHealth(newHealth, maxHealth);

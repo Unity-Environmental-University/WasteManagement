@@ -27,7 +27,9 @@ namespace _project.Scripts.Object_Scripts
         public void SpawnOpeningSifter()
         {
             var sifter = Instantiate(wasteSifter, spawn1.spawnLocation);
+            var siftCont = sifter.GetComponent<WasteSifter>();
             AssignHealthBar(sifter, spawn1.healthBar);
+            siftCont.SetHealth(siftCont.maxHealth / 2);
         }
 
         public void SpawnSifter(int side)
