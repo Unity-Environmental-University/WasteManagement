@@ -32,6 +32,12 @@ Desktop.ini
 .qodo/
 .utmp/
 
+# Git worktrees
+.worktrees/
+
+# Temp Spec Files
+/docs/superpowers/
+
 # Temp React project
 tmp/node_modules/
 tmp/dist/

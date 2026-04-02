@@ -9,7 +9,7 @@ namespace _project.Scripts.Object_Scripts
         public HealthBar healthBar;
         public float maxHealth;
         public float health;
-        public float defaultProcessCost = 5;
+        [SerializeField] private int siftPower = 1;
 
         private void Start()
         {
@@ -30,9 +30,13 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnTriggerEnter(Collider other)
         {
-            if (!other.gameObject.CompareTag($"IssueObject")) return;
-            var newHealth = health - other.GetComponent<IssueObject>()?.siftCost ?? defaultProcessCost;
-            SetHealth(newHealth);
+            if (!other.gameObject.CompareTag("IssueObject")) return;
+            var issue = other.GetComponent<IssueObject>();
+            if (issue == null || !issue.TryRegisterSifter(GetInstanceID())) return;
+
+            var damage = issue.SiftCost;
+            SetHealth(health - damage);
+            issue.Sift(siftPower);
         }
 
         private IEnumerator BreakSifter()
