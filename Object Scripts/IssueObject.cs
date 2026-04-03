@@ -20,7 +20,6 @@ namespace _project.Scripts.Object_Scripts
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
 
-        private int _size;
         private Vector3 _baseScale;
         private readonly HashSet<int> _siftersProcessed = new();
         private const float BaseProcessCost = 1f;
@@ -28,13 +27,9 @@ namespace _project.Scripts.Object_Scripts
         private Transform _startPoint;
         private int _waypointIndex;
 
-        public int Size => _size;
-        public float SiftCost => BaseSiftCost * _size;
-        public float ProcessCost => BaseProcessCost * _size;
-
-        public Material red;
-        public Material blue;
-        public Material green;
+        public int Size { get; private set; }
+        public float SiftCost => BaseSiftCost * Size;
+        public float ProcessCost => BaseProcessCost * Size;
 
         private void Awake()
         {
@@ -42,9 +37,9 @@ namespace _project.Scripts.Object_Scripts
                 rb.isKinematic = true;
 
             _baseScale = transform.localScale;
-            _size = SetRandSize();
-            transform.localScale = _baseScale * _size;
-            SetMaterial();
+            Size = SetRandSize();
+            transform.localScale = _baseScale * Size;
+            SetMaterialColor();
         }
 
         private void Update()
@@ -62,16 +57,16 @@ namespace _project.Scripts.Object_Scripts
                 _waypointIndex++;
         }
 
-        private void SetMaterial()
+        private void SetMaterialColor()
         {
-            var mat = _size switch
+            var mat = Size switch
             {
-                1 => red,
-                2 => blue,
-                3 => green,
+                1 => Color.red,
+                2 => Color.deepSkyBlue,
+                3 => Color.softGreen,
                 _ => throw new ArgumentOutOfRangeException()
             };
-            gameObject.GetComponent<Renderer>().material = mat;
+            gameObject.GetComponent<Renderer>().material.color = mat;
         }
 
         private static int SetRandSize() => Random.Range(1, 3); 
@@ -94,18 +89,18 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public void Sift(int power)
         {
-            _size = Mathf.Max(0, _size - power);
-            transform.localScale = _baseScale * _size;
+            Size = Mathf.Max(0, Size - power);
+            transform.localScale = _baseScale * Size;
 
             if (Debugging)
-                Debug.Log($"[IssueObject] Sifted — remaining size: {_size}");
+                Debug.Log($"[IssueObject] Sifted — remaining size: {Size}");
 
-            if (_size <= 0)
+            if (Size <= 0)
             {
                 Destroy(gameObject);
                 return;
             }
-            SetMaterial();
+            SetMaterialColor();
         }
 
         /// <summary>
@@ -116,8 +111,8 @@ namespace _project.Scripts.Object_Scripts
 
         public void SetSize(int s)
         {
-            _size = Mathf.Max(0, s);
-            transform.localScale = _baseScale * _size;
+            Size = Mathf.Max(0, s);
+            transform.localScale = _baseScale * Size;
         }
 
         public IssueType GetIssueType() => type;

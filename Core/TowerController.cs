@@ -18,14 +18,6 @@ namespace _project.Scripts.Core
 
         private static bool Debugging => GameMaster.Instance.debugging;
 
-        private void OnEnable() => IssueObject.OnReachedEnd += OnIssueReachedEnd;
-        private void OnDisable() => IssueObject.OnReachedEnd -= OnIssueReachedEnd;
-
-        private void OnIssueReachedEnd(IssueObject issue)
-        {
-            ProcessLoad(issue);
-        }
-
         public ICard[] GetCurrentUpgrades() => _upgrades;
         public float maintenanceHealth = BaseHealth;
         public float maintenanceRegen = BaseMaintenanceRegen;
@@ -58,6 +50,15 @@ namespace _project.Scripts.Core
         private bool ValidateUpgrades()
         {
             return _upgrades.Count(u => u != null) <= 6;
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            if (!other.gameObject.CompareTag("IssueObject")) return;
+            var issue = other.GetComponent<IssueObject>();
+            if (issue is null || !issue.TryRegisterSifter(GetInstanceID())) return;
+
+            ProcessLoad(issue);
         }
 
         private void ProcessLoad(IssueObject issueObject)
