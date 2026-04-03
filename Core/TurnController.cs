@@ -115,6 +115,10 @@ namespace _project.Scripts.Core
 
         public void GameLost()
         {
+            foreach (var s in _gm.entitySpawners)
+            {
+                s.StopSpawner();
+            }
             Debug.Log("[TurnController] Game Lost!");
         }
     }

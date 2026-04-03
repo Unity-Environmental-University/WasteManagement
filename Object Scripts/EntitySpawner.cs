@@ -7,7 +7,7 @@ namespace _project.Scripts.Object_Scripts
     {
         [SerializeField] private GameObject spawnerObject;
         [SerializeField] private Transform spawnPoint;
-        [SerializeField] private WaypointPath[] paths;
+        [SerializeField] private WaypointPath path;
         private Coroutine _spawnCoroutine;
         
         public float spawnInterval;
@@ -15,10 +15,6 @@ namespace _project.Scripts.Object_Scripts
         private void Awake()
         {
             spawnPoint = spawnPoint?.transform;
-        }
-
-        private void Start()
-        {
         }
 
         public void StartSpawner()
@@ -45,9 +41,9 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!spawnerObject) return;
             var obj = Instantiate(spawnableObject, spawnPoint.position, spawnPoint.rotation);
-            if (!obj.TryGetComponent<IssueObject>(out var issue) || paths.Length <= 0) return;
+            if (!obj.TryGetComponent<IssueObject>(out var issue)) return;
             issue.AssignType();
-            issue.SetPath(paths[Random.Range(0, paths.Length)]);
+            issue.SetPath(path);
         }
     }
 }

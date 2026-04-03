@@ -15,7 +15,6 @@ namespace _project.Scripts.Core
         private const float BaseChemicalProcessPower = 1f;
 
         [SerializeField] private HealthBar healthBar;
-        [SerializeField] private WaypointPath[] incomingPaths;
 
         private static bool Debugging => GameMaster.Instance.debugging;
 
@@ -24,13 +23,6 @@ namespace _project.Scripts.Core
 
         private void OnIssueReachedEnd(IssueObject issue)
         {
-            if (incomingPaths.Length == 0)
-            {
-                Debug.LogWarning($"[{name}] TowerController has no incomingPaths assigned — ignoring entity.");
-                return;
-            }
-            if (System.Array.IndexOf(incomingPaths, issue.GetPath()) < 0)
-                return;
             ProcessLoad(issue);
         }
 

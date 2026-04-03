@@ -38,19 +38,13 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
+            if (TryGetComponent<Rigidbody>(out var rb))
+                rb.isKinematic = true;
+
             _baseScale = transform.localScale;
             _size = SetRandSize();
             transform.localScale = _baseScale * _size;
-            Material mat;
-            mat = _size switch
-            {
-                0 => red,
-                1 => blue,
-                3 => green
-            };
-            gameObject.GetComponent<Renderer>().material=mat;
-            if (TryGetComponent<Rigidbody>(out var rb))
-                rb.isKinematic = true;
+            SetMaterial();
         }
 
         private void Update()
@@ -66,6 +60,18 @@ namespace _project.Scripts.Object_Scripts
 
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)
                 _waypointIndex++;
+        }
+
+        private void SetMaterial()
+        {
+            var mat = _size switch
+            {
+                1 => red,
+                2 => blue,
+                3 => green,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            gameObject.GetComponent<Renderer>().material = mat;
         }
 
         private static int SetRandSize() => Random.Range(1, 3); 
@@ -94,12 +100,17 @@ namespace _project.Scripts.Object_Scripts
             if (Debugging)
                 Debug.Log($"[IssueObject] Sifted — remaining size: {_size}");
 
-            if (_size <= 0) Destroy(gameObject);
+            if (_size <= 0)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            SetMaterial();
         }
 
         /// <summary>
         /// Returns true and marks this sifter as having processed this issue.
-        /// Returns false if this sifter already processed it (e.g. compound trigger colliders).
+        /// Returns false if this sifter already processed it (e.g., compound trigger colliders).
         /// </summary>
         public bool TryRegisterSifter(int sifterId) => _siftersProcessed.Add(sifterId);
 
