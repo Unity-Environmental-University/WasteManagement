@@ -18,10 +18,13 @@ namespace _project.Scripts.Core
         public InterfaceManager interfaceManager;
         public DeckManager deckManager;
         public PipelineComponentManager pipCompMan;
-        
+        public ShopManager shopManager;
+        public ScoreManager scoreManager;
+
         [Header("Debug")] public bool debugging;
 
         public CardController selectedCard;
+        public IPlaceable pendingPlacement;
         public List<EntitySpawner> entitySpawners;
         
 
@@ -41,15 +44,21 @@ namespace _project.Scripts.Core
             if (!towerManager) towerManager = GetComponent<TowerManager>();
             if (!interfaceManager) interfaceManager = GetComponentInChildren<InterfaceManager>();
             if (!deckManager) deckManager = GetComponentInChildren<DeckManager>();
+            if (!shopManager) shopManager = GetComponentInChildren<ShopManager>();
+            if (!scoreManager) scoreManager = GetComponentInChildren<ScoreManager>();
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));
             if (!towerManager) missing.Add(nameof(towerManager));
             if (!interfaceManager) missing.Add(nameof(interfaceManager));
             if (!deckManager) missing.Add(nameof(deckManager));
+            if (!shopManager) missing.Add(nameof(shopManager));
+            if (!scoreManager) missing.Add(nameof(scoreManager));
 
             if (missing.Count > 0)
                 Debug.LogWarning($"[CardGameMaster] Missing components: {string.Join(", ", missing)}");
+
+            if (scoreManager) scoreManager.Initialize();
         }
     }
 }
