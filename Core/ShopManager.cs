@@ -45,6 +45,7 @@ namespace _project.Scripts.Core
         public void OpenShop()
         {
             GenerateShopInventory();
+            GameMaster.Instance.interfaceManager.HideUIForShop();
             if (shopPanel) shopPanel.SetActive(true);
             if (Debugging) Debug.Log("[ShopManager] Shop opened.");
         }
@@ -52,12 +53,13 @@ namespace _project.Scripts.Core
         public void CloseShop()
         {
             if (shopPanel) shopPanel.SetActive(false);
+            GameMaster.Instance.interfaceManager.RecoverUIForShop();
             if (Debugging) Debug.Log("[ShopManager] Shop closed.");
         }
 
-        public void RemoveShopItem(GameObject shopItemGO)
+        public void RemoveShopItem(GameObject shopItemGo)
         {
-            if (shopItemGO) Destroy(shopItemGO);
+            if (shopItemGo) Destroy(shopItemGo);
         }
 
         private void GenerateShopInventory()

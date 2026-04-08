@@ -9,6 +9,8 @@ namespace _project.Scripts.UI
     {
         [SerializeField] private Button quitButton;
         [SerializeField] private Button nextButton;
+        [SerializeField] private Button openShopButton;
+        [SerializeField] private Button closeShopButton;
         [SerializeField] private Image mTowerUpgrades;
         [SerializeField] private Image rTowerUpgrades;
         [SerializeField] private Image lTowerUpgrades;
@@ -45,6 +47,8 @@ namespace _project.Scripts.UI
             mTowerUpgrades.gameObject.SetActive(false);
             rTowerUpgrades.gameObject.SetActive(false);
             nextButton.gameObject.SetActive(false);
+            openShopButton.gameObject.SetActive(false);
+            closeShopButton.gameObject.SetActive(false);
         }
 
         public void ShowPrepUI()
@@ -53,6 +57,8 @@ namespace _project.Scripts.UI
             mTowerUpgrades.gameObject.SetActive(true);
             rTowerUpgrades.gameObject.SetActive(true);
             nextButton.gameObject.SetActive(true);
+            openShopButton.gameObject.SetActive(true);
+            closeShopButton.gameObject.SetActive(true);
         }
 
         public void NextButtonPressed()
@@ -65,6 +71,22 @@ namespace _project.Scripts.UI
         {
             for (var i = handContainer.childCount - 1; i >= 0; i--)
                 Destroy(handContainer.GetChild(i).gameObject);
+        }
+
+        public void HideUIForShop()
+        {
+            quitButton.gameObject.SetActive(false);
+            nextButton.gameObject.SetActive(false);
+            openShopButton.gameObject.SetActive(false);
+            closeShopButton.gameObject.SetActive(true);
+        }
+
+        public void RecoverUIForShop()
+        {
+            quitButton.gameObject.SetActive(true);
+            nextButton.gameObject.SetActive(true);
+            openShopButton.gameObject.SetActive(true);
+            closeShopButton.gameObject.SetActive(false);
         }
     }
 }
