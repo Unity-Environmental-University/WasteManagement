@@ -30,6 +30,10 @@ namespace _project.Scripts.Core
         [Header("Card Items")]
         [SerializeField] private CardShopEntry[] cardEntries;
 
+        [Header("Testing")]
+        [SerializeField] private bool includeBlankTestItem = true;
+        [SerializeField] private Sprite blankTestSprite;
+
         private void Awake()
         {
             if (Instance && Instance != this)
@@ -65,6 +69,9 @@ namespace _project.Scripts.Core
         private void GenerateShopInventory()
         {
             ClearShop();
+
+            if (includeBlankTestItem)
+                SpawnShopItem(new BlankShopItem(blankTestSprite));
 
             if (towerPrefab)
                 SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerCost, towerPrefab, towerSprite));

@@ -29,6 +29,23 @@ namespace _project.Scripts.Core
         public Sprite sprite;
     }
 
+    public class BlankShopItem : IShopItem
+    {
+        public BlankShopItem(Sprite displaySprite)
+        {
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName => "Placeholder Item";
+        public string Description => "Temporary shop entry for layout testing.";
+        public int Cost => 0;
+        public Sprite DisplaySprite { get; }
+
+        public void Purchase()
+        {
+        }
+    }
+
     public class CardShopItem : IShopItem
     {
         private readonly ICard _card;

@@ -53,9 +53,11 @@ namespace _project.Scripts.UI
 
         public void ShowPrepUI()
         {
+            /* disabled for testing
             lTowerUpgrades.gameObject.SetActive(true);
             mTowerUpgrades.gameObject.SetActive(true);
             rTowerUpgrades.gameObject.SetActive(true);
+            */
             nextButton.gameObject.SetActive(true);
             openShopButton.gameObject.SetActive(true);
             closeShopButton.gameObject.SetActive(true);
