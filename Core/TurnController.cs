@@ -35,7 +35,7 @@ namespace _project.Scripts.Core
         {
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
-            if (currentTurn == 0) SpawnEarlyObjects();
+            //if (currentTurn == 0) SpawnEarlyObjects();
         }
 
         private void SpawnEarlyObjects()

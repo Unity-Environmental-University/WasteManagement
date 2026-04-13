@@ -71,7 +71,15 @@ namespace _project.Scripts.Core
             ClearShop();
 
             if (includeBlankTestItem)
-                SpawnShopItem(new BlankShopItem(blankTestSprite));
+            {
+                if (sifterPrefab)
+                    SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterCost, sifterPrefab,
+                        sifterSprite ? sifterSprite : blankTestSprite));
+                else
+                    SpawnShopItem(new BlankShopItem(blankTestSprite));
+
+                return;
+            }
 
             if (towerPrefab)
                 SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerCost, towerPrefab, towerSprite));

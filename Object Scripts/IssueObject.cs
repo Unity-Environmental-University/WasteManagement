@@ -21,7 +21,7 @@ namespace _project.Scripts.Object_Scripts
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
 
         private Vector3 _baseScale;
-        private readonly HashSet<int> _siftersProcessed = new();
+        private readonly HashSet<EntityId> _siftersProcessed = new();
         private const float BaseProcessCost = 1f;
         private const float BaseSiftCost = 5f;
         private Transform _startPoint;
@@ -107,7 +107,7 @@ namespace _project.Scripts.Object_Scripts
         /// Returns true and marks this sifter as having processed this issue.
         /// Returns false if this sifter already processed it (e.g., compound trigger colliders).
         /// </summary>
-        public bool TryRegisterSifter(int sifterId) => _siftersProcessed.Add(sifterId);
+        public bool TryRegisterSifter(EntityId sifterId) => _siftersProcessed.Add(sifterId);
 
         public void SetSize(int s)
         {

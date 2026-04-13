@@ -56,7 +56,7 @@ namespace _project.Scripts.Core
         {
             if (!other.gameObject.CompareTag("IssueObject")) return;
             var issue = other.GetComponent<IssueObject>();
-            if (issue is null || !issue.TryRegisterSifter(GetInstanceID())) return;
+            if (issue is null || !issue.TryRegisterSifter(GetEntityId())) return;
 
             ProcessLoad(issue);
         }
