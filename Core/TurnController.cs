@@ -35,7 +35,7 @@ namespace _project.Scripts.Core
         {
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
-            if (currentTurn == 0) SpawnEarlyObjects();
+            //if (currentTurn == 0) SpawnEarlyObjects();
         }
 
         private void SpawnEarlyObjects()
@@ -55,11 +55,14 @@ namespace _project.Scripts.Core
         private void EnterCardSequence()
         {
             currentPhase = GamePhase.Card;
-            
+
+            _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
-            
+
+            if (currentTurn > 0 && _gm.shopManager) _gm.shopManager.OpenShop();
+
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
         }
 
@@ -81,6 +84,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
             foreach (var s in _gm.entitySpawners) s.StartSpawner();
@@ -97,6 +101,7 @@ namespace _project.Scripts.Core
             foreach (var spawner in _gm.entitySpawners)
                 spawner.StopSpawner();
 
+            if (_gm.scoreManager) ScoreManager.AddTokens(_gm.scoreManager.TokensPerWave);
             currentTurn++;
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 

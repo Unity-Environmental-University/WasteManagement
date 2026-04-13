@@ -13,18 +13,18 @@ namespace _project.Scripts.Object_Scripts
 
         private void Start()
         {
-            healthBar.gameObject.SetActive(true);
+            if (healthBar) healthBar.gameObject.SetActive(true);
             /*
             This is being set inside the inspector- may lead to issues but maybe not?
             health = maxHealth;
             */
-            healthBar.SetHealth(health, maxHealth);
+            if (healthBar) healthBar.SetHealth(health, maxHealth);
         }
 
         public void SetHealth(float newHealth)
         {
             health = newHealth;
-            var survived = healthBar.SetHealth(newHealth, maxHealth);
+            var survived = healthBar ? healthBar.SetHealth(newHealth, maxHealth) : newHealth > 0;
             if (!survived) StartCoroutine(BreakSifter());
         }
 
@@ -32,7 +32,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!other.gameObject.CompareTag("IssueObject")) return;
             var issue = other.GetComponent<IssueObject>();
-            if (issue == null || !issue.TryRegisterSifter(GetInstanceID())) return;
+            if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
             var damage = issue.SiftCost;
             SetHealth(health - damage);
@@ -42,7 +42,7 @@ namespace _project.Scripts.Object_Scripts
         private IEnumerator BreakSifter()
         {
             yield return new WaitForSeconds(4f);
-            healthBar.gameObject.SetActive(false);
+            if (healthBar) healthBar.gameObject.SetActive(false);
             Destroy(gameObject);
         }
     }

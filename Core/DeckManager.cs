@@ -122,6 +122,14 @@ namespace _project.Scripts.Core
             }
         }
 
+        /// Adds a card to the discard pile so it enters the draw cycle on the next shuffle.
+        public void AddCard(ICard card)
+        {
+            if (card == null) return;
+            _discardPile.Add(card);
+            if (Debugging) Debug.Log($"[DeckManager] AddCard: {card.Name} added to discard pile.");
+        }
+
         public List<ICard> GetDeck() => new(_deck);
         public List<ICard> GetHand() => new(_hand);
         public List<ICard> GetDiscardPile() => new(_discardPile);
