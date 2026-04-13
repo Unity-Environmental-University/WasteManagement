@@ -13,7 +13,7 @@ namespace _project.Scripts.Core
         void Purchase();
     }
 
-    public interface IPlaceable
+    public interface IPlaceable : IShopItem
     {
         PlaceableType PlaceableType { get; }
         GameObject Place(Transform location);
@@ -91,7 +91,7 @@ namespace _project.Scripts.Core
         public void Purchase()
         {
             ScoreManager.SpendTokens(Cost);
-            GameMaster.Instance.pendingPlacement = this;
+            GameMaster.Instance.placementInventory.Add(this);
         }
 
         public GameObject Place(Transform location)
@@ -125,7 +125,7 @@ namespace _project.Scripts.Core
         public void Purchase()
         {
             ScoreManager.SpendTokens(Cost);
-            GameMaster.Instance.pendingPlacement = this;
+            GameMaster.Instance.placementInventory.Add(this);
         }
 
         public GameObject Place(Transform location)

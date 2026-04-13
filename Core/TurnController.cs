@@ -56,6 +56,7 @@ namespace _project.Scripts.Core
         {
             currentPhase = GamePhase.Card;
 
+            _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
@@ -83,7 +84,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
-            _gm.pendingPlacement = null;
+            _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
             foreach (var s in _gm.entitySpawners) s.StartSpawner();

@@ -30,7 +30,7 @@ namespace _project.Scripts.Object_Scripts
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            var pending = GameMaster.Instance.pendingPlacement;
+            var pending = GameMaster.Instance.PendingPlacement;
             if (pending == null || !CanAccept(pending)) return;
             if (slotRenderer)
                 slotRenderer.material.color = _isOccupied ? occupiedColor : hoverColor;
@@ -44,7 +44,7 @@ namespace _project.Scripts.Object_Scripts
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            var pending = GameMaster.Instance.pendingPlacement;
+            var pending = GameMaster.Instance.PendingPlacement;
             if (pending == null) return;
 
             if (_isOccupied)
@@ -66,7 +66,7 @@ namespace _project.Scripts.Object_Scripts
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedHealthBar);
 
             _isOccupied = true;
-            GameMaster.Instance.pendingPlacement = null;
+            GameMaster.Instance.placementInventory.ConsumeSelected();
 
             if (slotRenderer) slotRenderer.material.color = occupiedColor;
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
