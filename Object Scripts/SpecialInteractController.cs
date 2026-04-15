@@ -74,6 +74,9 @@ namespace _project.Scripts.Object_Scripts
 
         private bool CanAccept(IPlaceable item)
         {
+            if (item == null || item.PlaceableType == PlaceableType.Path)
+                return false;
+
             return acceptedType == PlaceableType.Any || acceptedType == item.PlaceableType;
         }
     }

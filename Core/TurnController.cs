@@ -35,12 +35,6 @@ namespace _project.Scripts.Core
         {
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
-            //if (currentTurn == 0) SpawnEarlyObjects();
-        }
-
-        private void SpawnEarlyObjects()
-        {
-            _gm.pipCompMan.SpawnOpeningSifter();
         }
         
         /// <summary>
@@ -61,7 +55,7 @@ namespace _project.Scripts.Core
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
 
-            if (currentTurn > 0 && _gm.shopManager) _gm.shopManager.OpenShop();
+            if (_gm.shopManager) _gm.shopManager.OpenShop();
 
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
         }
@@ -106,16 +100,6 @@ namespace _project.Scripts.Core
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 
             EndPhase();
-        }
-
-        private void PrepareNextWave(int score)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void WinGame()
-        {
-            throw new NotImplementedException();
         }
 
         public void GameLost()

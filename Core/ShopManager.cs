@@ -27,6 +27,16 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
 
+        [Header("Path Items")]
+        [SerializeField] private string shortPipeDisplayName = "Short Pipe";
+        [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
+        [SerializeField] private int shortPipeCost;
+        [SerializeField] private Sprite shortPipeSprite;
+        [SerializeField] private string longPipeDisplayName = "Long Pipe";
+        [SerializeField] private string longPipeDescription = "Straight pipe segment covering 3 cells.";
+        [SerializeField] private int longPipeCost;
+        [SerializeField] private Sprite longPipeSprite;
+
         [Header("Card Items")]
         [SerializeField] private CardShopEntry[] cardEntries;
 
@@ -72,14 +82,19 @@ namespace _project.Scripts.Core
 
             if (includeBlankTestItem)
             {
-                if (sifterPrefab)
-                    SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterCost, sifterPrefab,
-                        sifterSprite ? sifterSprite : blankTestSprite));
-                else
+                if (blankTestSprite)
                     SpawnShopItem(new BlankShopItem(blankTestSprite));
-
-                return;
             }
+
+            var fallbackPathSprite = shortPipeSprite != null
+                ? shortPipeSprite
+                : longPipeSprite != null
+                    ? longPipeSprite
+                    : blankTestSprite;
+            SpawnShopItem(new PathPieceShopItem(shortPipeDisplayName, shortPipeDescription, shortPipeCost, 2,
+                shortPipeSprite != null ? shortPipeSprite : fallbackPathSprite));
+            SpawnShopItem(new PathPieceShopItem(longPipeDisplayName, longPipeDescription, longPipeCost, 3,
+                longPipeSprite != null ? longPipeSprite : fallbackPathSprite));
 
             if (towerPrefab)
                 SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerCost, towerPrefab, towerSprite));

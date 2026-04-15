@@ -12,8 +12,9 @@ namespace _project.Scripts.UI
         [SerializeField] private TextMeshProUGUI descriptionText;
         [SerializeField] private Image displayImage;
         [SerializeField] private Button buyButton;
+        private bool Debugging => GameMaster.Instance.debugging;
 
-        public IShopItem ShopItem { get; private set; }
+        private IShopItem ShopItem { get; set; }
 
         public void Setup(IShopItem item)
         {
@@ -31,13 +32,14 @@ namespace _project.Scripts.UI
         {
             if (!ScoreManager.CanAfford(ShopItem.Cost))
             {
-                if (GameMaster.Instance.debugging)
+                if (Debugging)
                     Debug.Log($"[ShopObject] Cannot afford {ShopItem.DisplayName} ({ShopItem.Cost} tokens).");
                 return;
             }
 
             ShopItem.Purchase();
-            ShopManager.Instance.RemoveShopItem(gameObject);
+            if (ShopItem.RemoveAfterPurchase)
+                ShopManager.Instance.RemoveShopItem(gameObject);
         }
     }
 }
