@@ -49,6 +49,7 @@ namespace _project.Scripts.Core
         private void EnterCardSequence()
         {
             currentPhase = GamePhase.Card;
+            SwitchCamera();
 
             _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
@@ -58,6 +59,23 @@ namespace _project.Scripts.Core
             if (_gm.shopManager) _gm.shopManager.OpenShop();
 
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
+        }
+
+        private void SwitchCamera()
+        {
+            var top = _gm.topDownCamera;
+            var main = _gm.mainCamera;
+
+            if (main.isActiveAndEnabled)
+            {
+                main.gameObject.SetActive(false);
+                top.gameObject.SetActive(true);
+            }
+            else if (top.isActiveAndEnabled)
+            {
+                top.gameObject.SetActive(false);
+                main.gameObject.SetActive(true);
+            }
         }
 
         public void EndPhase()
@@ -78,6 +96,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            SwitchCamera();
             _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();

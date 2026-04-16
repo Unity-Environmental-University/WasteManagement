@@ -12,7 +12,9 @@ namespace _project.Scripts.Core
     [RequireComponent(typeof(TurnController), typeof(PlacementInventory))]
     public class GameMaster : MonoBehaviour
     {
-        [Header("Major Game Components")]
+        [Header("Major Game Components")] 
+        public Camera mainCamera;
+        public Camera topDownCamera;
         public TurnController turnController;
         public TowerManager towerManager;
         public InterfaceManager interfaceManager;
