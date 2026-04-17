@@ -477,6 +477,27 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
+        /// Returns the world-space position for the given grid cell. Falls back to the computed
+        /// local position (transformed by this board) when the cell GameObject is missing.
+        /// </summary>
+        private Vector3 GetCellWorldPosition(Vector2Int position)
+        {
+            var cell = GetCell(position);
+            if (cell) return cell.transform.position;
+            return transform.TransformPoint(GetLocalPosition(position.x, position.y));
+        }
+
+        /// <summary>
+        /// Returns a world-space waypoint position for the given cell — centered on the pipe's
+        /// top surface so entities travel along the pipe rather than inside the grid.
+        /// </summary>
+        public Vector3 GetPathWaypointPosition(Vector2Int position)
+        {
+            var basePos = GetCellWorldPosition(position);
+            return new Vector3(basePos.x, basePos.y + cellHeight * 0.5f + pipeVisualHeight, basePos.z);
+        }
+
+        /// <summary>
         /// Represents a path piece that has been successfully placed on the board.
         /// Stores metadata (ID, length, orientation) and the list of cells it occupies.
         /// </summary>
