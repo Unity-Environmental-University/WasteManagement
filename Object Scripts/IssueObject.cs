@@ -19,13 +19,14 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private WaypointPath path;
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
-
+        
         private Vector3 _baseScale;
         private readonly HashSet<EntityId> _siftersProcessed = new();
         private const float BaseProcessCost = 1f;
         private const float BaseSiftCost = 5f;
         private Transform _startPoint;
         private int _waypointIndex;
+        private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
         public int Size { get; private set; }
         public float SiftCost => BaseSiftCost * Size;
@@ -51,6 +52,7 @@ namespace _project.Scripts.Object_Scripts
             }
 
             var target = path.GetPosition(_waypointIndex);
+            target.y += transform.localScale.y * PathHeight;
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
 
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)

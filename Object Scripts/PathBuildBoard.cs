@@ -48,6 +48,8 @@ namespace _project.Scripts.Object_Scripts
         private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
         private GameObject _previewVisual;
         private Transform _visualRoot;
+        
+        public float entityOnBoardHeight;
 
         /// <summary>
         /// Read-only collection of all path pieces that have been successfully placed on the board.

@@ -23,6 +23,7 @@ namespace _project.Scripts.Core
         public PipelineComponentManager pipCompMan;
         public ShopManager shopManager;
         public ScoreManager scoreManager;
+        public PathBuildBoard pathBuildBoard;
 
         [Header("Debug")] public bool debugging;
 
