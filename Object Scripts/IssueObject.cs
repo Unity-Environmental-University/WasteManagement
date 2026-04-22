@@ -43,18 +43,33 @@ namespace _project.Scripts.Object_Scripts
             SetMaterialColor();
         }
 
+        /// <summary>
+        /// Per-frame movement along the assigned WaypointPath.
+        /// Advances waypoint-by-waypoint: moves toward the current target, and increments
+        /// the index once close enough. When the index exceeds the path length, the
+        /// issue has reached the goal and triggers ReachEnd().
+        /// </summary>
         private void Update()
         {
+            // GUARD: If no path is assigned OR we've consumed all waypoints, we've reached the end
             if (!path || _waypointIndex >= path.Count)
             {
                 ReachEnd();
                 return;
             }
 
+            // Fetch the world-space position of the current target waypoint
             var target = path.GetPosition(_waypointIndex);
+
+            // Lift the target up so the issue rides ON TOP of the pipe instead of inside it
+            // (scaled by this issue's size so bigger issues sit higher)
             target.y += transform.localScale.y * PathHeight;
+
+            // Move toward the target at moveSpeed units/second (frame-rate independent)
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
 
+            // ADVANCE: If within ~0.1 units of the waypoint (0.01 squared), snap to next waypoint
+            // Using sqrMagnitude avoids an expensive sqrt — compare squared distances instead
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)
                 _waypointIndex++;
         }

@@ -235,6 +235,17 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
+        /// Convenience overload — checks if a cell is occupied using a Vector2Int.
+        /// </summary>
+        public bool IsOccupied(Vector2Int cell) => IsOccupied(cell.x, cell.y);
+
+        /// <summary>
+        /// Returns true if the given cell is within the grid bounds (public accessor
+        /// for the private <see cref="IsInBounds(int,int)"/>).
+        /// </summary>
+        public bool IsCellInBounds(Vector2Int cell) => IsInBounds(cell.x, cell.y);
+
+        /// <summary>
         /// Generates a new grid of PathBuildCell GameObjects at runtime.
         /// Each cell is a cube primitive with a trigger collider and a PathBuildCell component.
         /// </summary>
@@ -497,6 +508,47 @@ namespace _project.Scripts.Object_Scripts
         {
             var basePos = GetCellWorldPosition(position);
             return new Vector3(basePos.x, basePos.y + cellHeight * 0.5f + pipeVisualHeight, basePos.z);
+        }
+
+        /// <summary>
+        /// Converts a world-space position into the nearest grid cell coordinate.
+        /// Used to map fixed anchor Transforms (e.g., WaypointPath.startPoint/endPoint)
+        /// onto the grid so we can test piece adjacency against them.
+        /// Returns the clamped cell index even if the point is outside the grid bounds.
+        /// </summary>
+        public Vector2Int WorldToCell(Vector3 worldPosition)
+        {
+            // Transform world position into this board's local space
+            var local = transform.InverseTransformPoint(worldPosition);
+
+            // Cell spacing includes both the cell itself and the gap between cells
+            var step = cellSize + cellGap;
+
+            // Reverse the GetLocalPosition math to recover column/row indices
+            // (GetLocalPosition centers the grid, so we add the half-extent back)
+            var column = Mathf.RoundToInt(local.x / step + (columns - 1) * 0.5f);
+            var row = Mathf.RoundToInt(local.z / step + (rows - 1) * 0.5f);
+
+            // Clamp so out-of-bounds anchors snap to the nearest edge cell
+            column = Mathf.Clamp(column, 0, columns - 1);
+            row = Mathf.Clamp(row, 0, rows - 1);
+
+            return new Vector2Int(column, row);
+        }
+
+        /// <summary>
+        /// Returns true if two grid cells are 4-way neighbors (share an edge) OR identical.
+        /// Diagonals are NOT considered adjacent — path pieces must link orthogonally.
+        /// Identical cells return true so anchor Transforms placed directly on a piece's
+        /// endpoint cell count as "connected" to that piece.
+        /// </summary>
+        public static bool AreCellsAdjacent(Vector2Int a, Vector2Int b)
+        {
+            var dx = Mathf.Abs(a.x - b.x);
+            var dy = Mathf.Abs(a.y - b.y);
+            // Same cell, or exactly one axis differs by 1 (the other by 0)
+            if (dx == 0 && dy == 0) return true;
+            return (dx == 1 && dy == 0) || (dx == 0 && dy == 1);
         }
 
         /// <summary>
