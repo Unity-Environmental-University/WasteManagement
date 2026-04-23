@@ -28,7 +28,7 @@ namespace _project.Scripts.Object_Scripts
         private int _waypointIndex;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
-        public int Size { get; private set; }
+        private int Size { get; set; }
         public float SiftCost => BaseSiftCost * Size;
         public float ProcessCost => BaseProcessCost * Size;
 
@@ -45,7 +45,7 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         /// Per-frame movement along the assigned WaypointPath.
-        /// Advances waypoint-by-waypoint: moves toward the current target, and increments
+        /// Advances waypoint-by-waypoint: moves toward the current target and increments
         /// the index once close enough. When the index exceeds the path length, the
         /// issue has reached the goal and triggers ReachEnd().
         /// </summary>

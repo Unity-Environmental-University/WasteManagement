@@ -24,13 +24,13 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")] [SerializeField]
         private PathBuildBoard pathBuildBoard;
 
-        // Fixed spawn-side anchor. When set, becomes the FIRST waypoint in the list.
-        // Its nearest grid cell is the BFS START node.
+        // Fixed spawn-side anchor. When set, it becomes the FIRST waypoint in the list.
+        // It's nearest grid cell is the BFS START node.
         [Tooltip("Optional start point prepended before the first placed piece.")] [SerializeField]
         private Transform startPoint;
 
-        // Fixed goal-side anchor. When set, becomes the LAST waypoint in the list.
-        // Its nearest grid cell is the BFS GOAL node.
+        // Fixed goal-side anchor. When set, it becomes the LAST waypoint in the list.
+        // It's nearest grid cell is the BFS GOAL node.
         [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
         private Transform endPoint;
 
@@ -75,7 +75,7 @@ namespace _project.Scripts.Object_Scripts
                 Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
 
             // Unused cells — red markers indicate placed pieces that were ignored
-            // (either unreachable from the start, or off the shortest route)
+            // (either unreachable from the start or off the shortest route)
             Gizmos.color = Color.red;
             foreach (var cell in _unusedCells)
                 Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
@@ -101,7 +101,7 @@ namespace _project.Scripts.Object_Scripts
         ///       3. If GOAL was reached, walk parents back to build the cell sequence.
         ///       4. Convert cells to world positions and bookend with start/end Transforms.
         ///
-        ///     Entities therefore follow the SHORTEST chain of orthogonally-adjacent occupied
+        ///     Entities therefore follow the SHORTEST chain of orthogonally adjacent occupied
         ///     cells from start to goal. Diagonal adjacency is not allowed — pieces must share
         ///     an edge. T-junctions and branches work naturally because BFS considers every
         ///     occupied cell, not just piece endpoints.
@@ -123,7 +123,7 @@ namespace _project.Scripts.Object_Scripts
 
             // RESOLVE START AND GOAL CELLS
             // We need concrete grid cells for BFS. If the caller's Transform sits directly
-            // on an occupied cell, use that. Otherwise find the nearest OCCUPIED cell by
+            // on an occupied cell, use that. Otherwise, find the nearest OCCUPIED cell by
             // expanding search outward from the Transform's grid position.
             var startCell = ResolveAnchorCell(startPoint);
             var goalCell = ResolveAnchorCell(endPoint);
@@ -192,10 +192,10 @@ namespace _project.Scripts.Object_Scripts
             // 4-way neighbor offsets (no diagonals): right, left, up, down
             var directions = new[]
             {
-                new Vector2Int(1, 0),
-                new Vector2Int(-1, 0),
-                new Vector2Int(0, 1),
-                new Vector2Int(0, -1)
+                new Vector2Int(01, 00),
+                new Vector2Int(-1, 00),
+                new Vector2Int(00, 01),
+                new Vector2Int(00, -1)
             };
 
             var found = false;
