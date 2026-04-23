@@ -19,6 +19,7 @@ namespace _project.Scripts.Object_Scripts
 
         public void StartSpawner()
         {
+            if (path) path.Rebuild();
             _spawnCoroutine = StartCoroutine(SpawnTimer(spawnInterval));
         }
 

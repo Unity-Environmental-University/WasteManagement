@@ -35,12 +35,6 @@ namespace _project.Scripts.Core
         {
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
-            //if (currentTurn == 0) SpawnEarlyObjects();
-        }
-
-        private void SpawnEarlyObjects()
-        {
-            _gm.pipCompMan.SpawnOpeningSifter();
         }
         
         /// <summary>
@@ -55,15 +49,33 @@ namespace _project.Scripts.Core
         private void EnterCardSequence()
         {
             currentPhase = GamePhase.Card;
+            SwitchCamera();
 
             _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
             _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
 
-            if (currentTurn > 0 && _gm.shopManager) _gm.shopManager.OpenShop();
+            if (_gm.shopManager) _gm.shopManager.OpenShop();
 
             if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
+        }
+
+        private void SwitchCamera()
+        {
+            var top = _gm.topDownCamera;
+            var main = _gm.mainCamera;
+
+            if (main.isActiveAndEnabled)
+            {
+                main.gameObject.SetActive(false);
+                top.gameObject.SetActive(true);
+            }
+            else if (top.isActiveAndEnabled)
+            {
+                top.gameObject.SetActive(false);
+                main.gameObject.SetActive(true);
+            }
         }
 
         public void EndPhase()
@@ -84,6 +96,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            SwitchCamera();
             _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
@@ -106,16 +119,6 @@ namespace _project.Scripts.Core
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 
             EndPhase();
-        }
-
-        private void PrepareNextWave(int score)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void WinGame()
-        {
-            throw new NotImplementedException();
         }
 
         public void GameLost()
