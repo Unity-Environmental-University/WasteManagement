@@ -21,25 +21,50 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Slider associatedHealthBar;
 
         private bool _isOccupied;
+        private bool _isHovered;
+        private Collider _slotCollider;
+        private PlacementInventory _placementInventory;
         private static bool Debugging => GameMaster.Instance.debugging;
+
+        private void Awake()
+        {
+            _slotCollider = GetComponent<Collider>();
+            if (slotRenderer) _defaultColor = slotRenderer.material.color;
+        }
+
+        private void OnEnable()
+        {
+            BindInventory();
+            RefreshInteractionState();
+        }
 
         private void Start()
         {
-            if (slotRenderer) _defaultColor = slotRenderer.material.color;
+            RefreshInteractionState();
+        }
+
+        private void OnDisable()
+        {
+            if (_placementInventory != null)
+                _placementInventory.SelectionChanged -= HandleSelectionChanged;
+
+            _placementInventory = null;
+            _isHovered = false;
         }
 
         public void OnPointerEnter(PointerEventData eventData)
         {
             var pending = GameMaster.Instance.PendingPlacement;
             if (pending == null || !CanAccept(pending)) return;
-            if (slotRenderer)
-                slotRenderer.material.color = _isOccupied ? occupiedColor : hoverColor;
+            _isHovered = true;
+            UpdateVisualState(pending);
             if (Debugging) Debug.Log($"[SpecialInteract] Hovering — pending: {pending.PlaceableType}");
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (slotRenderer) slotRenderer.material.color = _defaultColor;
+            _isHovered = false;
+            RefreshInteractionState();
         }
 
         public void OnPointerClick(PointerEventData eventData)
@@ -66,9 +91,10 @@ namespace _project.Scripts.Object_Scripts
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedHealthBar);
 
             _isOccupied = true;
+            _isHovered = false;
             GameMaster.Instance.placementInventory.ConsumeSelected();
 
-            if (slotRenderer) slotRenderer.material.color = occupiedColor;
+            RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
         }
 
@@ -78,6 +104,60 @@ namespace _project.Scripts.Object_Scripts
                 return false;
 
             return acceptedType == PlaceableType.Any || acceptedType == item.PlaceableType;
+        }
+
+        private void BindInventory()
+        {
+            var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
+            if (_placementInventory == inventory) return;
+
+            if (_placementInventory != null)
+                _placementInventory.SelectionChanged -= HandleSelectionChanged;
+
+            _placementInventory = inventory;
+
+            if (_placementInventory != null)
+                _placementInventory.SelectionChanged += HandleSelectionChanged;
+        }
+
+        private void HandleSelectionChanged(IPlaceable pending)
+        {
+            RefreshInteractionState(pending);
+        }
+
+        private void Update()
+        {
+            if (_placementInventory == null && GameMaster.Instance != null)
+                RefreshInteractionState();
+        }
+
+        private void RefreshInteractionState(IPlaceable pending = null)
+        {
+            BindInventory();
+
+            if (GameMaster.Instance == null)
+                return;
+
+            pending ??= GameMaster.Instance ? GameMaster.Instance.PendingPlacement : null;
+
+            var canInteract = CanAccept(pending);
+            if (!canInteract) _isHovered = false;
+
+            if (_slotCollider) _slotCollider.enabled = canInteract;
+            UpdateVisualState(pending);
+        }
+
+        private void UpdateVisualState(IPlaceable pending)
+        {
+            if (!slotRenderer) return;
+
+            if (_isOccupied)
+            {
+                slotRenderer.material.color = occupiedColor;
+                return;
+            }
+
+            slotRenderer.material.color = _isHovered && CanAccept(pending) ? hoverColor : _defaultColor;
         }
     }
 }
