@@ -42,6 +42,7 @@ namespace _project.Scripts.Object_Scripts
             if (!placed) return;
 
             gm.placementInventory.ConsumeSelected();
+            if (gm.turnController) gm.turnController.RegisterMove();
             _board?.RefreshVisuals();
         }
 

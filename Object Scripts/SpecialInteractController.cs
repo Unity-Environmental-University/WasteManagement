@@ -96,6 +96,7 @@ namespace _project.Scripts.Object_Scripts
             _isOccupied = true;
             _isHovered = false;
             GameMaster.Instance.placementInventory.ConsumeSelected();
+            if (GameMaster.Instance.turnController) GameMaster.Instance.turnController.RegisterMove();
 
             RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");

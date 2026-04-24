@@ -17,6 +17,7 @@ namespace _project.Scripts.Core
         private GameMaster _gm = GameMaster.Instance;
         [Header("State")] public int currentTurn;
         [Header("State")] public GamePhase currentPhase;
+        [Header("State")] public int moveCount;
 
         public float waveDuration = 60;
 
@@ -43,7 +44,17 @@ namespace _project.Scripts.Core
         private void GameStartSequence()
         {
             if (_gm.debugging) Debug.Log("Game Sequence Started!");
+            moveCount = 0;
             EnterCardSequence();
+        }
+
+        /// <summary>
+        ///     Records a player placement as a move. Increments the persistent run counter.
+        /// </summary>
+        public void RegisterMove()
+        {
+            moveCount++;
+            if (_gm.debugging) Debug.Log($"[TurnController] Move registered (total: {moveCount}).");
         }
 
         private void EnterCardSequence()
