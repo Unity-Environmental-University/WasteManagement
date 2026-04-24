@@ -22,7 +22,6 @@ namespace _project.Scripts.Core
         public PlacementInventory placementInventory;
         public PipelineComponentManager pipCompMan;
         public ShopManager shopManager;
-        public ScoreManager scoreManager;
         public PathBuildBoard pathBuildBoard;
 
         [Header("Debug")] public bool debugging;
@@ -51,7 +50,6 @@ namespace _project.Scripts.Core
             if (!placementInventory) placementInventory = GetComponent<PlacementInventory>();
             if (!placementInventory) placementInventory = gameObject.AddComponent<PlacementInventory>();
             if (!shopManager) shopManager = GetComponentInChildren<ShopManager>();
-            if (!scoreManager) scoreManager = GetComponentInChildren<ScoreManager>();
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));
@@ -59,12 +57,9 @@ namespace _project.Scripts.Core
             if (!interfaceManager) missing.Add(nameof(interfaceManager));
             if (!deckManager) missing.Add(nameof(deckManager));
             if (!shopManager) missing.Add(nameof(shopManager));
-            if (!scoreManager) missing.Add(nameof(scoreManager));
 
             if (missing.Count > 0)
                 Debug.LogWarning($"[CardGameMaster] Missing components: {string.Join(", ", missing)}");
-
-            if (scoreManager) scoreManager.Initialize();
         }
     }
 }

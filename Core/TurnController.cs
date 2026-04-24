@@ -114,7 +114,6 @@ namespace _project.Scripts.Core
             foreach (var spawner in _gm.entitySpawners)
                 spawner.StopSpawner();
 
-            if (_gm.scoreManager) ScoreManager.AddTokens(_gm.scoreManager.TokensPerWave);
             currentTurn++;
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 

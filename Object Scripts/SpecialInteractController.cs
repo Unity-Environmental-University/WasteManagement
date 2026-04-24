@@ -90,6 +90,9 @@ namespace _project.Scripts.Object_Scripts
             if (pending.PlaceableType == PlaceableType.Sifter && associatedHealthBar && placed)
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedHealthBar);
 
+            if (pending.PlaceableType == PlaceableType.Sifter && placed && placed.TryGetComponent<WasteSifter>(out var sifter))
+                sifter.SetSlot(this);
+
             _isOccupied = true;
             _isHovered = false;
             GameMaster.Instance.placementInventory.ConsumeSelected();
@@ -104,6 +107,14 @@ namespace _project.Scripts.Object_Scripts
                 return false;
 
             return acceptedType == PlaceableType.Any || acceptedType == item.PlaceableType;
+        }
+
+        public void ClearOccupied()
+        {
+            if (!_isOccupied) return;
+
+            _isOccupied = false;
+            RefreshInteractionState();
         }
 
         private void BindInventory()

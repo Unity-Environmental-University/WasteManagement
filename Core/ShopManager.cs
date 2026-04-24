@@ -16,25 +16,25 @@ namespace _project.Scripts.Core
         [Header("Tower Item")]
         [SerializeField] private string towerDisplayName = "Processing Tower";
         [SerializeField] private string towerDescription = "Intercepts issue objects on the pipeline.";
-        [SerializeField] private int towerCost = 15;
+        [SerializeField] private int towerRequiredLevel = 1;
         [SerializeField] private GameObject towerPrefab;
         [SerializeField] private Sprite towerSprite;
 
         [Header("Sifter Item")]
         [SerializeField] private string sifterDisplayName = "Waste Sifter";
         [SerializeField] private string sifterDescription = "Filters the pipeline, reducing issue size.";
-        [SerializeField] private int sifterCost = 8;
+        [SerializeField] private int sifterRequiredLevel = 1;
+        [SerializeField] private int sifterCount = 3;
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
 
         [Header("Path Items")]
         [SerializeField] private string shortPipeDisplayName = "Short Pipe";
         [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
-        [SerializeField] private int shortPipeCost;
+        [SerializeField] private int shortPipeRequiredLevel = 1;
         [SerializeField] private Sprite shortPipeSprite;
         [SerializeField] private string longPipeDisplayName = "Long Pipe";
         [SerializeField] private string longPipeDescription = "Straight pipe segment covering 3 cells.";
-        [SerializeField] private int longPipeCost;
         [SerializeField] private Sprite longPipeSprite;
 
         [Header("Card Items")]
@@ -76,6 +76,13 @@ namespace _project.Scripts.Core
             if (shopItemGo) Destroy(shopItemGo);
         }
 
+        private static int CurrentLevel => GameMaster.Instance.turnController.currentTurn + 1;
+
+        public static bool HasAccess(IShopItem item)
+        {
+            return item != null && CurrentLevel >= item.RequiredLevel;
+        }
+
         private void GenerateShopInventory()
         {
             ClearShop();
@@ -91,26 +98,30 @@ namespace _project.Scripts.Core
                 : longPipeSprite != null
                     ? longPipeSprite
                     : blankTestSprite;
-            SpawnShopItem(new PathPieceShopItem(shortPipeDisplayName, shortPipeDescription, shortPipeCost, 2,
+            SpawnShopItem(new PathPieceShopItem(shortPipeDisplayName, shortPipeDescription, shortPipeRequiredLevel, 2,
                 shortPipeSprite != null ? shortPipeSprite : fallbackPathSprite));
-            SpawnShopItem(new PathPieceShopItem(longPipeDisplayName, longPipeDescription, longPipeCost, 3,
+            SpawnShopItem(new PathPieceShopItem(longPipeDisplayName, longPipeDescription, 1, 3,
                 longPipeSprite != null ? longPipeSprite : fallbackPathSprite));
 
             if (towerPrefab)
-                SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerCost, towerPrefab, towerSprite));
+                SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab, towerSprite));
 
             if (sifterPrefab)
-                SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterCost, sifterPrefab, sifterSprite));
+            {
+                for (var i = 0; i < sifterCount; i++)
+                    SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel, sifterPrefab, sifterSprite));
+            }
 
             foreach (var entry in cardEntries)
             {
                 var card = CreateCard(entry.cardType);
-                if (card != null) SpawnShopItem(new CardShopItem(card, entry.cost, entry.sprite));
+                if (card != null) SpawnShopItem(new CardShopItem(card, entry.requiredLevel, entry.sprite));
             }
         }
 
         private void SpawnShopItem(IShopItem item)
         {
+            if (!HasAccess(item)) return;
             if (!shopItemPrefab || !shopItemsParent) return;
             var ui = Instantiate(shopItemPrefab, shopItemsParent);
             ui.Setup(item);

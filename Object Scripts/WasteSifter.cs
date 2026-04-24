@@ -10,6 +10,8 @@ namespace _project.Scripts.Object_Scripts
         public float maxHealth;
         public float health;
         [SerializeField] private int siftPower = 1;
+        private bool _isBreaking;
+        private SpecialInteractController _slot;
 
         private void Start()
         {
@@ -25,7 +27,12 @@ namespace _project.Scripts.Object_Scripts
         {
             health = newHealth;
             var survived = healthBar ? healthBar.SetHealth(newHealth, maxHealth) : newHealth > 0;
-            if (!survived) StartCoroutine(BreakSifter());
+            if (!survived && !_isBreaking) StartCoroutine(BreakSifter());
+        }
+
+        public void SetSlot(SpecialInteractController slot)
+        {
+            _slot = slot;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -41,7 +48,9 @@ namespace _project.Scripts.Object_Scripts
 
         private IEnumerator BreakSifter()
         {
+            _isBreaking = true;
             yield return new WaitForSeconds(4f);
+            _slot?.ClearOccupied();
             if (healthBar) healthBar.gameObject.SetActive(false);
             Destroy(gameObject);
         }

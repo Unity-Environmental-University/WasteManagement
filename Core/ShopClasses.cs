@@ -9,7 +9,7 @@ namespace _project.Scripts.Core
     {
         string DisplayName { get; }
         string Description { get; }
-        int Cost { get; }
+        int RequiredLevel { get; }
         Sprite DisplaySprite { get; }
         bool RemoveAfterPurchase { get; }
         void Purchase();
@@ -40,7 +40,7 @@ namespace _project.Scripts.Core
     public struct CardShopEntry
     {
         public string cardType; // "ChemicalSolvent" | "UpgradedMeshNet" | "SuperiorMaintenance"
-        public int cost;
+        public int requiredLevel;
         public Sprite sprite;
     }
 
@@ -53,7 +53,7 @@ namespace _project.Scripts.Core
 
         public string DisplayName => "Placeholder Item";
         public string Description => "Temporary shop entry for layout testing.";
-        public int Cost => 0;
+        public int RequiredLevel => 1;
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
 
@@ -66,22 +66,21 @@ namespace _project.Scripts.Core
     {
         private readonly ICard _card;
 
-        public CardShopItem(ICard card, int cost, Sprite displaySprite)
+        public CardShopItem(ICard card, int requiredLevel, Sprite displaySprite)
         {
             _card = card;
-            Cost = cost;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
             DisplaySprite = displaySprite;
         }
 
         public string DisplayName => _card.Name;
         public string Description => _card.Description ?? string.Empty;
-        public int Cost { get; }
+        public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
 
         public void Purchase()
         {
-            ScoreManager.SpendTokens(Cost);
             GameMaster.Instance.deckManager.AddCard(_card.Clone());
         }
     }
@@ -90,25 +89,24 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public TowerShopItem(string displayName, string description, int cost, GameObject prefab, Sprite displaySprite)
+        public TowerShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
         {
             DisplayName = displayName;
             Description = description;
-            Cost = cost;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
-        public int Cost { get; }
+        public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Tower;
 
         public void Purchase()
         {
-            ScoreManager.SpendTokens(Cost);
             GameMaster.Instance.placementInventory.Add(this);
         }
 
@@ -125,25 +123,24 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public SifterShopItem(string displayName, string description, int cost, GameObject prefab, Sprite displaySprite)
+        public SifterShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
         {
             DisplayName = displayName;
             Description = description;
-            Cost = cost;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
-        public int Cost { get; }
+        public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Sifter;
 
         public void Purchase()
         {
-            ScoreManager.SpendTokens(Cost);
             GameMaster.Instance.placementInventory.Add(this);
         }
 
@@ -157,43 +154,42 @@ namespace _project.Scripts.Core
     {
         private readonly int _length;
 
-        public PathPieceShopItem(string displayName, string description, int cost, int length, Sprite displaySprite)
+        public PathPieceShopItem(string displayName, string description, int requiredLevel, int length, Sprite displaySprite)
         {
             DisplayName = displayName;
             Description = description;
-            Cost = cost;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
             _length = length;
             DisplaySprite = displaySprite;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
-        public int Cost { get; }
+        public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => false;
 
         public void Purchase()
         {
-            ScoreManager.SpendTokens(Cost);
-            var placeable = new PathPiecePlaceable(DisplayName, Description, Cost, _length, DisplaySprite);
+            var placeable = new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length, DisplaySprite);
             GameMaster.Instance.placementInventory.Add(placeable);
         }
     }
 
     public class PathPiecePlaceable : IPathPiecePlaceable
     {
-        public PathPiecePlaceable(string displayName, string description, int cost, int length, Sprite displaySprite)
+        public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length, Sprite displaySprite)
         {
             DisplayName = displayName;
             Description = description;
-            Cost = cost;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
             Length = Mathf.Max(2, length);
             DisplaySprite = displaySprite;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
-        public int Cost { get; }
+        public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public int Length { get; }
