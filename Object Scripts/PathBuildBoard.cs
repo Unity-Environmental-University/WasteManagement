@@ -31,7 +31,9 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float cellGap = 0.1f;
         [SerializeField] private float cellHeight = 0.1f;
 
-        [Header("Visuals")] [SerializeField] private Color emptyColor = new(0.18f, 0.18f, 0.18f, 1f);
+        [Header("Visuals")] [SerializeField] private Material cellMaterial;
+        [SerializeField] private Material pipeMaterial;
+        [SerializeField] private Color emptyColor = new(0.18f, 0.18f, 0.18f, 1f);
 
         [SerializeField] private Color occupiedColor = new(0.28f, 0.28f, 0.28f, 1f);
         [SerializeField] private Color validPreviewColor = new(0.35f, 0.8f, 1f, 1f);
@@ -269,7 +271,7 @@ namespace _project.Scripts.Object_Scripts
                 cellObject.transform.localScale = new Vector3(cellSize, cellHeight, cellSize);
 
                 var rend = cellObject.GetComponent<Renderer>();
-                rend.material = new Material(rend.sharedMaterial);
+                rend.material = cellMaterial ? new Material(cellMaterial) : new Material(rend.sharedMaterial);
 
                 var collisionComp = cellObject.GetComponent<Collider>();
                 if (collisionComp) collisionComp.isTrigger = true;
@@ -384,7 +386,8 @@ namespace _project.Scripts.Object_Scripts
             if (collisionComp) collisionComp.enabled = false;
 
             var rend = visual.GetComponent<Renderer>();
-            rend.material = new Material(rend.sharedMaterial)
+            var sourceMaterial = pipeMaterial ? pipeMaterial : rend.sharedMaterial;
+            rend.material = new Material(sourceMaterial)
             {
                 color = color
             };

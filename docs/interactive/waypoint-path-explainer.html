@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>On the Mechanics of the Waypoint Path — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Caveat:wght@400..700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paper & ink */
+    --paper: #f1e7cf;
+    --paper-warm: #eadcb6;
+    --paper-edge: #dccba0;
+    --ink: #1a1f2e;
+    --ink-soft: #3c4254;
+    --ink-dim: #6a6b6e;
+
+    /* Accents — oxidised, aged */
+    --rust: #b24626;
+    --rust-deep: #8e3318;
+    --forest: #3d5a3a;
+    --forest-deep: #2a3f28;
+    --ochre: #c78d1f;
+    --ochre-warm: #dba93e;
+    --blueprint: #4a6885;
+    --blueprint-soft: #8aa0b8;
+
+    /* Grid lines */
+    --grid-line: rgba(74, 104, 133, 0.18);
+    --grid-line-bold: rgba(74, 104, 133, 0.30);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: "Newsreader", Georgia, serif;
+    font-weight: 400;
+    font-size: 18px;
+    line-height: 1.65;
+    color: var(--ink);
+    background-color: var(--paper);
+    background-image:
+      /* noise/grain */
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.15  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),
+      /* graph paper: thick every 5, thin rest */
+      linear-gradient(to right, var(--grid-line-bold) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line-bold) 1px, transparent 1px),
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size:
+      200px 200px,
+      120px 120px,
+      120px 120px,
+      24px 24px,
+      24px 24px;
+    background-attachment: fixed;
+  }
+
+  ::selection { background: var(--ochre-warm); color: var(--ink); }
+
+  /* ---------------- masthead ---------------- */
+  .masthead {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 3.2rem 2rem 0;
+    position: relative;
+  }
+  .masthead-rule {
+    border: none;
+    height: 7px;
+    margin: 0 0 0.4rem;
+    background:
+      linear-gradient(to bottom,
+        var(--ink) 0, var(--ink) 2px,
+        transparent 2px, transparent 3px,
+        var(--ink) 3px, var(--ink) 3.8px,
+        transparent 3.8px, transparent 5px,
+        var(--ink) 5px, var(--ink) 7px);
+  }
+  .masthead-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.68rem;
+    color: var(--ink-soft);
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--ink);
+  }
+  .masthead-meta .issue { font-weight: 600; }
+  .masthead-meta .edition { font-style: italic; letter-spacing: 0.1em; }
+
+  /* ---------------- hero ---------------- */
+  .hero {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 3rem;
+    align-items: end;
+    border-bottom: 1px solid var(--ink);
+  }
+  .hero-chapter {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+  }
+  .hero-chapter::before,
+  .hero-chapter::after {
+    content: "";
+    flex: 0 0 24px;
+    height: 1px;
+    background: var(--rust);
+  }
+  .hero-chapter::after { flex: 1; }
+  .hero h1 {
+    font-family: "Fraunces", serif;
+    font-weight: 400;
+    font-size: clamp(3rem, 7.5vw, 6.2rem);
+    line-height: 0.92;
+    letter-spacing: -0.025em;
+    margin: 0 0 1rem;
+    font-variation-settings: "opsz" 144, "SOFT" 30;
+    color: var(--ink);
+  }
+  .hero h1 em {
+    font-style: italic;
+    font-weight: 300;
+    color: var(--rust);
+    font-variation-settings: "opsz" 144, "SOFT" 80;
+  }
+  .hero-sub {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-size: 1.25rem;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 44ch;
+  }
+  .hero-sub code {
+    font-family: "JetBrains Mono", monospace;
+    font-style: normal;
+    font-size: 0.92em;
+    color: var(--ink);
+    background: var(--paper-warm);
+    padding: 0.05em 0.35em;
+    border: 1px solid var(--ink);
+  }
+  .hero-stamp {
+    justify-self: end;
+    transform: rotate(-6deg);
+    font-family: "JetBrains Mono", monospace;
+    color: var(--rust-deep);
+    border: 3px double var(--rust-deep);
+    padding: 0.8rem 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    line-height: 1.2;
+    font-size: 0.72rem;
+    text-align: center;
+    opacity: 0.85;
+    position: relative;
+  }
+  .hero-stamp b {
+    display: block;
+    font-size: 1.25rem;
+    letter-spacing: 0.2em;
+    margin-bottom: 0.25rem;
+  }
+  .hero-stamp i {
+    display: block;
+    font-style: normal;
+    font-size: 0.6rem;
+    opacity: 0.75;
+    margin-top: 0.35rem;
+  }
+
+  /* ---------------- toc / nav ---------------- */
+  .toc {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: var(--paper);
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 0;
+  }
+  .toc-inner {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 0.7rem 2rem;
+    display: flex;
+    gap: 1.6rem;
+    align-items: center;
+    overflow-x: auto;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    white-space: nowrap;
+  }
+  .toc-inner::-webkit-scrollbar { height: 4px; }
+  .toc-inner::-webkit-scrollbar-thumb { background: var(--ink-dim); }
+  .toc-label { color: var(--rust); font-weight: 600; }
+  .toc a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: color 0.15s;
+    position: relative;
+  }
+  .toc a:hover { color: var(--rust); }
+  .toc a .num {
+    color: var(--ochre);
+    margin-right: 0.35em;
+    font-style: italic;
+    font-family: "Newsreader", serif;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  /* ---------------- main layout ---------------- */
+  main {
+    max-width: 1160px;
+    margin: 0 auto;
+    padding: 3rem 2rem 5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  main > * { grid-column: 1; }
+
+  /* ---------------- typography ---------------- */
+  p {
+    margin: 1em 0;
+    max-width: 68ch;
+  }
+  p.lede::first-letter {
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-variation-settings: "opsz" 144;
+    float: left;
+    font-size: 4.8em;
+    line-height: 0.85;
+    margin: 0.05em 0.12em 0 0;
+    color: var(--rust);
+    padding-top: 0.05em;
+  }
+
+  section {
+    margin-top: 4.5rem;
+    position: relative;
+  }
+  section:first-child { margin-top: 1rem; }
+
+  /* section header with numeric */
+  .section-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.4rem;
+    align-items: baseline;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 2px solid var(--ink);
+    position: relative;
+  }
+  .section-head::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -6px;
+    height: 1px;
+    background: var(--ink);
+  }
+  .section-num {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 3.4rem;
+    line-height: 1;
+    color: var(--rust);
+    font-variation-settings: "opsz" 144, "SOFT" 100;
+  }
+  .section-num sup {
+    font-size: 0.4em;
+    font-style: normal;
+    vertical-align: super;
+    color: var(--ink-soft);
+    margin-right: 0.15em;
+  }
+  .section-head h2 {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: clamp(1.8rem, 3.4vw, 2.5rem);
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--ink);
+    font-variation-settings: "opsz" 72;
+  }
+  .section-kicker {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--forest-deep);
+    margin-top: 0.3rem;
+    display: block;
+  }
+
+  h3 {
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: 1.35rem;
+    letter-spacing: -0.01em;
+    margin: 2.2rem 0 0.4rem;
+    color: var(--ink);
+    font-variation-settings: "opsz" 72;
+  }
+  h3::before {
+    content: "§ ";
+    color: var(--rust);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.88em;
+    background: var(--paper-warm);
+    color: var(--rust-deep);
+    padding: 0.05em 0.4em;
+    border: 1px solid var(--paper-edge);
+    border-radius: 2px;
+    font-weight: 500;
+  }
+
+  pre {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--paper-warm);
+    border: 1px solid var(--ink);
+    border-left: 4px solid var(--ink);
+    padding: 1.1rem 1.3rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--ink);
+    margin: 1.2rem 0;
+    box-shadow: 4px 4px 0 var(--ink);
+    position: relative;
+  }
+  pre::before {
+    content: "LISTING";
+    position: absolute;
+    top: -10px;
+    right: 14px;
+    background: var(--paper);
+    padding: 0 0.5rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.25em;
+    color: var(--ink-soft);
+    border: 1px solid var(--ink);
+  }
+  pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+    font-weight: 400;
+  }
+
+  ul, ol { max-width: 64ch; padding-left: 1.4rem; }
+  ul li, ol li { margin: 0.35em 0; }
+  ul { list-style: none; padding-left: 0; }
+  ul > li { padding-left: 1.5rem; position: relative; }
+  ul > li::before {
+    content: "—";
+    position: absolute;
+    left: 0;
+    color: var(--rust);
+    font-weight: 700;
+  }
+  ol {
+    list-style: none;
+    counter-reset: ordered;
+    padding-left: 0;
+  }
+  ol > li {
+    counter-increment: ordered;
+    padding-left: 2.2rem;
+    position: relative;
+    margin: 0.45em 0;
+  }
+  ol > li::before {
+    content: counter(ordered, decimal-leading-zero) ".";
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85em;
+    color: var(--rust);
+    font-weight: 600;
+  }
+
+  /* ---------------- callouts ---------------- */
+  .callout {
+    margin: 1.8rem 0;
+    padding: 1.2rem 1.4rem 1.2rem 3.2rem;
+    background: var(--paper-warm);
+    border: 1px solid var(--ink);
+    position: relative;
+    max-width: 72ch;
+  }
+  .callout::before {
+    content: attr(data-label);
+    position: absolute;
+    left: -1px;
+    top: -1px;
+    bottom: -1px;
+    width: 2.4rem;
+    background: var(--ink);
+    color: var(--paper);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .callout.tldr { border-color: var(--ochre); }
+  .callout.tldr::before { background: var(--ochre); color: var(--ink); }
+  .callout.tip { border-color: var(--forest); }
+  .callout.tip::before { background: var(--forest); color: var(--paper); }
+  .callout.warning { border-color: var(--rust); border-left-width: 4px; }
+  .callout.warning::before { background: var(--rust); color: var(--paper); }
+
+  .callout strong { font-variant: small-caps; letter-spacing: 0.04em; font-weight: 700; }
+  .callout p { margin: 0.2em 0; max-width: none; }
+
+  /* ---------------- steps (big picture) ---------------- */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0;
+    margin: 2rem 0;
+    border: 1px solid var(--ink);
+    background: var(--paper-warm);
+  }
+  .step {
+    padding: 1.3rem 1.2rem 1.4rem;
+    border-right: 1px dashed var(--ink);
+    position: relative;
+  }
+  .step:last-child { border-right: none; }
+  .step-num {
+    font-family: "Fraunces", serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: 2.2rem;
+    line-height: 1;
+    color: var(--rust);
+    margin-bottom: 0.6rem;
+    display: block;
+    font-variation-settings: "opsz" 144, "SOFT" 100;
+  }
+  .step-body {
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  .step-body code { font-size: 0.82em; }
+
+  @media (max-width: 720px) {
+    .steps { grid-template-columns: 1fr; }
+    .step { border-right: none; border-bottom: 1px dashed var(--ink); }
+    .step:last-child { border-bottom: none; }
+  }
+
+  /* ---------------- widget (figure) ---------------- */
+  .figure {
+    margin: 2.4rem 0;
+    padding: 0;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 6px 6px 0 var(--ink);
+    position: relative;
+  }
+  .figure-caption {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.7rem 1.2rem;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  .figure-caption .fig-label b { color: var(--ochre-warm); margin-right: 0.8em; }
+  .figure-caption .fig-label i {
+    font-style: italic;
+    letter-spacing: 0.08em;
+    text-transform: none;
+    font-family: "Newsreader", serif;
+    font-size: 1em;
+    color: var(--paper);
+    opacity: 0.8;
+    margin-left: 0.6em;
+  }
+  .figure-caption .fig-count {
+    font-size: 0.65rem;
+    opacity: 0.7;
+  }
+  .figure-body {
+    padding: 1.6rem 1.4rem 1.4rem;
+  }
+  .figure-desc {
+    font-family: "Newsreader", serif;
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--ink-soft);
+    margin: 0 0 1.2rem;
+    max-width: 64ch;
+    line-height: 1.5;
+  }
+  .figure-desc strong {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ---------------- controls ---------------- */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0.8rem 0 1.2rem;
+    align-items: center;
+  }
+  button {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.55rem 0.9rem;
+    background: var(--paper);
+    color: var(--ink);
+    border: 1.5px solid var(--ink);
+    cursor: pointer;
+    transition: all 0.12s ease;
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  button:hover:not(:disabled) {
+    background: var(--ink);
+    color: var(--paper);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  button:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 var(--ink);
+  }
+  button:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: 1px 1px 0 var(--ink-dim); }
+
+  button.primary {
+    background: var(--rust);
+    color: var(--paper);
+    border-color: var(--rust-deep);
+    box-shadow: 2px 2px 0 var(--rust-deep);
+  }
+  button.primary:hover:not(:disabled) {
+    background: var(--rust-deep);
+    color: var(--paper);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+
+  .mode-toggle {
+    display: inline-flex;
+    border: 1.5px solid var(--ink);
+    box-shadow: 2px 2px 0 var(--ink);
+  }
+  .mode-toggle button {
+    border: none;
+    box-shadow: none;
+    background: var(--paper);
+    padding: 0.5rem 0.85rem;
+    border-right: 1px solid var(--ink);
+  }
+  .mode-toggle button:last-child { border-right: none; }
+  .mode-toggle button:hover:not(.active) {
+    background: var(--paper-warm);
+    color: var(--ink);
+    transform: none;
+    box-shadow: none;
+  }
+  .mode-toggle button.active {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .control-label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-right: 0.2rem;
+  }
+
+  .speed-slider {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0 0.3rem;
+  }
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 130px;
+    height: 6px;
+    background: var(--paper-edge);
+    border: 1px solid var(--ink);
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--rust);
+    border: 1.5px solid var(--ink);
+    cursor: pointer;
+    border-radius: 0;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--rust);
+    border: 1.5px solid var(--ink);
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  /* ---------------- grid ---------------- */
+  .grid-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 1rem 0 0.6rem;
+    padding: 1rem;
+    background: var(--paper-warm);
+    border: 1px dashed var(--ink);
+    position: relative;
+  }
+  .grid-wrap::before,
+  .grid-wrap::after {
+    content: "";
+    position: absolute;
+    width: 10px; height: 10px;
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+  }
+  .grid-wrap::before { top: -5px; left: -5px; }
+  .grid-wrap::after { bottom: -5px; right: -5px; }
+  .grid {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    background: #f8f0db;
+    border: 2px solid var(--ink);
+    position: relative;
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 42px 42px;
+  }
+  .cell {
+    width: 42px;
+    height: 42px;
+    background: transparent;
+    border: none;
+    border-right: 1px solid rgba(74, 104, 133, 0.15);
+    border-bottom: 1px solid rgba(74, 104, 133, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Fraunces", serif;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+    color: var(--ink-dim);
+    user-select: none;
+    position: relative;
+  }
+  .cell:hover {
+    background: rgba(178, 70, 38, 0.08);
+    box-shadow: inset 0 0 0 1.5px var(--rust);
+    z-index: 2;
+  }
+  .cell.occupied {
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--paper-edge),
+      var(--paper-edge) 2px,
+      #d6c296 2px,
+      #d6c296 4px
+    );
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1.5px var(--ink-soft);
+  }
+  .cell.path {
+    background: var(--forest);
+    color: var(--paper);
+    box-shadow: inset 0 0 0 1.5px var(--forest-deep);
+    text-shadow: 0 1px 0 var(--forest-deep);
+  }
+  .cell.unused {
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(178, 70, 38, 0.15),
+      rgba(178, 70, 38, 0.15) 3px,
+      rgba(178, 70, 38, 0.28) 3px,
+      rgba(178, 70, 38, 0.28) 6px
+    );
+    color: var(--rust-deep);
+    box-shadow: inset 0 0 0 1.5px var(--rust);
+  }
+  .cell.start {
+    background: var(--blueprint);
+    color: var(--paper);
+    box-shadow: inset 0 0 0 2px var(--ink);
+    text-shadow: 0 1px 0 var(--ink);
+  }
+  .cell.end {
+    background: var(--rust);
+    color: var(--paper);
+    box-shadow: inset 0 0 0 2px var(--rust-deep);
+    text-shadow: 0 1px 0 var(--rust-deep);
+  }
+  .cell.visiting {
+    background: rgba(199, 141, 31, 0.35);
+    color: var(--ink);
+    box-shadow: inset 0 0 0 1.5px var(--ochre);
+    animation: pulse-soft 0.6s ease-out;
+  }
+  .cell.frontier {
+    background: rgba(199, 141, 31, 0.2);
+    color: var(--rust-deep);
+    box-shadow: inset 0 0 0 1.5px dashed var(--ochre);
+    outline: 2px dashed var(--ochre);
+    outline-offset: -3px;
+  }
+  .cell.current {
+    transform: scale(1.15);
+    z-index: 5;
+    background: var(--ochre-warm);
+    box-shadow:
+      0 0 0 2px var(--ink),
+      0 4px 8px rgba(26, 31, 46, 0.35);
+    color: var(--ink);
+  }
+  .cell.ring {
+    outline: 2px dashed var(--blueprint);
+    outline-offset: -3px;
+    background: rgba(74, 104, 133, 0.12);
+  }
+  .cell.crumb {
+    background: rgba(74, 104, 133, 0.08);
+    color: var(--blueprint);
+  }
+  .cell.crumb .arrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 1.25rem;
+    line-height: 1;
+    font-weight: 400;
+    opacity: 0.7;
+  }
+  .cell.trail {
+    background: rgba(61, 90, 58, 0.22);
+    color: var(--forest-deep);
+    box-shadow: inset 0 0 0 1.5px var(--forest);
+  }
+  .cell.trail .arrow { opacity: 1; color: var(--forest-deep); }
+  .cell.trace-head {
+    background: var(--ochre-warm);
+    color: var(--ink);
+    box-shadow: 0 0 0 2px var(--ink), 0 4px 8px rgba(26, 31, 46, 0.35);
+    transform: scale(1.15);
+    z-index: 5;
+  }
+  .cell.trace-head .arrow { opacity: 1; color: var(--ink); font-weight: 700; }
+
+  @keyframes pulse-soft {
+    0% { transform: scale(1.15); background: var(--ochre-warm); }
+    100% { transform: scale(1); }
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1.4rem;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 1rem 0 0.4rem;
+    padding: 0.7rem 1rem;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+  }
+  .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+  .legend-swatch {
+    width: 14px; height: 14px;
+    border: 1.5px solid var(--ink);
+    display: inline-block;
+    flex: 0 0 14px;
+  }
+  .legend-swatch.lg-placed {
+    background: repeating-linear-gradient(-45deg, var(--paper-edge), var(--paper-edge) 2px, #d6c296 2px, #d6c296 4px);
+  }
+  .legend-swatch.lg-path { background: var(--forest); }
+  .legend-swatch.lg-unused {
+    background: repeating-linear-gradient(45deg, rgba(178, 70, 38, 0.3), rgba(178, 70, 38, 0.3) 2px, rgba(178, 70, 38, 0.5) 2px, rgba(178, 70, 38, 0.5) 4px);
+    border-color: var(--rust);
+  }
+  .legend-swatch.lg-start { background: var(--blueprint); }
+  .legend-swatch.lg-end { background: var(--rust); }
+
+  /* ---------------- status ---------------- */
+  .status {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    padding: 0.8rem 1rem;
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    border-left-width: 4px;
+    border-left-color: var(--blueprint);
+    min-height: 1.5em;
+    line-height: 1.5;
+  }
+  .status::before {
+    content: "» ";
+    color: var(--rust);
+    font-weight: 700;
+  }
+  .status .hl { color: var(--ochre); font-weight: 700; background: rgba(199, 141, 31, 0.15); padding: 0 0.25em; }
+  .status .ok { color: var(--forest-deep); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+  .status .bad { color: var(--rust-deep); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* ---------------- path chip list ---------------- */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0.8rem 0 0;
+    padding: 0.7rem 0.9rem;
+    background: var(--paper-warm);
+    border: 1px dashed var(--ink);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    min-height: 2.2rem;
+    align-items: center;
+  }
+  .chips-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-right: 0.3rem;
+    font-weight: 600;
+  }
+  .chip {
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    padding: 0.15rem 0.45rem;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+    animation: chip-in 0.3s ease-out;
+  }
+  .chip.head { background: var(--forest); color: var(--paper); border-color: var(--forest-deep); }
+  .chip-arrow { color: var(--rust); font-weight: 700; }
+  @keyframes chip-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------------- collapsible ---------------- */
+  details {
+    background: var(--paper);
+    border: 1px solid var(--ink);
+    margin: 1.4rem 0;
+    position: relative;
+    max-width: 72ch;
+  }
+  details + details { border-top: none; margin-top: -1px; }
+  details summary {
+    padding: 1rem 1.3rem 1rem 3.4rem;
+    cursor: pointer;
+    font-family: "Fraunces", serif;
+    font-weight: 500;
+    font-size: 1.1rem;
+    color: var(--ink);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: background 0.15s;
+    position: relative;
+    font-variation-settings: "opsz" 72;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "+";
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: 1.5px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 400;
+    font-size: 1rem;
+    color: var(--ink);
+    transition: transform 0.2s, background 0.15s;
+  }
+  details[open] summary::before {
+    content: "−";
+    background: var(--rust);
+    color: var(--paper);
+    border-color: var(--rust);
+  }
+  details summary:hover { background: var(--paper-warm); }
+  details summary code {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.88em;
+    background: var(--paper-warm);
+    color: var(--rust-deep);
+    padding: 0.05em 0.4em;
+    border: 1px solid var(--paper-edge);
+    border-radius: 2px;
+  }
+  details .content {
+    padding: 0.4rem 1.4rem 1.2rem;
+    border-top: 1px dashed var(--ink);
+  }
+
+  /* ---------------- keyboard ---------------- */
+  .kbd {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.82em;
+    background: var(--paper-warm);
+    border: 1px solid var(--ink);
+    border-bottom-width: 2px;
+    padding: 0 0.4em;
+    border-radius: 2px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* ---------------- margin annotations ---------------- */
+  .margin-note {
+    font-family: "Caveat", cursive;
+    font-size: 1.25rem;
+    color: var(--rust-deep);
+    line-height: 1.2;
+    display: block;
+    margin: 0.8rem 0 1rem;
+    padding-left: 1.3rem;
+    border-left: 2px solid var(--rust);
+    max-width: 34ch;
+    transform: rotate(-0.5deg);
+  }
+
+  /* ---------------- ornamental rule ---------------- */
+  .orn {
+    text-align: center;
+    margin: 3rem 0 2rem;
+    color: var(--ink);
+    font-size: 1.1rem;
+    letter-spacing: 1.2em;
+    user-select: none;
+  }
+
+  /* ---------------- colophon ---------------- */
+  .colophon {
+    margin-top: 5rem;
+    padding-top: 2rem;
+    border-top: 4px double var(--ink);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  /* ---------------- responsive ---------------- */
+  @media (max-width: 820px) {
+    .hero { grid-template-columns: 1fr; gap: 1.5rem; }
+    .hero-stamp { justify-self: start; }
+    .section-head { grid-template-columns: 1fr; gap: 0.4rem; }
+    .section-num { font-size: 2.4rem; }
+    .grid { background-size: 38px 38px; }
+    .cell { width: 38px; height: 38px; font-size: 0.9rem; }
+    pre::before { display: none; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 17px; }
+    main { padding: 2rem 1.2rem 4rem; }
+    .hero { padding: 1.8rem 1.2rem; }
+    .masthead { padding: 2rem 1.2rem 0; }
+    .grid { background-size: 34px 34px; }
+    .cell { width: 34px; height: 34px; font-size: 0.85rem; }
+    .figure { box-shadow: 3px 3px 0 var(--ink); }
+    pre { box-shadow: 3px 3px 0 var(--ink); }
+    .figure-caption { flex-direction: column; gap: 0.3rem; align-items: flex-start; }
+    .legend { gap: 0.5rem 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <hr class="masthead-rule">
+  <div class="masthead-meta">
+    <span class="issue">Vol. I · No. 03 · Pathfinding Division</span>
+    <span class="edition">A Field Manual of the WasteManagement Engine</span>
+    <span class="issue">MMXXVI</span>
+  </div>
+</div>
+
+<header class="hero">
+  <div>
+    <div class="hero-chapter">Chapter III — On the Ordering of Routes</div>
+    <h1>How the<br><em>Waypoint Path</em><br>Works.</h1>
+    <p class="hero-sub">An interactive study in breadth-first pathfinding over a grid of placed pieces &mdash; being a practical dissection of <code>WaypointPath.cs</code>.</p>
+  </div>
+  <div class="hero-stamp">
+    <b>STUDY</b>
+    Classified<br>Interior Use
+    <i>— rev. 04 —</i>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="toc-inner">
+    <span class="toc-label">Contents →</span>
+    <a href="#problem"><span class="num">i.</span>Problem</a>
+    <a href="#bigpicture"><span class="num">ii.</span>Overview</a>
+    <a href="#grid"><span class="num">iii.</span>Playground</a>
+    <a href="#bfs"><span class="num">iv.</span>BFS Visualizer</a>
+    <a href="#anchor"><span class="num">v.</span>Anchors</a>
+    <a href="#code"><span class="num">vi.</span>Code Tour</a>
+    <a href="#gotchas"><span class="num">vii.</span>Gotchas</a>
+  </div>
+</nav>
+
+<main>
+
+<div class="callout tldr" data-label="Abstract">
+  <p><strong>The thirty-second précis.</strong> Enemies must walk from start to end. The player places road pieces on a grid. This script inspects the pieces, finds the <em>shortest road</em> by the method of <strong>Breadth-First Search</strong>, and delivers the enemy a list of coordinates to step through, one after the other.</p>
+</div>
+
+<section id="problem">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>01</div>
+    <div>
+      <span class="section-kicker">The Problem at Hand</span>
+      <h2>A maze of the player's own making.</h2>
+    </div>
+  </div>
+
+  <p class="lede">The game is, in essence, a maze. The player deposits path pieces on a grid to build a road; enemies must traverse that road to reach the goal at the far end. Simple in concept — thorny in practice.</p>
+
+  <p>The player may (and will) do any of the following:</p>
+  <ul>
+    <li>Build a road riddled with twists, turns, and branches.</li>
+    <li>Leave dead-ends that lead nowhere in particular.</li>
+    <li>Drop pieces that do not even connect to the main road.</li>
+  </ul>
+  <p>The script must survey this whole mess and determine: <em>what is the best road from start to end?</em></p>
+</section>
+
+<section id="bigpicture">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>02</div>
+    <div>
+      <span class="section-kicker">The Big Picture</span>
+      <h2>Five movements, in sequence.</h2>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <span class="step-num">i.</span>
+      <div class="step-body">Player places path pieces on the grid.</div>
+    </div>
+    <div class="step">
+      <span class="step-num">ii.</span>
+      <div class="step-body">Wave begins &mdash; the game calls <code>Rebuild()</code>.</div>
+    </div>
+    <div class="step">
+      <span class="step-num">iii.</span>
+      <div class="step-body">Script finds the shortest road through the pieces.</div>
+    </div>
+    <div class="step">
+      <span class="step-num">iv.</span>
+      <div class="step-body">Script compiles a list of world positions (waypoints).</div>
+    </div>
+    <div class="step">
+      <span class="step-num">v.</span>
+      <div class="step-body">Enemies ask <code>GetPosition(index)</code> &mdash; &ldquo;where next?&rdquo;</div>
+    </div>
+  </div>
+</section>
+
+<section id="grid">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>03</div>
+    <div>
+      <span class="section-kicker">Experiment the First</span>
+      <h2>Construct a road of your own.</h2>
+    </div>
+  </div>
+
+  <span class="margin-note">Click to drop pieces. The path recalculates every keystroke.</span>
+
+  <figure class="figure">
+    <figcaption class="figure-caption">
+      <span class="fig-label"><b>FIG. 1</b> Interactive Grid Builder <i>— live recalculation</i></span>
+      <span class="fig-count">apparatus 01 / 04</span>
+    </figcaption>
+    <div class="figure-body">
+      <p class="figure-desc">Tap cells to toggle them. The script recomputes the path in real time. <strong>Green</strong> cells lie on the chosen path; <strong>hatched red</strong> are placed but unused; <strong>blue</strong> marks the start, <strong>solid red</strong> the end.</p>
+
+      <div class="controls">
+        <span class="control-label">Click mode</span>
+        <div class="mode-toggle" id="builder-mode">
+          <button class="active" data-mode="toggle">Toggle piece</button>
+          <button data-mode="start">Set start</button>
+          <button data-mode="end">Set end</button>
+        </div>
+        <button id="builder-preset1">Simple</button>
+        <button id="builder-preset2">Branches + dead-ends</button>
+        <button id="builder-preset3">Broken (gap)</button>
+        <button id="builder-clear">Clear</button>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="grid" id="builder-grid"></div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch lg-placed"></div>Placed</div>
+        <div class="legend-item"><div class="legend-swatch lg-path"></div>On path</div>
+        <div class="legend-item"><div class="legend-swatch lg-unused"></div>Unused</div>
+        <div class="legend-item"><div class="legend-swatch lg-start"></div>Start</div>
+        <div class="legend-item"><div class="legend-swatch lg-end"></div>End</div>
+      </div>
+
+      <div class="status" id="builder-status">Click cells to place pieces.</div>
+    </div>
+  </figure>
+</section>
+
+<section id="bfs">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>04</div>
+    <div>
+      <span class="section-kicker">On the Method</span>
+      <h2>BFS, disassembled one step at a time.</h2>
+    </div>
+  </div>
+
+  <div class="callout tip" data-label="Analogy">
+    <p><strong>The pond trick.</strong> Imagine a pebble dropped into still water. Ripples spread outward in every direction at identical speed. The <em>first</em> ripple to touch the goal marks the shortest route there. This, in a sentence, is breadth-first search.</p>
+  </div>
+
+  <figure class="figure">
+    <figcaption class="figure-caption">
+      <span class="fig-label"><b>FIG. 2</b> BFS Step-by-Step Visualizer <i>— frontier, visited, path</i></span>
+      <span class="fig-count">apparatus 02 / 04</span>
+    </figcaption>
+    <div class="figure-body">
+      <p class="figure-desc">Observe the ripple spread from the start cell. <strong>Outlined ochre</strong> cells are the <em>frontier</em> (to explore next). <strong>Bright ochre</strong> is the cell presently under inspection. Upon reaching the goal, the algorithm walks the breadcrumbs backward to trace the green path.</p>
+
+      <div class="controls">
+        <button class="primary" id="bfs-play">▶ Auto-play</button>
+        <button id="bfs-step">Step once</button>
+        <button id="bfs-reset">Reset</button>
+        <div class="speed-slider">
+          <span class="control-label">Speed</span>
+          <input type="range" id="bfs-speed" min="50" max="800" value="300">
+        </div>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="grid" id="bfs-grid"></div>
+      </div>
+
+      <div class="status" id="bfs-status">Press <span class="kbd">Step once</span> or <span class="kbd">Auto-play</span> to begin.</div>
+    </div>
+  </figure>
+
+  <h3>The three things BFS tracks</h3>
+  <ul>
+    <li><strong>Frontier</strong> — a to-do list of cells to explore next (first in, first out).</li>
+    <li><strong>Came-from map</strong> — breadcrumbs recording which cell we arrived from.</li>
+    <li><strong>Goal check</strong> — the instant the goal is popped from the frontier, the matter is settled.</li>
+  </ul>
+
+  <h3>Walking the breadcrumbs</h3>
+
+  <p>BFS leaves behind a <em>came-from map</em>: for every cell it visited, an arrow back toward the cell it arrived from. To reconstruct the path, we start at the goal and follow those arrows home &mdash; then reverse the list so the enemy walks start-to-goal.</p>
+
+  <span class="margin-note">Each cell remembers one parent. Follow the arrows.</span>
+
+  <figure class="figure">
+    <figcaption class="figure-caption">
+      <span class="fig-label"><b>FIG. 3</b> The Breadcrumb Walk <i>— goal-to-start reconstruction</i></span>
+      <span class="fig-count">apparatus 03 / 04</span>
+    </figcaption>
+    <div class="figure-body">
+      <p class="figure-desc">Every visited cell displays a small arrow pointing to its parent &mdash; the cell BFS came from. Press <strong>Walk back</strong> to step from the goal, following those arrows home. Cells turn green as they join the final path; the list below shows the path being assembled in reverse.</p>
+
+      <div class="controls">
+        <button class="primary" id="crumb-walk">▶ Auto walk</button>
+        <button id="crumb-step">Step back</button>
+        <button id="crumb-reset">Reset</button>
+        <div class="speed-slider">
+          <span class="control-label">Speed</span>
+          <input type="range" id="crumb-speed" min="80" max="1000" value="450">
+        </div>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="grid" id="crumb-grid"></div>
+      </div>
+
+      <div class="status" id="crumb-status">Start at the <span class="hl">goal (G)</span>. Follow the arrows back to the start.</div>
+
+      <div class="chips" id="crumb-chips">
+        <span class="chips-label">Path</span>
+        <span style="color:var(--ink-dim);font-style:italic;">— empty; press Walk back —</span>
+      </div>
+    </div>
+  </figure>
+</section>
+
+<section id="anchor">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>05</div>
+    <div>
+      <span class="section-kicker">Of Forgiveness in Placement</span>
+      <h2>Anchors search outward in rings.</h2>
+    </div>
+  </div>
+
+  <p class="lede">The start and end points are <code>Transform</code>s dropped into the scene. One need not place them <em>precisely</em> upon a path piece &mdash; the script radiates outward in concentric rings until it finds the nearest occupied cell.</p>
+
+  <span class="margin-note">Radius caps at 5. Beyond that, the script gives up.</span>
+
+  <figure class="figure">
+    <figcaption class="figure-caption">
+      <span class="fig-label"><b>FIG. 4</b> Ring Search Visualizer <i>— concentric expansion</i></span>
+      <span class="fig-count">apparatus 04 / 04</span>
+    </figcaption>
+    <div class="figure-body">
+      <p class="figure-desc">Click any cell to drop a Transform. Watch the script expand outward in rings until it strikes an occupied piece. Search terminates after radius <strong>5</strong>.</p>
+
+      <div class="controls">
+        <button id="anchor-reset">Reset pieces</button>
+        <span class="control-label" style="margin-left:auto;">Click a cell to place</span>
+      </div>
+
+      <div class="grid-wrap">
+        <div class="grid" id="anchor-grid"></div>
+      </div>
+
+      <div class="status" id="anchor-status">Click an empty cell to see the ring search in action.</div>
+    </div>
+  </figure>
+</section>
+
+<div class="orn">✦ ✦ ✦</div>
+
+<section id="code">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>06</div>
+    <div>
+      <span class="section-kicker">The Code, Disrobed</span>
+      <h2>A tour of the principal routines.</h2>
+    </div>
+  </div>
+
+  <details open>
+    <summary>What <code>Rebuild()</code> does</summary>
+    <div class="content">
+      <p>This is the main function. It runs at wave start and performs these actions in order:</p>
+      <ol>
+        <li>Clears the old path.</li>
+        <li>Adds the start Transform as waypoint #1.</li>
+        <li>Figures out which grid cell is the BFS start, and which is the goal.</li>
+        <li>Runs BFS to obtain the cell sequence.</li>
+        <li>Converts those cells into world positions.</li>
+        <li>Adds the end Transform as the last waypoint.</li>
+      </ol>
+      <p>If any step fails (no pieces, no connection), it falls back to a straight line from start to end.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>The BFS loop, translated to plain English</summary>
+    <div class="content">
+<pre><code>// To-do list of cells to check (FIFO queue = shortest path)
+var frontier = new Queue&lt;Vector2Int&gt;();
+frontier.Enqueue(start);
+
+// Breadcrumbs: for each cell, which cell led us here?
+var cameFrom = new Dictionary&lt;Vector2Int, Vector2Int&gt; { [start] = start };
+
+// Only 4 directions — no diagonals!
+var directions = new[] {
+    new Vector2Int( 1,  0),  // right
+    new Vector2Int(-1,  0),  // left
+    new Vector2Int( 0,  1),  // up
+    new Vector2Int( 0, -1)   // down
+};
+
+while (frontier.Count &gt; 0) {
+    var current = frontier.Dequeue();
+
+    if (current == goal) break;   // Found it!
+
+    foreach (var dir in directions) {
+        var next = current + dir;
+        if (cameFrom.ContainsKey(next)) continue;          // already visited
+        if (!pathBuildBoard.IsOccupied(next)) continue;    // not a piece
+        cameFrom[next] = current;                          // leave breadcrumb
+        frontier.Enqueue(next);
+    }
+}</code></pre>
+      <p><strong>Why a Queue?</strong> A queue is first-in-first-out — the thing you added first comes out first. This makes BFS explore in &ldquo;layers&rdquo; of the same distance, which guarantees the shortest path.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Reconstructing the path — the breadcrumb walk</summary>
+    <div class="content">
+<pre><code>// Start at goal, walk backward through breadcrumbs
+var path = new List&lt;Vector2Int&gt;();
+var node = goal;
+while (node != start) {
+    path.Add(node);
+    node = cameFrom[node];   // follow the breadcrumb
+}
+path.Add(start);
+path.Reverse();   // flip to start → goal order</code></pre>
+      <p>We built the path backwards (goal → start), so we reverse it at the end so the enemy walks in the right direction.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Ring search: <code>ResolveAnchorCell</code></summary>
+    <div class="content">
+<pre><code>// Try the exact cell the Transform is on
+if (pathBuildBoard.IsOccupied(anchorCell)) return anchorCell;
+
+// Otherwise, expand outward: ring 1, ring 2, ... up to ring 5
+for (var radius = 1; radius &lt;= 5; radius++) {
+    for (var dx = -radius; dx &lt;= radius; dx++)
+    for (var dy = -radius; dy &lt;= radius; dy++) {
+        // Skip the interior — only check the ring's edge
+        if (Mathf.Abs(dx) != radius &amp;&amp; Mathf.Abs(dy) != radius) continue;
+
+        var candidate = new Vector2Int(anchorCell.x + dx, anchorCell.y + dy);
+        if (pathBuildBoard.IsOccupied(candidate)) return candidate;
+    }
+}
+return null;   // nothing found within radius 5</code></pre>
+      <p>The predicate <code>Mathf.Abs(dx) != radius &amp;&amp; Mathf.Abs(dy) != radius</code> skips the interior of the square so we only examine the outer edge of each ring.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>What the API exposes to other scripts</summary>
+    <div class="content">
+      <ul>
+        <li><code>Count</code> — number of waypoints. Enemies check this to know when they've reached the end.</li>
+        <li><code>GetPosition(int index)</code> — returns the world position of waypoint <code>index</code>. Enemies call this every frame.</li>
+        <li><code>Rebuild()</code> — recalculates the path. Call at wave start.</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<section id="gotchas">
+  <div class="section-head">
+    <div class="section-num"><sup>§</sup>07</div>
+    <div>
+      <span class="section-kicker">Caveats & Common Troubles</span>
+      <h2>Three ways to bleed.</h2>
+    </div>
+  </div>
+
+  <div class="callout warning" data-label="Gotcha I">
+    <p><strong>Diagonal neighbours do not count.</strong> BFS checks only up, down, left, right. If two pieces touch only at a corner, the path breaks. Pieces must share a full edge.</p>
+  </div>
+
+  <div class="callout warning" data-label="Gotcha II">
+    <p><strong>Gaps kill the path.</strong> A single empty cell between pieces and BFS cannot cross it. The whole road will be marked red (unused) and the enemy walks a straight line from start to end.</p>
+  </div>
+
+  <div class="callout warning" data-label="Gotcha III">
+    <p><strong>Anchors too far from pieces.</strong> Ring search caps at radius 5. If the start or end Transform sits more than 5 cells from any placed piece, it fails to resolve.</p>
+  </div>
+
+  <h3>The scene gizmos</h3>
+  <p>When editing in Unity, you'll see:</p>
+  <ul>
+    <li><strong>Yellow lines</strong> — the enemy's actual route.</li>
+    <li><strong>Green wire cubes</strong> — cells on the path.</li>
+    <li><strong>Red wire cubes</strong> — placed pieces that got ignored.</li>
+  </ul>
+  <p>Red cubes are your friend: they tell you which pieces are not in fact helping.</p>
+</section>
+
+<div class="orn">✦ ✦ ✦</div>
+
+<div class="callout tldr" data-label="In Closing">
+  <p><strong>The takeaway.</strong> BFS is simply <em>&ldquo;spread outward until you touch the goal, remember how you got there, then walk the breadcrumbs backward.&rdquo;</em> That single idea is the entire engine of this script.</p>
+</div>
+
+<footer class="colophon">
+  <span>Set in Fraunces, Newsreader &amp; JetBrains Mono</span>
+  <span>Filed under: pathfinding / graph search / grid</span>
+  <span>End of document</span>
+</footer>
+
+</main>
+
+<script>
+// ============================================================
+// SHARED BFS ALGORITHM
+// ============================================================
+function bfs(occupied, start, goal, cols, rows) {
+  const key = (c) => `${c[0]},${c[1]}`;
+  const startKey = key(start), goalKey = key(goal);
+  if (!occupied.has(startKey) || !occupied.has(goalKey)) return null;
+  if (startKey === goalKey) return [start];
+
+  const frontier = [start];
+  const cameFrom = new Map();
+  cameFrom.set(startKey, null);
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let found = false;
+
+  while (frontier.length) {
+    const cur = frontier.shift();
+    if (key(cur) === goalKey) { found = true; break; }
+    for (const [dx,dy] of dirs) {
+      const nx = cur[0]+dx, ny = cur[1]+dy;
+      if (nx<0||ny<0||nx>=cols||ny>=rows) continue;
+      const nk = `${nx},${ny}`;
+      if (cameFrom.has(nk)) continue;
+      if (!occupied.has(nk)) continue;
+      cameFrom.set(nk, cur);
+      frontier.push([nx,ny]);
+    }
+  }
+  if (!found) return null;
+  const path = [];
+  let node = goal;
+  while (node && key(node) !== startKey) {
+    path.push(node);
+    node = cameFrom.get(key(node));
+  }
+  path.push(start);
+  path.reverse();
+  return path;
+}
+
+function resolveAnchor(occupied, anchor, maxRadius = 5) {
+  const key = (c) => `${c[0]},${c[1]}`;
+  if (occupied.has(key(anchor))) return { cell: anchor, radius: 0 };
+  for (let r = 1; r <= maxRadius; r++) {
+    for (let dx = -r; dx <= r; dx++)
+      for (let dy = -r; dy <= r; dy++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const c = [anchor[0]+dx, anchor[1]+dy];
+        if (occupied.has(key(c))) return { cell: c, radius: r };
+      }
+  }
+  return null;
+}
+
+// ============================================================
+// WIDGET 1: INTERACTIVE GRID BUILDER
+// ============================================================
+(function() {
+  const COLS = 10, ROWS = 7;
+  const gridEl = document.getElementById('builder-grid');
+  const statusEl = document.getElementById('builder-status');
+  const modeEls = document.querySelectorAll('#builder-mode button');
+
+  let occupied = new Set();
+  let start = [0, 3];
+  let end = [9, 3];
+  let mode = 'toggle';
+
+  gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  function key(c) { return `${c[0]},${c[1]}`; }
+
+  function render() {
+    gridEl.innerHTML = '';
+    const startRes = resolveAnchor(occupied, start);
+    const endRes = resolveAnchor(occupied, end);
+    let path = null, pathSet = new Set();
+    if (startRes && endRes) {
+      path = bfs(occupied, startRes.cell, endRes.cell, COLS, ROWS);
+      if (path) path.forEach(c => pathSet.add(key(c)));
+    }
+
+    if (!occupied.size) {
+      statusEl.innerHTML = 'Click cells to place pieces.';
+    } else if (!startRes) {
+      statusEl.innerHTML = '<span class="bad">Start has no piece within radius 5.</span>';
+    } else if (!endRes) {
+      statusEl.innerHTML = '<span class="bad">End has no piece within radius 5.</span>';
+    } else if (!path) {
+      statusEl.innerHTML = `<span class="bad">No connected path!</span> Start and end pieces aren't linked.`;
+    } else {
+      const unused = occupied.size - path.length;
+      statusEl.innerHTML = `<span class="ok">Path found.</span> Length: <span class="hl">${path.length}</span> cells. Unused pieces: <span class="hl">${unused}</span>.`;
+    }
+
+    for (let y = ROWS-1; y >= 0; y--) {
+      for (let x = 0; x < COLS; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const k = key([x,y]);
+        const isStart = x === start[0] && y === start[1];
+        const isEnd = x === end[0] && y === end[1];
+        const isOccupied = occupied.has(k);
+        const isPath = pathSet.has(k);
+
+        if (isStart) cell.classList.add('start');
+        else if (isEnd) cell.classList.add('end');
+        else if (isPath) cell.classList.add('path');
+        else if (isOccupied) cell.classList.add('unused');
+
+        if (isStart) cell.textContent = 'S';
+        else if (isEnd) cell.textContent = 'E';
+        else if (isOccupied) cell.textContent = isPath ? '•' : '×';
+
+        cell.addEventListener('click', () => handleClick(x, y));
+        gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  function handleClick(x, y) {
+    if (mode === 'start') { start = [x,y]; }
+    else if (mode === 'end') { end = [x,y]; }
+    else {
+      const k = key([x,y]);
+      if (occupied.has(k)) occupied.delete(k);
+      else occupied.add(k);
+    }
+    render();
+  }
+
+  modeEls.forEach(btn => btn.addEventListener('click', () => {
+    modeEls.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+  }));
+
+  document.getElementById('builder-clear').addEventListener('click', () => {
+    occupied.clear();
+    render();
+  });
+
+  document.getElementById('builder-preset1').addEventListener('click', () => {
+    occupied = new Set();
+    for (let x = 1; x <= 8; x++) occupied.add(`${x},3`);
+    start = [0,3]; end = [9,3];
+    render();
+  });
+
+  document.getElementById('builder-preset2').addEventListener('click', () => {
+    occupied = new Set();
+    for (let x = 1; x <= 8; x++) occupied.add(`${x},3`);
+    occupied.add('3,4'); occupied.add('3,5'); occupied.add('4,5');
+    occupied.add('6,1'); occupied.add('7,1');
+    start = [0,3]; end = [9,3];
+    render();
+  });
+
+  document.getElementById('builder-preset3').addEventListener('click', () => {
+    occupied = new Set();
+    for (let x = 1; x <= 3; x++) occupied.add(`${x},3`);
+    for (let x = 5; x <= 8; x++) occupied.add(`${x},3`);
+    start = [0,3]; end = [9,3];
+    render();
+  });
+
+  for (let x = 1; x <= 8; x++) occupied.add(`${x},3`);
+  render();
+})();
+
+// ============================================================
+// WIDGET 2: BFS STEP-BY-STEP VISUALIZER
+// ============================================================
+(function() {
+  const COLS = 10, ROWS = 7;
+  const gridEl = document.getElementById('bfs-grid');
+  const statusEl = document.getElementById('bfs-status');
+  gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  const occupied = new Set();
+  const layout = [
+    [1,5],[2,5],[3,5],[3,4],[3,3],[4,3],[5,3],[5,2],[5,1],[6,1],[7,1],[7,2],[7,3],[8,3],
+    [4,5],[5,5],[6,5],
+    [8,5],[9,5]
+  ];
+  layout.forEach(c => occupied.add(`${c[0]},${c[1]}`));
+  const start = [1,5];
+  const goal = [8,3];
+
+  let frontier = [];
+  let cameFrom = new Map();
+  let visited = new Set();
+  let current = null;
+  let phase = 'idle';
+  let pathSet = new Set();
+  let stepCount = 0;
+
+  function key(c) { return `${c[0]},${c[1]}`; }
+
+  function reset() {
+    frontier = [start.slice()];
+    cameFrom = new Map();
+    cameFrom.set(key(start), null);
+    visited = new Set();
+    current = null;
+    phase = 'exploring';
+    pathSet = new Set();
+    stepCount = 0;
+    statusEl.innerHTML = `Ready. Frontier has <span class="hl">1</span> cell: the start.`;
+    render();
+  }
+
+  function step() {
+    if (phase === 'done' || phase === 'failed') return false;
+
+    if (phase === 'exploring') {
+      if (!frontier.length) {
+        phase = 'failed';
+        statusEl.innerHTML = `<span class="bad">Frontier empty — goal unreachable.</span>`;
+        current = null;
+        render();
+        return false;
+      }
+      current = frontier.shift();
+      visited.add(key(current));
+      stepCount++;
+
+      if (key(current) === key(goal)) {
+        phase = 'tracing';
+        let node = goal;
+        while (node) {
+          pathSet.add(key(node));
+          node = cameFrom.get(key(node));
+        }
+        statusEl.innerHTML = `<span class="ok">Goal reached in ${stepCount} steps.</span> Now walking breadcrumbs backward to build the path.`;
+        phase = 'done';
+        render();
+        return true;
+      }
+
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+      let added = 0;
+      for (const [dx,dy] of dirs) {
+        const nx = current[0]+dx, ny = current[1]+dy;
+        if (nx<0||ny<0||nx>=COLS||ny>=ROWS) continue;
+        const nk = `${nx},${ny}`;
+        if (cameFrom.has(nk)) continue;
+        if (!occupied.has(nk)) continue;
+        cameFrom.set(nk, current);
+        frontier.push([nx,ny]);
+        added++;
+      }
+      statusEl.innerHTML = `Step ${stepCount}: visiting <span class="hl">(${current[0]},${current[1]})</span>. Added <span class="hl">${added}</span> new neighbours. Frontier size: <span class="hl">${frontier.length}</span>.`;
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function render() {
+    gridEl.innerHTML = '';
+    const frontierSet = new Set(frontier.map(key));
+
+    for (let y = ROWS-1; y >= 0; y--) {
+      for (let x = 0; x < COLS; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const k = key([x,y]);
+        const isStart = x === start[0] && y === start[1];
+        const isGoal = x === goal[0] && y === goal[1];
+        const isOccupied = occupied.has(k);
+        const isVisited = visited.has(k);
+        const isFrontier = frontierSet.has(k);
+        const isCurrent = current && x === current[0] && y === current[1];
+        const isOnPath = pathSet.has(k);
+
+        if (isOnPath) cell.classList.add('path');
+        else if (isCurrent) { cell.classList.add('visiting','current'); }
+        else if (isFrontier) cell.classList.add('frontier');
+        else if (isVisited) cell.classList.add('visiting');
+        else if (isOccupied) cell.classList.add('occupied');
+
+        if (isStart) { cell.classList.add('start'); cell.textContent = 'S'; }
+        else if (isGoal) { cell.classList.add('end'); cell.textContent = 'G'; }
+        else if (isOnPath) cell.textContent = '•';
+
+        gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  let playInterval = null;
+  const playBtn = document.getElementById('bfs-play');
+  const stepBtn = document.getElementById('bfs-step');
+  const resetBtn = document.getElementById('bfs-reset');
+  const speedEl = document.getElementById('bfs-speed');
+
+  function stopPlay() {
+    if (playInterval) { clearInterval(playInterval); playInterval = null; }
+    playBtn.textContent = '▶ Auto-play';
+  }
+
+  playBtn.addEventListener('click', () => {
+    if (playInterval) { stopPlay(); return; }
+    if (phase === 'idle' || phase === 'done' || phase === 'failed') reset();
+    playBtn.textContent = '⏸ Pause';
+    const tick = () => {
+      const ok = step();
+      if (!ok) stopPlay();
+    };
+    tick();
+    playInterval = setInterval(tick, parseInt(speedEl.value));
+  });
+
+  speedEl.addEventListener('input', () => {
+    if (playInterval) {
+      clearInterval(playInterval);
+      playInterval = setInterval(() => {
+        const ok = step();
+        if (!ok) stopPlay();
+      }, parseInt(speedEl.value));
+    }
+  });
+
+  stepBtn.addEventListener('click', () => {
+    stopPlay();
+    if (phase === 'idle' || phase === 'done' || phase === 'failed') reset();
+    else step();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    stopPlay();
+    reset();
+  });
+
+  reset();
+  phase = 'idle';
+  statusEl.innerHTML = 'Press <span class="kbd">Step once</span> or <span class="kbd">Auto-play</span> to begin.';
+})();
+
+// ============================================================
+// WIDGET 3: BREADCRUMB WALK
+// ============================================================
+(function() {
+  const COLS = 10, ROWS = 7;
+  const gridEl = document.getElementById('crumb-grid');
+  const statusEl = document.getElementById('crumb-status');
+  const chipsEl = document.getElementById('crumb-chips');
+  gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  const occupied = new Set();
+  const layout = [
+    [1,5],[2,5],[3,5],[3,4],[3,3],[4,3],[5,3],[5,2],[5,1],[6,1],[7,1],[7,2],[7,3],[8,3],
+    [4,5],[5,5],[6,5],
+    [8,5],[9,5]
+  ];
+  layout.forEach(c => occupied.add(`${c[0]},${c[1]}`));
+  const start = [1,5];
+  const goal = [8,3];
+
+  function key(c) { return `${c[0]},${c[1]}`; }
+
+  // Pre-compute cameFrom by running BFS once
+  const cameFrom = new Map();
+  (function precompute() {
+    const frontier = [start];
+    cameFrom.set(key(start), null);
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    while (frontier.length) {
+      const cur = frontier.shift();
+      if (key(cur) === key(goal)) break;
+      for (const [dx,dy] of dirs) {
+        const nx = cur[0]+dx, ny = cur[1]+dy;
+        if (nx<0||ny<0||nx>=COLS||ny>=ROWS) continue;
+        const nk = `${nx},${ny}`;
+        if (cameFrom.has(nk)) continue;
+        if (!occupied.has(nk)) continue;
+        cameFrom.set(nk, cur);
+        frontier.push([nx,ny]);
+      }
+    }
+  })();
+
+  // Arrow character for a cell pointing to its parent
+  function arrowFor(cell) {
+    const parent = cameFrom.get(key(cell));
+    if (!parent) return '';
+    const dx = parent[0] - cell[0];
+    const dy = parent[1] - cell[1];
+    if (dx === 1) return '→';
+    if (dx === -1) return '←';
+    if (dy === 1) return '↑';
+    if (dy === -1) return '↓';
+    return '';
+  }
+
+  // Walk state
+  let trail = [];       // cells walked so far, goal → start order
+  let cursor = null;    // current head
+  let phase = 'idle';   // idle | walking | done
+
+  function reset() {
+    trail = [];
+    cursor = null;
+    phase = 'idle';
+    statusEl.innerHTML = `Start at the <span class="hl">goal (G)</span>. Follow the arrows back to the start.`;
+    renderChips();
+    render();
+  }
+
+  function step() {
+    if (phase === 'done') return false;
+    if (phase === 'idle') {
+      cursor = goal.slice();
+      trail = [cursor];
+      phase = 'walking';
+      statusEl.innerHTML = `Standing on the <span class="hl">goal (${goal[0]},${goal[1]})</span>. Its arrow points to its parent.`;
+      renderChips();
+      render();
+      return true;
+    }
+    // walking
+    const parent = cameFrom.get(key(cursor));
+    if (!parent) {
+      phase = 'done';
+      statusEl.innerHTML = `<span class="ok">Arrived at start.</span> Path has <span class="hl">${trail.length}</span> cells. Reverse the list &rarr; the enemy walks it forward.`;
+      renderChips(true);
+      render();
+      return false;
+    }
+    cursor = parent;
+    trail.push(cursor);
+    if (key(cursor) === key(start)) {
+      phase = 'done';
+      statusEl.innerHTML = `<span class="ok">Arrived at start.</span> Path has <span class="hl">${trail.length}</span> cells. Reverse the list &rarr; the enemy walks it forward.`;
+      renderChips(true);
+      render();
+      return false;
+    }
+    statusEl.innerHTML = `Stepped to <span class="hl">(${cursor[0]},${cursor[1]})</span>. Following its arrow next.`;
+    renderChips();
+    render();
+    return true;
+  }
+
+  function render() {
+    gridEl.innerHTML = '';
+    const trailSet = new Set(trail.map(key));
+    const headKey = cursor ? key(cursor) : null;
+
+    for (let y = ROWS-1; y >= 0; y--) {
+      for (let x = 0; x < COLS; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const k = key([x,y]);
+        const isStart = x === start[0] && y === start[1];
+        const isGoal = x === goal[0] && y === goal[1];
+        const hasCrumb = cameFrom.has(k) && !isStart && !isGoal;
+        const onTrail = trailSet.has(k);
+        const isHead = headKey === k;
+
+        // Base layer: visited cells get crumb styling
+        if (hasCrumb) cell.classList.add('crumb');
+        else if (occupied.has(k) && !isStart && !isGoal) cell.classList.add('occupied');
+
+        // Trail overlay (don't recolor start/goal — they keep their markers)
+        if (onTrail && !isStart && !isGoal) cell.classList.add('trail');
+        if (isHead && phase !== 'idle') cell.classList.add('trace-head');
+
+        // Start/goal styling wins
+        if (isStart) { cell.classList.add('start'); cell.textContent = 'S'; }
+        else if (isGoal) { cell.classList.add('end'); cell.textContent = 'G'; }
+        else if (hasCrumb) {
+          const arrow = arrowFor([x,y]);
+          if (arrow) {
+            const span = document.createElement('span');
+            span.className = 'arrow';
+            span.textContent = arrow;
+            cell.appendChild(span);
+          }
+        }
+
+        gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  function renderChips(final = false) {
+    chipsEl.innerHTML = '';
+    const label = document.createElement('span');
+    label.className = 'chips-label';
+    label.textContent = final ? 'Path (reversed):' : 'Path so far:';
+    chipsEl.appendChild(label);
+
+    if (!trail.length) {
+      const hint = document.createElement('span');
+      hint.style.color = 'var(--ink-dim)';
+      hint.style.fontStyle = 'italic';
+      hint.textContent = '— empty; press Walk back —';
+      chipsEl.appendChild(hint);
+      return;
+    }
+
+    const sequence = final ? trail.slice().reverse() : trail;
+    sequence.forEach((c, i) => {
+      if (i > 0) {
+        const arr = document.createElement('span');
+        arr.className = 'chip-arrow';
+        arr.textContent = final ? '→' : '←';
+        chipsEl.appendChild(arr);
+      }
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      if (!final && i === sequence.length - 1) chip.classList.add('head');
+      chip.textContent = `(${c[0]},${c[1]})`;
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  let playInterval = null;
+  const walkBtn = document.getElementById('crumb-walk');
+  const stepBtn = document.getElementById('crumb-step');
+  const resetBtn = document.getElementById('crumb-reset');
+  const speedEl = document.getElementById('crumb-speed');
+
+  function stopPlay() {
+    if (playInterval) { clearInterval(playInterval); playInterval = null; }
+    walkBtn.textContent = '▶ Auto walk';
+  }
+
+  walkBtn.addEventListener('click', () => {
+    if (playInterval) { stopPlay(); return; }
+    if (phase === 'done') reset();
+    walkBtn.textContent = '⏸ Pause';
+    const tick = () => {
+      const ok = step();
+      if (!ok) stopPlay();
+    };
+    tick();
+    playInterval = setInterval(tick, parseInt(speedEl.value));
+  });
+
+  speedEl.addEventListener('input', () => {
+    if (playInterval) {
+      clearInterval(playInterval);
+      playInterval = setInterval(() => {
+        const ok = step();
+        if (!ok) stopPlay();
+      }, parseInt(speedEl.value));
+    }
+  });
+
+  stepBtn.addEventListener('click', () => {
+    stopPlay();
+    if (phase === 'done') reset();
+    else step();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    stopPlay();
+    reset();
+  });
+
+  reset();
+})();
+
+// ============================================================
+// WIDGET 4: ANCHOR RING SEARCH
+// ============================================================
+(function() {
+  const COLS = 10, ROWS = 7;
+  const gridEl = document.getElementById('anchor-grid');
+  const statusEl = document.getElementById('anchor-status');
+  gridEl.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+
+  let occupied = new Set();
+  [[4,2],[5,2],[6,2],[4,3],[6,3],[4,4],[5,4],[6,4]].forEach(c => occupied.add(`${c[0]},${c[1]}`));
+
+  let anchor = null;
+  let foundCell = null;
+  let searchRadius = 0;
+  let animRings = [];
+
+  function key(c) { return `${c[0]},${c[1]}`; }
+
+  async function animateSearch(a) {
+    anchor = a;
+    foundCell = null;
+    animRings = [];
+    if (occupied.has(key(a))) {
+      foundCell = a;
+      searchRadius = 0;
+      statusEl.innerHTML = `<span class="ok">Direct hit.</span> Transform at (${a[0]},${a[1]}) is already on a piece.`;
+      render();
+      return;
+    }
+    for (let r = 1; r <= 5; r++) {
+      animRings = [r];
+      searchRadius = r;
+      statusEl.innerHTML = `Searching ring <span class="hl">${r}</span>...`;
+      render();
+      await new Promise(res => setTimeout(res, 400));
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const c = [a[0]+dx, a[1]+dy];
+          if (c[0]<0||c[1]<0||c[0]>=COLS||c[1]>=ROWS) continue;
+          if (occupied.has(key(c))) {
+            foundCell = c;
+            statusEl.innerHTML = `<span class="ok">Found.</span> Nearest piece at (${c[0]},${c[1]}), ring <span class="hl">${r}</span>.`;
+            render();
+            return;
+          }
+        }
+      }
+    }
+    statusEl.innerHTML = `<span class="bad">No piece found within radius 5.</span> Anchor fails to resolve.`;
+    render();
+  }
+
+  function render() {
+    gridEl.innerHTML = '';
+    for (let y = ROWS-1; y >= 0; y--) {
+      for (let x = 0; x < COLS; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const k = key([x,y]);
+        if (occupied.has(k)) cell.classList.add('occupied');
+
+        if (anchor) {
+          const dx = Math.abs(x - anchor[0]);
+          const dy = Math.abs(y - anchor[1]);
+          const r = Math.max(dx, dy);
+          if (animRings.includes(r) && r > 0) cell.classList.add('ring');
+        }
+
+        if (anchor && x === anchor[0] && y === anchor[1]) {
+          cell.classList.add('start');
+          cell.textContent = 'T';
+        } else if (foundCell && x === foundCell[0] && y === foundCell[1]) {
+          cell.classList.add('path');
+          cell.textContent = '•';
+        } else if (occupied.has(k)) {
+          cell.textContent = '■';
+        }
+
+        cell.addEventListener('click', () => {
+          animateSearch([x,y]);
+        });
+        gridEl.appendChild(cell);
+      }
+    }
+  }
+
+  document.getElementById('anchor-reset').addEventListener('click', () => {
+    anchor = null; foundCell = null; animRings = [];
+    statusEl.innerHTML = 'Click an empty cell to see the ring search in action.';
+    render();
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
