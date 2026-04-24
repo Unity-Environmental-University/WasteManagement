@@ -86,7 +86,7 @@ namespace _project.Scripts.Object_Scripts
             gameObject.GetComponent<Renderer>().material.color = mat;
         }
 
-        private static int SetRandSize() => Random.Range(1, 3); 
+        private static int SetRandSize() => Random.Range(1, 4);
 
         public void AssignType()
         {
