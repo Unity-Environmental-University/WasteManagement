@@ -1,6 +1,7 @@
 using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace _project.Scripts.Object_Scripts
@@ -17,8 +18,9 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color occupiedColor = new Color(1f, 0.4f, 0.4f, 0.6f);
         private Color _defaultColor;
 
-        [Header("Sifter Slot (optional)")]
-        [SerializeField] private Slider associatedHealthBar;
+        [Header("Utility Slot (optional)")]
+        [FormerlySerializedAs("associatedHealthBar")]
+        [SerializeField] private Slider associatedStatusBar;
 
         private bool _isOccupied;
         private bool _isHovered;
@@ -87,13 +89,15 @@ namespace _project.Scripts.Object_Scripts
 
             var placed = pending.Place(transform);
 
-            if (pending.PlaceableType == PlaceableType.Sifter && associatedHealthBar && placed)
-                GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedHealthBar);
+            if (pending.PlaceableType == PlaceableType.Utility && associatedStatusBar && placed)
+                GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedStatusBar);
 
-            if (pending.PlaceableType == PlaceableType.Sifter && placed && placed.TryGetComponent<WasteSifter>(out var sifter))
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<WasteSifter>(out var sifter))
                 sifter.SetSlot(this);
 
-            if (pending.PlaceableType == PlaceableType.Sifter && placed && placed.TryGetComponent<Cesspit>(out var cesspit))
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<Cesspit>(out var cesspit))
                 cesspit.SetSlot(this);
 
             _isOccupied = true;

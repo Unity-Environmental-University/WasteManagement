@@ -9,15 +9,15 @@ namespace _project.Scripts.UI
 
         public bool SetHealth(float current, float max)
         {
+            SetValue(current, max);
+
+            return !(current <= 0);
+        }
+
+        public void SetValue(float current, float max)
+        {
             slider.maxValue = max;
-            if (current <= 0)
-            {
-                slider.value = float.NaN;
-                return false;
-            }
-            
-            slider.value = current;
-            return true;
+            slider.value = Mathf.Clamp(current, 0f, max);
         }
     }
 }

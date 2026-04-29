@@ -1,6 +1,7 @@
 using System.Collections;
 using _project.Scripts.UI;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -11,27 +12,29 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 4f;
         
-        public HealthBar healthBar;
-        public float maxHealth;
-        public float health;
+        [FormerlySerializedAs("healthBar")] public HealthBar fullnessBar;
+        [FormerlySerializedAs("maxHealth")] public float maxFullness;
+        [FormerlySerializedAs("health")] public float fullness;
 
         private SpecialInteractController _slot;
-        private bool _isBreaking;
         private bool _spawningRunaways;
         
         private void Start()
         {
-            if (healthBar) healthBar.gameObject.SetActive(true);
-            if (healthBar) healthBar.SetHealth(health, maxHealth);
+            if (fullnessBar) fullnessBar.gameObject.SetActive(true);
+            UpdateFullnessBar();
 
-            StartCoroutine(SpawnRunaway());
+            if (IsFull)
+                StartRunaways();
         }
 
-        public void SetHealth(float newHealth)
+        public void SetFullness(float newFullness)
         {
-            health = newHealth;
-            var survived = healthBar ? healthBar.SetHealth(newHealth, maxHealth) : newHealth > 0;
-            //if (!survived && !_isBreaking) StartCoroutine(BreakTank());
+            fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
+            UpdateFullnessBar();
+
+            if (IsFull)
+                StartRunaways();
         }
 
         public void SetSlot(SpecialInteractController slot) => _slot = slot;
@@ -42,9 +45,23 @@ namespace _project.Scripts.Object_Scripts
             var issue = other.GetComponent<IssueObject>();
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
-            var damage = issue.SiftCost;
-            SetHealth(health - damage);
+            SetFullness(fullness + issue.SiftCost);
             issue.Sift(processPower);
+        }
+
+        private bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+
+        private void UpdateFullnessBar()
+        {
+            if (fullnessBar) fullnessBar.SetValue(fullness, maxFullness);
+        }
+
+        private void StartRunaways()
+        {
+            if (_spawningRunaways) return;
+
+            _spawningRunaways = true;
+            StartCoroutine(SpawnRunaway());
         }
 
         private IEnumerator SpawnRunaway()

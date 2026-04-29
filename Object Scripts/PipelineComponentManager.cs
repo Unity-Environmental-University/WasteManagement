@@ -56,7 +56,7 @@ namespace _project.Scripts.Object_Scripts
             }
 
             if (sifter.TryGetComponent<Cesspit>(out var cesspit))
-                cesspit.healthBar = hBar;
+                cesspit.fullnessBar = hBar;
         }
         
         [Serializable]
