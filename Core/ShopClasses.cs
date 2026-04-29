@@ -112,7 +112,7 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            var go = Object.Instantiate((Object)_prefab, location.position, location.rotation);
+            var go = Object.Instantiate(_prefab, location.position, location.rotation);
             var tc = go.GetComponent<TowerController>();
             if (tc) GameMaster.Instance.towerManager.RegisterTower(tc);
             return go;
@@ -146,7 +146,7 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            return Object.Instantiate((Object)_prefab, location.position, location.rotation);
+            return Object.Instantiate(_prefab, location.position, location.rotation);
         }
     }
 
@@ -177,7 +177,7 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            return Object.Instantiate((Object)_prefab, location.position, location.rotation);
+            return Object.Instantiate(_prefab, location.position, location.rotation);
         }
     }
 
