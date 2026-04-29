@@ -47,9 +47,16 @@ namespace _project.Scripts.Object_Scripts
 
         public void AssignHealthBar(GameObject sifter, Slider healthBar)
         {
-            var cont = sifter.GetComponent<WasteSifter>();
             var hBar = healthBar.GetComponent<HealthBar>();
-            cont.healthBar = hBar;
+
+            if (sifter.TryGetComponent<WasteSifter>(out var sifterController))
+            {
+                sifterController.healthBar = hBar;
+                return;
+            }
+
+            if (sifter.TryGetComponent<Cesspit>(out var cesspit))
+                cesspit.healthBar = hBar;
         }
         
         [Serializable]

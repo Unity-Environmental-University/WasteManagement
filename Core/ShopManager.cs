@@ -28,6 +28,13 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
 
+        [Header("Cesspit Item")]
+        [SerializeField] private string cesspitDisplayName = "Cesspit";
+        [SerializeField] private string cesspitDescription = "Stores overflow and leaks runaway issues toward the destination.";
+        [SerializeField] private int cesspitRequiredLevel = 1;
+        [SerializeField] private GameObject cesspitPrefab;
+        [SerializeField] private Sprite cesspitSprite;
+
         [Header("Path Items")]
         [SerializeField] private string shortPipeDisplayName = "Short Pipe";
         [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
@@ -111,6 +118,9 @@ namespace _project.Scripts.Core
                 for (var i = 0; i < sifterCount; i++)
                     SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel, sifterPrefab, sifterSprite));
             }
+
+            if (cesspitPrefab)
+                SpawnShopItem(new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel, cesspitPrefab, cesspitSprite));
 
             foreach (var entry in cardEntries)
             {

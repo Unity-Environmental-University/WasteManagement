@@ -26,6 +26,8 @@ namespace _project.Scripts.Object_Scripts
         private const float BaseSiftCost = 5f;
         private Transform _startPoint;
         private int _waypointIndex;
+        private bool _useDirectDestination;
+        private Vector3 _directDestination;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
         private int Size { get; set; }
@@ -51,6 +53,16 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void Update()
         {
+            if (_useDirectDestination)
+            {
+                transform.position = Vector3.MoveTowards(transform.position, _directDestination, moveSpeed * Time.deltaTime);
+
+                if (Vector3.SqrMagnitude(transform.position - _directDestination) < 0.01f)
+                    ReachEnd();
+
+                return;
+            }
+
             // GUARD: If no path is assigned OR we've consumed all waypoints, we've reached the end
             if (!path || _waypointIndex >= path.Count)
             {
@@ -136,7 +148,18 @@ namespace _project.Scripts.Object_Scripts
         public void SetType(IssueType t) => type = t;
         public WaypointPath GetPath() => path;
 
-        public void SetPath(WaypointPath p) => path = p;
+        public void SetPath(WaypointPath p)
+        {
+            path = p;
+            _useDirectDestination = false;
+        }
+
+        public void SetDirectDestination(Vector3 destination)
+        {
+            _directDestination = destination;
+            _useDirectDestination = true;
+            path = null;
+        }
 
         public static event Action<IssueObject> OnReachedEnd;
 

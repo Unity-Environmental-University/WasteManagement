@@ -7,6 +7,9 @@ namespace _project.Scripts.Object_Scripts
     public class Cesspit : MonoBehaviour
     { 
         [SerializeField] private int processPower = 3;
+        [SerializeField] private GameObject runawayPrefab;
+        [SerializeField] private Transform runawayDestination;
+        [SerializeField] private float runawaySpawnInterval = 4f;
         
         public HealthBar healthBar;
         public float maxHealth;
@@ -14,12 +17,14 @@ namespace _project.Scripts.Object_Scripts
 
         private SpecialInteractController _slot;
         private bool _isBreaking;
-        private bool _isOffloading;
+        private bool _spawningRunaways;
         
         private void Start()
         {
             if (healthBar) healthBar.gameObject.SetActive(true);
             if (healthBar) healthBar.SetHealth(health, maxHealth);
+
+            StartCoroutine(SpawnRunaway());
         }
 
         public void SetHealth(float newHealth)
@@ -44,22 +49,18 @@ namespace _project.Scripts.Object_Scripts
 
         private IEnumerator SpawnRunaway()
         {
-            while (_isOffloading)
+            while (_spawningRunaways)
             {
-                yield return new WaitForSeconds(4f);
-                // Spawn a poop gremlin
-                
-            }
-            yield return new WaitForSeconds(4f);
-        }
+                yield return new WaitForSeconds(runawaySpawnInterval);
 
-        private IEnumerator BreakTank()
-        {
-            _isBreaking = true;
-            yield return new WaitForSeconds(4f);
-            _slot?.ClearOccupied();
-            if (healthBar) healthBar.gameObject.SetActive(false);
-            Destroy(gameObject);
+                if (!runawayPrefab || !runawayDestination) continue;
+
+                var obj = Instantiate(runawayPrefab, transform.position, transform.rotation);
+                if (!obj.TryGetComponent<IssueObject>(out var issue)) continue;
+
+                issue.AssignType();
+                issue.SetDirectDestination(runawayDestination.position);
+            }
         }
     }
 }

@@ -31,7 +31,7 @@ namespace _project.Scripts.Core
     public enum PlaceableType
     {
         Tower = 0,
-        Sifter = 1,
+        Utility = 1,
         Any = 2,
         Path = 3
     }
@@ -112,7 +112,7 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            var go = Object.Instantiate(_prefab, location.position, location.rotation);
+            var go = Object.Instantiate((Object)_prefab, location.position, location.rotation);
             var tc = go.GetComponent<TowerController>();
             if (tc) GameMaster.Instance.towerManager.RegisterTower(tc);
             return go;
@@ -137,7 +137,7 @@ namespace _project.Scripts.Core
         public int RequiredLevel { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
-        public PlaceableType PlaceableType => PlaceableType.Sifter;
+        public PlaceableType PlaceableType => PlaceableType.Utility;
 
         public void Purchase()
         {
@@ -146,7 +146,38 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            return Object.Instantiate(_prefab, location.position, location.rotation);
+            return Object.Instantiate((Object)_prefab, location.position, location.rotation);
+        }
+    }
+
+    public class CesspitShopItem : IShopItem, IPlaceable
+    {
+        private readonly GameObject _prefab;
+
+        public CesspitShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            _prefab = prefab;
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Utility;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        public GameObject Place(Transform location)
+        {
+            return Object.Instantiate((Object)_prefab, location.position, location.rotation);
         }
     }
 

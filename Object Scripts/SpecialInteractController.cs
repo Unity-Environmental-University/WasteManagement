@@ -93,6 +93,9 @@ namespace _project.Scripts.Object_Scripts
             if (pending.PlaceableType == PlaceableType.Sifter && placed && placed.TryGetComponent<WasteSifter>(out var sifter))
                 sifter.SetSlot(this);
 
+            if (pending.PlaceableType == PlaceableType.Sifter && placed && placed.TryGetComponent<Cesspit>(out var cesspit))
+                cesspit.SetSlot(this);
+
             _isOccupied = true;
             _isHovered = false;
             GameMaster.Instance.placementInventory.ConsumeSelected();
