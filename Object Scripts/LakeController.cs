@@ -16,7 +16,8 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnIssueReachedEnd(IssueObject issue)
         {
-            health -= issue.ProcessCost * 5;
+            var damage = issue.ProcessCost * 5;
+            health -= damage;
             UpdateLakeColor();
             
             if (health <= 0) GameMaster.Instance.turnController.GameLost();

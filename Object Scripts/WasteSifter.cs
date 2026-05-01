@@ -43,7 +43,7 @@ namespace _project.Scripts.Object_Scripts
 
             var damage = issue.SiftCost;
             SetHealth(health - damage);
-            issue.Sift(siftPower);
+            issue.Process(siftPower, "Sifted");
         }
 
         private IEnumerator BreakSifter()

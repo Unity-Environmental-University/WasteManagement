@@ -11,6 +11,7 @@ namespace _project.Scripts.Object_Scripts
         private Coroutine _spawnCoroutine;
         
         public float spawnInterval;
+        public GameObject SpawnPrefab => spawnerObject;
 
         private void Awake()
         {

@@ -33,6 +33,7 @@ namespace _project.Scripts.Object_Scripts
         private int Size { get; set; }
         public float SiftCost => BaseSiftCost * Size;
         public float ProcessCost => BaseProcessCost * Size;
+        public bool IsDirectDestination => _useDirectDestination;
 
         private void Awake()
         {
@@ -114,15 +115,15 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         /// Reduces size by <paramref name="power"/>. Read <see cref="SiftCost"/> BEFORE
-        /// calling this — _size is mutated immediately and SiftCost reflects the post-sift value.
+        /// calling this — _size is mutated immediately and SiftCost reflects the post-process value.
         /// </summary>
-        public void Sift(int power)
+        public void Process(int power, string processLabel)
         {
             Size = Mathf.Max(0, Size - power);
             transform.localScale = _baseScale * Size;
 
             if (Debugging)
-                Debug.Log($"[IssueObject] Sifted — remaining size: {Size}");
+                Debug.Log($"[IssueObject] {processLabel} — remaining size: {Size}");
 
             if (Size <= 0)
             {
@@ -159,6 +160,11 @@ namespace _project.Scripts.Object_Scripts
             _directDestination = destination;
             _useDirectDestination = true;
             path = null;
+        }
+
+        public void SetMoveSpeed(float speed)
+        {
+            moveSpeed = Mathf.Max(0f, speed);
         }
 
         public static event Action<IssueObject> OnReachedEnd;

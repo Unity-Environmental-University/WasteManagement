@@ -13,6 +13,8 @@ namespace _project.Scripts.Core
 
     public class TurnController : MonoBehaviour
     {
+        public static event Action OnCardPhaseEntered;
+        public static event Action OnTowerPhaseEntered;
         private static TurnController Instance { get; set; }
         private GameMaster _gm = GameMaster.Instance;
         [Header("State")] public int currentTurn;
@@ -60,6 +62,7 @@ namespace _project.Scripts.Core
         private void EnterCardSequence()
         {
             currentPhase = GamePhase.Card;
+            OnCardPhaseEntered?.Invoke();
             SwitchCamera();
 
             _gm.placementInventory.SelectFirstAvailable();
@@ -107,6 +110,7 @@ namespace _project.Scripts.Core
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
+            OnTowerPhaseEntered?.Invoke();
             SwitchCamera();
             _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
