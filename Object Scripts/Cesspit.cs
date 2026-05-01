@@ -138,6 +138,7 @@ namespace _project.Scripts.Object_Scripts
                 issue.AssignType();
                 issue.SetDirectDestination(runawayDestination.position);
                 issue.SetMoveSpeed(runawayMoveSpeed);
+                issue.EnableClickPop();
             }
         }
     }

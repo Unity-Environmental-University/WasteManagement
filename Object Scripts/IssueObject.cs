@@ -27,6 +27,7 @@ namespace _project.Scripts.Object_Scripts
         private Transform _startPoint;
         private int _waypointIndex;
         private bool _useDirectDestination;
+        private bool _canBePoppedByClick;
         private Vector3 _directDestination;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
@@ -99,6 +100,15 @@ namespace _project.Scripts.Object_Scripts
             gameObject.GetComponent<Renderer>().material.color = mat;
         }
 
+        private void OnMouseDown()
+        {
+            if (!_canBePoppedByClick) return;
+            var turnController = GameMaster.Instance?.turnController;
+            if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
+
+            Destroy(gameObject);
+        }
+
         private static int SetRandSize() => Random.Range(1, 4);
 
         public void AssignType()
@@ -160,6 +170,11 @@ namespace _project.Scripts.Object_Scripts
             _directDestination = destination;
             _useDirectDestination = true;
             path = null;
+        }
+
+        public void EnableClickPop()
+        {
+            _canBePoppedByClick = true;
         }
 
         public void SetMoveSpeed(float speed)
