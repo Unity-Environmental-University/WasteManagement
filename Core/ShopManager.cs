@@ -83,7 +83,7 @@ namespace _project.Scripts.Core
             if (shopItemGo) Destroy(shopItemGo);
         }
 
-        private static int CurrentLevel => GameMaster.Instance.turnController.currentTurn + 1;
+        private static int CurrentLevel => GameMaster.Instance.turnController.currentLevel;
 
         public static bool HasAccess(IShopItem item)
         {

@@ -18,6 +18,7 @@ namespace _project.Scripts.Core
         private static TurnController Instance { get; set; }
         private GameMaster _gm = GameMaster.Instance;
         [Header("State")] public int currentTurn;
+        [Header("State")] public int currentLevel;
         [Header("State")] public GamePhase currentPhase;
         [Header("State")] public int moveCount;
 
@@ -46,6 +47,8 @@ namespace _project.Scripts.Core
         private void GameStartSequence()
         {
             if (_gm.debugging) Debug.Log("Game Sequence Started!");
+            currentTurn = 0;
+            currentLevel = _gm.popManager ? _gm.popManager.GetLevelByPopulationSize() : 1;
             moveCount = 0;
             EnterCardSequence();
         }
@@ -72,7 +75,7 @@ namespace _project.Scripts.Core
 
             if (_gm.shopManager) _gm.shopManager.OpenShop();
 
-            if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}");
+            if (_gm.debugging) Debug.Log($"[TurnController] Card phase — turn {currentTurn}, level {currentLevel}");
         }
 
         private void SwitchCamera()
@@ -100,6 +103,7 @@ namespace _project.Scripts.Core
                     BeginWaveSequence();
                     break;
                 case GamePhase.Tower:
+                    currentLevel = _gm.popManager ? _gm.popManager.GetLevelByPopulationSize() : currentLevel;
                     EnterCardSequence();
                     break;
                 default:

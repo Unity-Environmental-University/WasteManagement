@@ -16,6 +16,7 @@ namespace _project.Scripts.Core
         public Camera mainCamera;
         public Camera topDownCamera;
         public TurnController turnController;
+        public PopulationManager popManager;
         public TowerManager towerManager;
         public InterfaceManager interfaceManager;
         public DeckManager deckManager;
@@ -44,6 +45,7 @@ namespace _project.Scripts.Core
             Instance = this;
 
             if (!turnController) turnController = GetComponent<TurnController>();
+            if (!popManager) popManager = GetComponent<PopulationManager>();
             if (!towerManager) towerManager = GetComponent<TowerManager>();
             if (!interfaceManager) interfaceManager = GetComponentInChildren<InterfaceManager>();
             if (!deckManager) deckManager = GetComponentInChildren<DeckManager>();
@@ -53,11 +55,12 @@ namespace _project.Scripts.Core
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));
+            if (!popManager) missing.Add(nameof(popManager));
             if (!towerManager) missing.Add(nameof(towerManager));
             if (!interfaceManager) missing.Add(nameof(interfaceManager));
             if (!deckManager) missing.Add(nameof(deckManager));
+            if (!placementInventory) missing.Add(nameof(placementInventory));
             if (!shopManager) missing.Add(nameof(shopManager));
-
             if (missing.Count > 0)
                 Debug.LogWarning($"[CardGameMaster] Missing components: {string.Join(", ", missing)}");
         }
