@@ -4,9 +4,9 @@ using UnityEngine;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    /// Represents a single cell in the path building grid.
-    /// Handles user interaction (clicks, hovers) for placing path pieces during the Card phase.
-    /// Each cell tracks its grid position and communicates with the parent PathBuildBoard.
+    ///     Represents a single cell in the path building grid.
+    ///     Handles user interaction (clicks, hovers) for placing path pieces during the Card phase.
+    ///     Each cell tracks its grid position and communicates with the parent PathBuildBoard.
     /// </summary>
     public class PathBuildCell : MonoBehaviour
     {
@@ -14,21 +14,21 @@ namespace _project.Scripts.Object_Scripts
         private Renderer _cellRenderer;
 
         /// <summary>
-        /// The column index of this cell in the grid (X axis).
+        ///     The column index of this cell in the grid (X axis).
         /// </summary>
         public int Column { get; private set; }
-        
+
         /// <summary>
-        /// The row index of this cell in the grid (Z axis).
+        ///     The row index of this cell in the grid (Z axis).
         /// </summary>
         public int Row { get; private set; }
 
         /// <summary>
-        /// Handles mouse click on this cell. Attempts to place the pending path piece if:
-        /// - GameMaster exists and is in the Card phase
-        /// - A valid IPathPiecePlaceable is pending
-        /// - The piece placement succeeds
-        /// Consumes the selected item from inventory and refreshes board visuals on success.
+        ///     Handles mouse click on this cell. Attempts to place the pending path piece if:
+        ///     - GameMaster exists and is in the Card phase
+        ///     - A valid IPathPiecePlaceable is pending
+        ///     - The piece placement succeeds
+        ///     Consumes the selected item from inventory and refreshes board visuals on success.
         /// </summary>
         private void OnMouseDown()
         {
@@ -47,7 +47,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Notifies the board when the mouse enters this cell, triggering preview visuals.
+        ///     Notifies the board when the mouse enters this cell, triggering preview visuals.
         /// </summary>
         private void OnMouseEnter()
         {
@@ -55,7 +55,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Notifies the board when the mouse exits this cell, clearing preview visuals.
+        ///     Notifies the board when the mouse exits this cell, clearing preview visuals.
         /// </summary>
         private void OnMouseExit()
         {
@@ -63,8 +63,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Initializes the cell with references to the parent board, grid position, and renderer.
-        /// Called by PathBuildBoard during grid generation or binding.
+        ///     Initializes the cell with references to the parent board, grid position, and renderer.
+        ///     Called by PathBuildBoard during grid generation or binding.
         /// </summary>
         /// <param name="board">The parent PathBuildBoard managing this cell.</param>
         /// <param name="column">The column index in the grid.</param>
@@ -79,7 +79,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Updates the visual color of this cell (e.g., empty, occupied, or preview states).
+        ///     Updates the visual color of this cell (e.g., empty, occupied, or preview states).
         /// </summary>
         /// <param name="color">The color to apply to the cell's material.</param>
         public void SetColor(Color color)
@@ -89,7 +89,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Delegates piece placement to the parent board.
+        ///     Delegates piece placement to the parent board.
         /// </summary>
         /// <param name="piece">The path piece to place.</param>
         /// <returns>The GameObject if placement succeeds, otherwise null.</returns>

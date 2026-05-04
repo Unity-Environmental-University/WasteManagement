@@ -7,20 +7,21 @@ using UnityEngine.InputSystem;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    /// Defines the orientation of path pieces on the grid.
+    ///     Defines the orientation of path pieces on the grid.
     /// </summary>
     public enum PathPieceOrientation
     {
         /// <summary>Path piece extends along the X axis (columns).</summary>
         Horizontal,
+
         /// <summary>Path piece extends along the Z axis (rows).</summary>
         Vertical
     }
 
     /// <summary>
-    /// Manages a grid of PathBuildCell objects for placing path pieces.
-    /// Handles grid generation, piece placement validation, visual previewing, and R-key rotation.
-    /// Tracks all placed pieces and their occupancy via piece IDs.
+    ///     Manages a grid of PathBuildCell objects for placing path pieces.
+    ///     Handles grid generation, piece placement validation, visual previewing, and R-key rotation.
+    ///     Tracks all placed pieces and their occupancy via piece IDs.
     /// </summary>
     public class PathBuildBoard : MonoBehaviour
     {
@@ -40,6 +41,8 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color invalidPreviewColor = new(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color placedPipeColor = new(0.8f, 0.8f, 0.8f, 1f);
         [SerializeField] private float pipeVisualHeight = 0.2f;
+
+        public float entityOnBoardHeight;
         private readonly List<PlacedPathPiece> _placedPieces = new();
         private readonly Dictionary<int, GameObject> _placedVisuals = new();
 
@@ -50,17 +53,15 @@ namespace _project.Scripts.Object_Scripts
         private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
         private GameObject _previewVisual;
         private Transform _visualRoot;
-        
-        public float entityOnBoardHeight;
 
         /// <summary>
-        /// Read-only collection of all path pieces that have been successfully placed on the board.
+        ///     Read-only collection of all path pieces that have been successfully placed on the board.
         /// </summary>
         public IReadOnlyList<PlacedPathPiece> PlacedPieces => _placedPieces;
 
         /// <summary>
-        /// Initializes the grid by attempting to bind existing cells or building new ones.
-        /// Refreshes visuals after setup.
+        ///     Initializes the grid by attempting to bind existing cells or building new ones.
+        ///     Refreshes visuals after setup.
         /// </summary>
         private void Awake()
         {
@@ -71,8 +72,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Monitors the pending placement piece from GameMaster and refreshes visuals when it changes.
-        /// Handles R-key input to toggle the orientation of the selected piece.
+        ///     Monitors the pending placement piece from GameMaster and refreshes visuals when it changes.
+        ///     Handles R-key input to toggle the orientation of the selected piece.
         /// </summary>
         private void Update()
         {
@@ -92,8 +93,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Clears all cells and placed pieces, then rebuilds the grid from scratch.
-        /// Can be invoked from the Unity Editor context menu.
+        ///     Clears all cells and placed pieces, then rebuilds the grid from scratch.
+        ///     Can be invoked from the Unity Editor context menu.
         /// </summary>
         [ContextMenu("Rebuild Grid")]
         public void RebuildGrid()
@@ -108,8 +109,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Updates all cell colors based on occupancy and displays a preview visual for the pending piece.
-        /// Shows valid (blue) or invalid (red) preview based on placement feasibility.
+        ///     Updates all cell colors based on occupancy and displays a preview visual for the pending piece.
+        ///     Shows valid (blue) or invalid (red) preview based on placement feasibility.
         /// </summary>
         public void RefreshVisuals()
         {
@@ -145,7 +146,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Sets the currently hovered cell and refreshes visuals to show the preview.
+        ///     Sets the currently hovered cell and refreshes visuals to show the preview.
         /// </summary>
         /// <param name="cell">The cell the mouse is hovering over.</param>
         public void SetHoveredCell(PathBuildCell cell)
@@ -155,7 +156,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Clears the hovered cell if it matches the provided cell, hiding the preview visual.
+        ///     Clears the hovered cell if it matches the provided cell, hiding the preview visual.
         /// </summary>
         /// <param name="cell">The cell that the mouse is exiting.</param>
         public void ClearHoveredCell(PathBuildCell cell)
@@ -168,8 +169,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Attempts to place a path piece on the board starting at the anchor cell.
-        /// Validates the footprint, assigns a unique piece ID, updates occupancy, and creates the visual.
+        ///     Attempts to place a path piece on the board starting at the anchor cell.
+        ///     Validates the footprint, assigns a unique piece ID, updates occupancy, and creates the visual.
         /// </summary>
         /// <param name="anchorCell">The cell at which the piece starts (origin cell).</param>
         /// <param name="piece">The path piece to place.</param>
@@ -207,7 +208,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Calculates the list of grid cells occupied by a piece of a given length and orientation.
+        ///     Calculates the list of grid cells occupied by a piece of a given length and orientation.
         /// </summary>
         /// <param name="anchor">The starting cell position (column, row).</param>
         /// <param name="length">The number of cells the piece spans.</param>
@@ -226,30 +227,36 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Checks if a specific grid cell is occupied by any placed piece.
+        ///     Checks if a given grid cell is occupied by any placed piece.
         /// </summary>
         /// <param name="column">The column index.</param>
         /// <param name="row">The row index.</param>
         /// <returns>True if the cell is in bounds and occupied, otherwise false.</returns>
-        public bool IsOccupied(int column, int row)
+        private bool IsOccupied(int column, int row)
         {
             return IsInBounds(column, row) && _pieceIds[column, row] > 0;
         }
 
         /// <summary>
-        /// Convenience overload — checks if a cell is occupied using a Vector2Int.
+        ///     Convenience overload — checks if a cell is occupied using a Vector2Int.
         /// </summary>
-        public bool IsOccupied(Vector2Int cell) => IsOccupied(cell.x, cell.y);
+        public bool IsOccupied(Vector2Int cell)
+        {
+            return IsOccupied(cell.x, cell.y);
+        }
 
         /// <summary>
-        /// Returns true if the given cell is within the grid bounds (public accessor
-        /// for the private <see cref="IsInBounds(int,int)"/>).
+        ///     Returns true if the given cell is within the grid bounds (public accessor
+        ///     for the private <see cref="IsInBounds(int,int)" />).
         /// </summary>
-        public bool IsCellInBounds(Vector2Int cell) => IsInBounds(cell.x, cell.y);
+        public bool IsCellInBounds(Vector2Int cell)
+        {
+            return IsInBounds(cell.x, cell.y);
+        }
 
         /// <summary>
-        /// Generates a new grid of PathBuildCell GameObjects at runtime.
-        /// Each cell is a cube primitive with a trigger collider and a PathBuildCell component.
+        ///     Generates a new grid of PathBuildCell GameObjects at runtime.
+        ///     Each cell is a cube primitive with a trigger collider and a PathBuildCell component.
         /// </summary>
         private void BuildGridIfNeeded()
         {
@@ -283,8 +290,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Attempts to bind existing PathBuildCell children instead of generating new ones.
-        /// Useful for preserving manually-placed cells in the scene.
+        ///     Attempts to bind existing PathBuildCell children instead of generating new ones.
+        ///     Useful for preserving manually placed cells in the scene.
         /// </summary>
         /// <returns>True if binding succeeds (correct count and no duplicates), otherwise false.</returns>
         private bool TryBindExistingCells()
@@ -310,8 +317,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Destroys all child GameObjects (cells and visuals) and clears internal state.
-        /// Uses DestroyImmediate in edit mode and Destroy in play mode.
+        ///     Destroys all child GameObjects (cells and visuals) and clears the internal state.
+        ///     Uses DestroyImmediate in edit mode and Destroy in play mode.
         /// </summary>
         private void ClearGeneratedCells()
         {
@@ -332,7 +339,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Gets or creates the "PipeVisuals" child GameObject that holds all pipe visual cubes.
+        ///     Gets or creates the "PipeVisuals" child GameObject that holds all pipe visual cubes.
         /// </summary>
         /// <returns>The Transform of the visual root.</returns>
         private Transform GetOrCreateVisualRoot()
@@ -346,7 +353,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Lazily creates and returns the preview visual GameObject (only created once).
+        ///     Lazily creates and returns the preview visual GameObject (only created once).
         /// </summary>
         /// <returns>The preview visual GameObject.</returns>
         private GameObject GetPreviewVisual()
@@ -358,7 +365,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Hides the preview visual by deactivating it.
+        ///     Hides the preview visual by deactivating it.
         /// </summary>
         private void HidePreviewVisual()
         {
@@ -366,8 +373,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Creates a new cube GameObject for visualizing pipes (preview or placed).
-        /// Collider is disabled so it doesn't interfere with mouse input on cells.
+        ///     Creates a new cube GameObject for visualizing pipes (preview or placed).
+        ///     Collider is disabled so it doesn't interfere with mouse input on cells.
         /// </summary>
         /// <param name="visualName">The name of the GameObject.</param>
         /// <param name="color">The initial color of the visual.</param>
@@ -396,8 +403,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Updates a pipe visual's position, scale, and color based on the footprint and orientation.
-        /// Calculates the center of the footprint and stretches the visual to span all cells.
+        ///     Updates a pipe visual's position, scale, and color based on the footprint and orientation.
+        ///     Calculates the center of the footprint and stretches the visual to span all cells.
         /// </summary>
         /// <param name="visual">The visual GameObject to update.</param>
         /// <param name="footprint">The list of grid cells the piece occupies.</param>
@@ -441,8 +448,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Calculates the local position for a cell at the given column and row.
-        /// Centers the grid around the origin.
+        ///     Calculates the local position for a cell at the given column and row.
+        ///     Centers the grid around the origin.
         /// </summary>
         /// <param name="column">The column index.</param>
         /// <param name="row">The row index.</param>
@@ -456,23 +463,21 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Checks if all cells in the footprint are valid (in bounds and unoccupied).
+        ///     Checks if all cells in the footprint are valid (in bounds and unoccupied).
         /// </summary>
         /// <param name="footprint">The list of grid cells to check.</param>
         /// <returns>True if all cells are available for placement, otherwise false.</returns>
         private bool CanPlaceFootprint(List<Vector2Int> footprint)
         {
             foreach (var cell in footprint)
-            {
                 if (!IsInBounds(cell.x, cell.y) || _pieceIds[cell.x, cell.y] > 0)
                     return false;
-            }
 
             return true;
         }
 
         /// <summary>
-        /// Checks if a column and row are within the grid bounds.
+        ///     Checks if a column and row are within the grid bounds.
         /// </summary>
         /// <param name="column">The column index.</param>
         /// <param name="row">The row index.</param>
@@ -483,7 +488,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Gets the PathBuildCell at the specified grid position.
+        ///     Gets the PathBuildCell at the specified grid position.
         /// </summary>
         /// <param name="position">The grid position (column, row).</param>
         /// <returns>The PathBuildCell if in bounds, otherwise null.</returns>
@@ -493,8 +498,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Returns the world-space position for the given grid cell. Falls back to the computed
-        /// local position (transformed by this board) when the cell GameObject is missing.
+        ///     Returns the world-space position for the given grid cell. Falls back to the computed
+        ///     local position (transformed by this board) when the cell GameObject is missing.
         /// </summary>
         private Vector3 GetCellWorldPosition(Vector2Int position)
         {
@@ -504,8 +509,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Returns a world-space waypoint position for the given cell — centered on the pipe's
-        /// top surface so entities travel along the pipe rather than inside the grid.
+        ///     Returns a world-space waypoint position for the given cell — centered on the pipe's
+        ///     top surface so entities travel along the pipe rather than inside the grid.
         /// </summary>
         public Vector3 GetPathWaypointPosition(Vector2Int position)
         {
@@ -514,10 +519,10 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Converts a world-space position into the nearest grid cell coordinate.
-        /// Used to map fixed anchor Transforms (e.g., WaypointPath.startPoint/endPoint)
-        /// onto the grid so we can test piece adjacency against them.
-        /// Returns the clamped cell index even if the point is outside the grid bounds.
+        ///     Converts a world-space position into the nearest grid cell coordinate.
+        ///     Used to map fixed anchor Transforms (e.g., WaypointPath.startPoint/endPoint)
+        ///     onto the grid so we can test piece adjacency against them.
+        ///     Returns the clamped cell index even if the point is outside the grid bounds.
         /// </summary>
         public Vector2Int WorldToCell(Vector3 worldPosition)
         {
@@ -532,7 +537,7 @@ namespace _project.Scripts.Object_Scripts
             var column = Mathf.RoundToInt(local.x / step + (columns - 1) * 0.5f);
             var row = Mathf.RoundToInt(local.z / step + (rows - 1) * 0.5f);
 
-            // Clamp so out-of-bounds anchors snap to the nearest edge cell
+            // Clamp so out-of-bounds anchors snap to the nearest-edge cell
             column = Mathf.Clamp(column, 0, columns - 1);
             row = Mathf.Clamp(row, 0, rows - 1);
 
@@ -540,10 +545,10 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Returns true if two grid cells are 4-way neighbors (share an edge) OR identical.
-        /// Diagonals are NOT considered adjacent — path pieces must link orthogonally.
-        /// Identical cells return true so anchor Transforms placed directly on a piece's
-        /// endpoint cell count as "connected" to that piece.
+        ///     Returns true if two grid cells are 4-way neighbors (share an edge) OR identical.
+        ///     Diagonals are NOT considered adjacent — path pieces must link orthogonally.
+        ///     Identical cells return true, so anchor Transforms placed directly on a piece's
+        ///     endpoint cell count as "connected" to that piece.
         /// </summary>
         public static bool AreCellsAdjacent(Vector2Int a, Vector2Int b)
         {
@@ -555,18 +560,21 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Represents a path piece that has been successfully placed on the board.
-        /// Stores metadata (ID, length, orientation) and the list of cells it occupies.
+        ///     Represents a path piece that has been successfully placed on the board.
+        ///     Stores metadata (ID, length, orientation) and the list of cells it occupies.
         /// </summary>
         [Serializable]
         public class PlacedPathPiece
         {
             /// <summary>Unique identifier for this placed piece.</summary>
             public int id;
+
             /// <summary>The number of cells this piece spans.</summary>
             public int length;
+
             /// <summary>The orientation of the piece (Horizontal or Vertical).</summary>
             public PathPieceOrientation orientation;
+
             /// <summary>The grid cells occupied by this piece.</summary>
             public List<Vector2Int> cells = new();
         }

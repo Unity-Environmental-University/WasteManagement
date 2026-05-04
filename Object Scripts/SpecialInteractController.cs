@@ -88,6 +88,7 @@ namespace _project.Scripts.Object_Scripts
             }
 
             var placed = pending.Place(transform);
+            if (placed is null) return;
 
             if (pending.PlaceableType == PlaceableType.Utility && associatedStatusBar && placed)
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedStatusBar);
