@@ -101,6 +101,10 @@ namespace _project.Scripts.Object_Scripts
                 placed.TryGetComponent<Cesspit>(out var cesspit))
                 cesspit.SetSlot(this);
 
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<TreatmentTank>(out var tank))
+                tank.SetSlot(this);
+
             _isOccupied = true;
             _isHovered = false;
             GameMaster.Instance.placementInventory.ConsumeSelected();

@@ -85,7 +85,7 @@ namespace _project.Scripts.Core
         }
     }
 
-    public class TowerShopItem : IShopItem, IPlaceable
+    public class TowerShopItem : IPlaceable
     {
         private readonly GameObject _prefab;
 
@@ -119,7 +119,7 @@ namespace _project.Scripts.Core
         }
     }
 
-    public class SifterShopItem : IShopItem, IPlaceable
+    public class SifterShopItem : IPlaceable
     {
         private readonly GameObject _prefab;
 
@@ -150,11 +150,42 @@ namespace _project.Scripts.Core
         }
     }
 
-    public class CesspitShopItem : IShopItem, IPlaceable
+    public class CesspitShopItem : IPlaceable
     {
         private readonly GameObject _prefab;
 
         public CesspitShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            _prefab = prefab;
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Utility;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        public GameObject Place(Transform location)
+        {
+            return Object.Instantiate(_prefab, location.position, location.rotation);
+        }
+    }
+
+    public class TreatmentTankShopItem : IPlaceable
+    {
+        private readonly GameObject _prefab;
+
+        public TreatmentTankShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
         {
             DisplayName = displayName;
             Description = description;

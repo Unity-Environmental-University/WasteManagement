@@ -35,6 +35,14 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject cesspitPrefab;
         [SerializeField] private Sprite cesspitSprite;
 
+        [Header("Treatment Tank Item")] [SerializeField]
+        private string treatmentTankDisplayName = "Treatment Tank";
+        [SerializeField] private string treatmentTankDescription =
+            "Captures issues and emits clean effluent. Locks up when full.";
+        [SerializeField] private int treatmentTankRequiredLevel = 4;
+        [SerializeField] private GameObject treatmentTankPrefab;
+        [SerializeField] private Sprite treatmentTankSprite;
+
         [Header("Path Items")]
         [SerializeField] private string shortPipeDisplayName = "Short Pipe";
         [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
@@ -114,13 +122,17 @@ namespace _project.Scripts.Core
                 SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab, towerSprite));
 
             if (sifterPrefab)
-            {
                 for (var i = 0; i < sifterCount; i++)
-                    SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel, sifterPrefab, sifterSprite));
-            }
+                    SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
+                        sifterPrefab, sifterSprite));
 
             if (cesspitPrefab)
-                SpawnShopItem(new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel, cesspitPrefab, cesspitSprite));
+                SpawnShopItem(new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
+                    cesspitPrefab, cesspitSprite));
+
+            if (treatmentTankPrefab)
+                SpawnShopItem(new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,
+                    treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite));
 
             foreach (var entry in cardEntries)
             {
