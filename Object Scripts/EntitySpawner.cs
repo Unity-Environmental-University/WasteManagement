@@ -18,16 +18,46 @@ namespace _project.Scripts.Object_Scripts
             spawnPoint = spawnPoint?.transform;
         }
 
-        public void StartSpawner()
+        public bool StartSpawner()
         {
-            if (path) path.Rebuild();
+            if (!path)
+            {
+                Debug.LogWarning("Cannot start spawner: no waypoint path assigned.");
+                return false;
+            }
+
+            if (!path.Rebuild())
+            {
+                Debug.LogWarning($"Cannot start spawner: {path.InvalidReason}");
+                return false;
+            }
+
             _spawnCoroutine = StartCoroutine(SpawnTimer(spawnInterval));
+            return true;
         }
 
         public void StopSpawner()
         {
             if (_spawnCoroutine != null)
                 StopCoroutine(_spawnCoroutine);
+        }
+
+        public bool ValidatePath(out string reason)
+        {
+            if (!path)
+            {
+                reason = "No waypoint path assigned.";
+                return false;
+            }
+
+            if (path.Rebuild())
+            {
+                reason = null;
+                return true;
+            }
+
+            reason = path.InvalidReason;
+            return false;
         }
 
         private IEnumerator SpawnTimer(float interval)

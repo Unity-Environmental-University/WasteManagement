@@ -70,7 +70,8 @@ namespace _project.Scripts.Core
 
             _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
-            _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
+            // TODO: re-enable hand UI when card system is back in use
+            // _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
 
             if (_gm.shopManager) _gm.shopManager.OpenShop();
@@ -100,6 +101,7 @@ namespace _project.Scripts.Core
             switch (currentPhase)
             {
                 case GamePhase.Card:
+                    if (!CanBeginWave()) return;
                     BeginWaveSequence();
                     break;
                 case GamePhase.Tower:
@@ -119,11 +121,29 @@ namespace _project.Scripts.Core
             _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
-            foreach (var s in _gm.entitySpawners) s.StartSpawner();
+            foreach (var s in _gm.entitySpawners)
+                if (s)
+                    s.StartSpawner();
 
             StartCoroutine(WaveTimer(waveDuration));
             
             Debug.Log("Beginning Wave!");
+        }
+
+        private bool CanBeginWave()
+        {
+            if (_gm.entitySpawners == null) return true;
+
+            foreach (var spawner in _gm.entitySpawners)
+            {
+                if (!spawner) continue;
+                if (spawner.ValidatePath(out var reason)) continue;
+
+                Debug.LogWarning($"Cannot begin wave: {reason}");
+                return false;
+            }
+
+            return true;
         }
 
         private IEnumerator WaveTimer(float duration)

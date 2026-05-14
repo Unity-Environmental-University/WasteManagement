@@ -255,6 +255,25 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
+        ///     Projects a cell outside the board onto the nearest one-cell perimeter ring.
+        ///     For example, rows above the board become row == rows instead of staying farther
+        ///     away, while in-bounds axes keep their original coordinate.
+        /// </summary>
+        public Vector2Int ClampToOutsideRing(Vector2Int cell)
+        {
+            var column = cell.x;
+            var row = cell.y;
+
+            if (column < 0) column = -1;
+            else if (column >= columns) column = columns;
+
+            if (row < 0) row = -1;
+            else if (row >= rows) row = rows;
+
+            return new Vector2Int(column, row);
+        }
+
+        /// <summary>
         ///     Generates a new grid of PathBuildCell GameObjects at runtime.
         ///     Each cell is a cube primitive with a trigger collider and a PathBuildCell component.
         /// </summary>
@@ -526,6 +545,22 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public Vector2Int WorldToCell(Vector3 worldPosition)
         {
+            var cell = WorldToCellUnclamped(worldPosition);
+
+            // Clamp so out-of-bounds anchors snap to the nearest-edge cell
+            var column = Mathf.Clamp(cell.x, 0, columns - 1);
+            var row = Mathf.Clamp(cell.y, 0, rows - 1);
+
+            return new Vector2Int(column, row);
+        }
+
+        /// <summary>
+        ///     Converts a world-space position into the nearest grid cell coordinate without
+        ///     clamping it to the board bounds. Endpoint markers just outside the playable grid
+        ///     can therefore map to cells like row -1 or rows.
+        /// </summary>
+        public Vector2Int WorldToCellUnclamped(Vector3 worldPosition)
+        {
             // Transform world position into this board's local space
             var local = transform.InverseTransformPoint(worldPosition);
 
@@ -536,10 +571,6 @@ namespace _project.Scripts.Object_Scripts
             // (GetLocalPosition centers the grid, so we add the half-extent back)
             var column = Mathf.RoundToInt(local.x / step + (columns - 1) * 0.5f);
             var row = Mathf.RoundToInt(local.z / step + (rows - 1) * 0.5f);
-
-            // Clamp so out-of-bounds anchors snap to the nearest-edge cell
-            column = Mathf.Clamp(column, 0, columns - 1);
-            row = Mathf.Clamp(row, 0, rows - 1);
 
             return new Vector2Int(column, row);
         }

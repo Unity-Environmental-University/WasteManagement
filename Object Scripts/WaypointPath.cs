@@ -51,6 +51,9 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public int Count => _waypoints.Count;
 
+        public bool IsValid { get; private set; }
+        public string InvalidReason { get; private set; }
+
         /// <summary>
         /// Draws the route as gizmos in the Scene view:
         ///   - YELLOW lines between consecutive waypoints (the route)
@@ -94,11 +97,12 @@ namespace _project.Scripts.Object_Scripts
         ///     Rebuilds the waypoint list using BFS through occupied grid cells.
         ///
         ///     Algorithm:
-        ///       1. Determine START cell (nearest occupied cell to <see cref="startPoint"/>)
-        ///          and GOAL cell (nearest occupied cell to <see cref="endPoint"/>).
-        ///       2. BFS outward from START through 4-way-adjacent occupied cells,
+        ///       1. Determine START candidates from occupied cells edge-adjacent to
+        ///          <see cref="startPoint"/> and GOAL candidates from occupied cells
+        ///          edge-adjacent to <see cref="endPoint"/>.
+        ///       2. BFS outward from every START candidate through 4-way-adjacent occupied cells,
         ///          recording the parent of each visited cell so we can reconstruct the path.
-        ///       3. If GOAL was reached, walk parents back to build the cell sequence.
+        ///       3. If any GOAL was reached, walk parents back to build the cell sequence.
         ///       4. Convert cells to world positions and bookend with start/end Transforms.
         ///
         ///     Entities therefore follow the SHORTEST chain of orthogonally adjacent occupied
@@ -106,47 +110,54 @@ namespace _project.Scripts.Object_Scripts
         ///     an edge. T-junctions and branches work naturally because BFS considers every
         ///     occupied cell, not just piece endpoints.
         /// </summary>
-        public void Rebuild()
+        public bool Rebuild()
         {
             _waypoints.Clear();
             _pathCells.Clear();
             _unusedCells.Clear();
-
-            // Always emit the startPoint as the first waypoint if assigned
-            if (startPoint) _waypoints.Add(startPoint.position);
+            IsValid = false;
+            InvalidReason = null;
 
             if (!pathBuildBoard)
             {
-                if (endPoint) _waypoints.Add(endPoint.position);
-                return;
+                InvalidReason = "Missing path build board.";
+                return FailRebuild();
             }
 
-            // RESOLVE START AND GOAL CELLS
-            // We need concrete grid cells for BFS. If the caller's Transform sits directly
-            // on an occupied cell, use that. Otherwise, find the nearest OCCUPIED cell by
-            // expanding search outward from the Transform's grid position.
-            var startCell = ResolveAnchorCell(startPoint);
-            var goalCell = ResolveAnchorCell(endPoint);
-
-            // If we can't resolve both endpoints, there's nothing to pathfind through.
-            // Fall back to just the start/end Transforms as a direct line.
-            if (!startCell.HasValue || !goalCell.HasValue)
+            if (!startPoint || !endPoint)
             {
-                RecordAllOccupiedAsUnused();
-                if (endPoint) _waypoints.Add(endPoint.position);
-                return;
+                InvalidReason = "Missing lower or upper endpoint.";
+                return FailRebuild();
             }
 
-            // RUN BFS: returns the ordered list of cells from start → goal, or null if unreachable.
-            var cellPath = BreadthFirstSearch(startCell.Value, goalCell.Value);
+            // RESOLVE START AND GOAL CANDIDATES
+            // Endpoint markers are strict: a placed path cell must share an edge with each
+            // marker square. The middle of the route remains normal occupied-cell BFS.
+            var starts = GetOccupiedEndpointNeighbors(startPoint);
+            if (starts.Count == 0)
+            {
+                InvalidReason = "No placed path cell touches the lower endpoint square.";
+                return FailRebuild();
+            }
+
+            var goals = GetOccupiedEndpointNeighbors(endPoint);
+            if (goals.Count == 0)
+            {
+                InvalidReason = "No placed path cell touches the upper endpoint square.";
+                return FailRebuild();
+            }
+
+            // RUN BFS: returns the ordered list of cells from a lower candidate to an upper
+            // candidate, or null if no connected occupied route exists.
+            var cellPath = BreadthFirstSearch(starts, goals);
 
             if (cellPath == null)
             {
-                // No connected route exists. All occupied cells go to the "unused" bucket.
-                RecordAllOccupiedAsUnused();
-                if (endPoint) _waypoints.Add(endPoint.position);
-                return;
+                InvalidReason = "Placed path does not connect lower endpoint to upper endpoint.";
+                return FailRebuild();
             }
+
+            _waypoints.Add(startPoint.position);
 
             // CONVERT CELL PATH TO WAYPOINTS
             foreach (var cell in cellPath)
@@ -159,7 +170,10 @@ namespace _project.Scripts.Object_Scripts
             RecordUnusedCells(cellPath);
 
             // Bookend with endPoint
-            if (endPoint) _waypoints.Add(endPoint.position);
+            _waypoints.Add(endPoint.position);
+            IsValid = true;
+            InvalidReason = null;
+            return true;
         }
 
         // ============================================================
@@ -168,26 +182,32 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         /// Runs breadth-first search over occupied cells. Returns the cell sequence
-        /// from <paramref name="start"/> to <paramref name="goal"/> (inclusive) along
-        /// the shortest orthogonally-connected route, or null if goal is unreachable.
+        /// from any start to any goal (inclusive) along the shortest orthogonally-connected
+        /// route, or null if every goal is unreachable.
         /// </summary>
-        private List<Vector2Int> BreadthFirstSearch(Vector2Int start, Vector2Int goal)
+        private List<Vector2Int> BreadthFirstSearch(
+            IReadOnlyList<Vector2Int> starts,
+            IReadOnlyCollection<Vector2Int> goals
+        )
         {
-            // Guard: start and goal must both be occupied cells to be valid graph nodes
-            if (!pathBuildBoard.IsOccupied(start) || !pathBuildBoard.IsOccupied(goal))
+            if (starts == null || starts.Count == 0 || goals == null || goals.Count == 0)
                 return null;
 
-            // Trivial case: start == goal
-            if (start == goal)
-                return new List<Vector2Int> { start };
+            var goalSet = goals as HashSet<Vector2Int> ?? new HashSet<Vector2Int>(goals);
 
             // FRONTIER: cells to explore next (FIFO queue gives shortest-path guarantee in BFS)
             var frontier = new Queue<Vector2Int>();
-            frontier.Enqueue(start);
 
             // PARENT MAP: for each visited cell, remember which cell we came FROM.
             // This lets us reconstruct the path by walking backward from goal → start.
-            var cameFrom = new Dictionary<Vector2Int, Vector2Int> { [start] = start };
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+
+            foreach (var start in starts)
+            {
+                if (!pathBuildBoard.IsOccupied(start) || cameFrom.ContainsKey(start)) continue;
+                frontier.Enqueue(start);
+                cameFrom[start] = start;
+            }
 
             // 4-way neighbor offsets (no diagonals): right, left, up, down
             var directions = new[]
@@ -198,17 +218,17 @@ namespace _project.Scripts.Object_Scripts
                 new Vector2Int(00, -1)
             };
 
-            var found = false;
+            Vector2Int? foundGoal = null;
 
             // MAIN BFS LOOP: expand outward layer by layer
             while (frontier.Count > 0)
             {
                 var current = frontier.Dequeue();
 
-                // Early exit: we reached the goal — no need to explore further
-                if (current == goal)
+                // Early exit: we reached any goal — no need to explore further
+                if (goalSet.Contains(current))
                 {
-                    found = true;
+                    foundGoal = current;
                     break;
                 }
 
@@ -226,17 +246,17 @@ namespace _project.Scripts.Object_Scripts
                 }
             }
 
-            if (!found) return null;
+            if (!foundGoal.HasValue) return null;
 
-            // RECONSTRUCT PATH: walk the parent chain from goal back to start
+            // RECONSTRUCT PATH: walk the parent chain from goal back to its start
             var path = new List<Vector2Int>();
-            var node = goal;
-            while (node != start)
+            var node = foundGoal.Value;
+            while (cameFrom[node] != node)
             {
                 path.Add(node);
                 node = cameFrom[node];
             }
-            path.Add(start);
+            path.Add(node);
 
             // We built the path goal → start; reverse to get start → goal
             path.Reverse();
@@ -248,43 +268,33 @@ namespace _project.Scripts.Object_Scripts
         // ============================================================
 
         /// <summary>
-        /// Maps an anchor Transform (startPoint or endPoint) onto a specific occupied grid cell.
-        ///   1. Convert the Transform's world position to a grid cell.
-        ///   2. If that cell is occupied, use it.
-        ///   3. Otherwise, expand outward in rings (1-cell, 2-cell, …) looking for the nearest
-        ///      occupied cell. This lets the player place the start/end Transforms just outside
-        ///      the path without precisely aligning them.
-        ///   4. If no occupied cell is found within the search radius, return null.
+        /// Returns occupied cells that share an edge with the endpoint marker square.
+        /// Endpoint validation is strict: no radius search, no diagonal matching, and no
+        /// nearest occupied fallback.
         /// </summary>
-        private Vector2Int? ResolveAnchorCell(Transform anchor)
+        private List<Vector2Int> GetOccupiedEndpointNeighbors(Transform anchor)
         {
-            if (!anchor) return null;
+            var candidates = new List<Vector2Int>();
+            if (!anchor || !pathBuildBoard) return candidates;
 
-            var anchorCell = pathBuildBoard.WorldToCell(anchor.position);
-
-            // Fast path: the anchor sits directly on an occupied cell
-            if (pathBuildBoard.IsOccupied(anchorCell))
-                return anchorCell;
-
-            // Expand outward in increasing Chebyshev rings (radius 1, 2, 3, …)
-            // Cap the radius so a stray Transform doesn't cause us to scan the entire board.
-            const int maxSearchRadius = 5;
-            for (var radius = 1; radius <= maxSearchRadius; radius++)
+            var anchorCell = pathBuildBoard.ClampToOutsideRing(pathBuildBoard.WorldToCellUnclamped(anchor.position));
+            var directions = new[]
             {
-                // Walk the perimeter of the square ring at this radius
-                for (var dx = -radius; dx <= radius; dx++)
-                for (var dy = -radius; dy <= radius; dy++)
-                {
-                    // Only cells ON the ring's edge (skip the interior we already checked)
-                    if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius) continue;
+                new Vector2Int(01, 00),
+                new Vector2Int(-1, 00),
+                new Vector2Int(00, 01),
+                new Vector2Int(00, -1)
+            };
 
-                    var candidate = new Vector2Int(anchorCell.x + dx, anchorCell.y + dy);
-                    if (pathBuildBoard.IsOccupied(candidate))
-                        return candidate;
-                }
+            foreach (var direction in directions)
+            {
+                var candidate = anchorCell + direction;
+                if (!pathBuildBoard.IsCellInBounds(candidate)) continue;
+                if (!pathBuildBoard.IsOccupied(candidate)) continue;
+                candidates.Add(candidate);
             }
 
-            return null;
+            return candidates;
         }
 
         // ============================================================
@@ -314,6 +324,12 @@ namespace _project.Scripts.Object_Scripts
             foreach (var piece in pathBuildBoard.PlacedPieces)
             foreach (var cell in piece.cells)
                 _unusedCells.Add(cell);
+        }
+
+        private bool FailRebuild()
+        {
+            RecordAllOccupiedAsUnused();
+            return false;
         }
     }
 }
