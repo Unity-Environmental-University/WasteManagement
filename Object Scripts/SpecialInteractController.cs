@@ -107,9 +107,10 @@ namespace _project.Scripts.Object_Scripts
 
             _isOccupied = true;
             _isHovered = false;
-            GameMaster.Instance.placementInventory.ConsumeSelected();
-            if (GameMaster.Instance.turnController) GameMaster.Instance.turnController.RegisterMove();
-
+            var gm = GameMaster.Instance;
+            gm.placementInventory.ConsumeSelected();
+            if (gm.turnController) gm.turnController.RegisterMove();
+            gm.turnController.infrastructureValue += gm.placementInventory.SelectedItem.InfraValue;
             RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
         }
@@ -151,7 +152,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void Update()
         {
-            if (_placementInventory == null && GameMaster.Instance != null)
+            if (_placementInventory is null && GameMaster.Instance is not null)
                 RefreshInteractionState();
         }
 
@@ -159,7 +160,7 @@ namespace _project.Scripts.Object_Scripts
         {
             BindInventory();
 
-            if (GameMaster.Instance == null)
+            if (GameMaster.Instance is null)
                 return;
 
             pending ??= GameMaster.Instance ? GameMaster.Instance.PendingPlacement : null;

@@ -17,6 +17,7 @@ namespace _project.Scripts.Core
         [SerializeField] private string towerDisplayName = "Processing Tower";
         [SerializeField] private string towerDescription = "Intercepts issue objects on the pipeline.";
         [SerializeField] private int towerRequiredLevel = 1;
+        [SerializeField] private int towerInfraValue = 2;
         [SerializeField] private GameObject towerPrefab;
         [SerializeField] private Sprite towerSprite;
 
@@ -24,6 +25,7 @@ namespace _project.Scripts.Core
         [SerializeField] private string sifterDisplayName = "Waste Sifter";
         [SerializeField] private string sifterDescription = "Filters the pipeline, reducing issue size.";
         [SerializeField] private int sifterRequiredLevel = 1;
+        [SerializeField] private int sifterInfraValue = 1;
         [SerializeField] private int sifterCount = 3;
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
@@ -32,6 +34,7 @@ namespace _project.Scripts.Core
         [SerializeField] private string cesspitDisplayName = "Cesspit";
         [SerializeField] private string cesspitDescription = "Stores overflow and leaks runaway issues toward the destination.";
         [SerializeField] private int cesspitRequiredLevel = 1;
+        [SerializeField] private int cesspitInfraValue = 2;
         [SerializeField] private GameObject cesspitPrefab;
         [SerializeField] private Sprite cesspitSprite;
 
@@ -40,9 +43,14 @@ namespace _project.Scripts.Core
         [SerializeField] private string treatmentTankDescription =
             "Captures issues and emits clean effluent. Locks up when full.";
         [SerializeField] private int treatmentTankRequiredLevel = 4;
+        [SerializeField] private int treatmentTankInfraValue = 8;
         [SerializeField] private GameObject treatmentTankPrefab;
         [SerializeField] private Sprite treatmentTankSprite;
 
+        //TODO: Determine Path Infra Values
+        [SerializeField] private int pipeInfraValue;
+        //
+        
         [Header("Path Items")]
         [SerializeField] private string shortPipeDisplayName = "Short Pipe";
         [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
@@ -108,36 +116,36 @@ namespace _project.Scripts.Core
                     SpawnShopItem(new BlankShopItem(blankTestSprite));
             }
 
-            var fallbackPathSprite = shortPipeSprite != null
-                ? shortPipeSprite
-                : longPipeSprite != null
-                    ? longPipeSprite
-                    : blankTestSprite;
+            var fallbackPathSprite = shortPipeSprite ?? (longPipeSprite
+                ? longPipeSprite
+                : blankTestSprite);
             SpawnShopItem(new PathPieceShopItem(shortPipeDisplayName, shortPipeDescription, shortPipeRequiredLevel, 2,
-                shortPipeSprite != null ? shortPipeSprite : fallbackPathSprite));
+                shortPipeSprite ?? fallbackPathSprite, pipeInfraValue));
             SpawnShopItem(new PathPieceShopItem(longPipeDisplayName, longPipeDescription, 1, 3,
-                longPipeSprite != null ? longPipeSprite : fallbackPathSprite));
+                longPipeSprite ?? fallbackPathSprite, pipeInfraValue));
 
             if (towerPrefab)
-                SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab, towerSprite));
+                SpawnShopItem(new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab,
+                    towerSprite, towerInfraValue));
 
             if (sifterPrefab)
                 for (var i = 0; i < sifterCount; i++)
                     SpawnShopItem(new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
-                        sifterPrefab, sifterSprite));
+                        sifterPrefab, sifterSprite, sifterInfraValue));
 
             if (cesspitPrefab)
                 SpawnShopItem(new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
-                    cesspitPrefab, cesspitSprite));
+                    cesspitPrefab, cesspitSprite, cesspitInfraValue));
 
             if (treatmentTankPrefab)
                 SpawnShopItem(new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,
-                    treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite));
+                    treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite,treatmentTankInfraValue));
 
             foreach (var entry in cardEntries)
             {
                 var card = CreateCard(entry.cardType);
-                if (card != null) SpawnShopItem(new CardShopItem(card, entry.requiredLevel, entry.sprite));
+                if (card != null)
+                    SpawnShopItem(new CardShopItem(card, entry.requiredLevel, entry.sprite, entry.infraValue));
             }
         }
 

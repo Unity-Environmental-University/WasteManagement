@@ -9,6 +9,7 @@ namespace _project.Scripts.Object_Scripts
         public HealthBar healthBar;
         public float maxHealth;
         public float health;
+        
         [SerializeField] private int siftPower = 1;
         private bool _isBreaking;
         private SpecialInteractController _slot;
@@ -17,7 +18,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (healthBar) healthBar.gameObject.SetActive(true);
             /*
-            This is being set inside the inspector- may lead to issues but maybe not?
+            This is being set inside the inspector: may lead to issues but maybe not?
             health = maxHealth;
             */
             if (healthBar) healthBar.SetHealth(health, maxHealth);

@@ -4,19 +4,17 @@ using UnityEngine;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    /// Defines a single traversal route for <see cref="IssueObject"/> enemies to follow.
-    /// The path is dynamically built from pieces placed on a <see cref="PathBuildBoard"/>,
-    /// with optional fixed start/end transforms bookending the player-built section.
-    /// 
-    /// Call <see cref="Rebuild"/> before enemies spawn (e.g., at wave start) to construct
-    /// the waypoint list from currently placed pieces.
-    /// 
-    /// Internally uses BREADTH-FIRST SEARCH through occupied grid cells, treating the
-    /// whole placed-piece network as a graph. This means:
-    ///   - T-junctions and branches work correctly
-    ///   - Corners/turns work as long as pieces are orthogonally adjacent (share an edge)
-    ///   - The SHORTEST route from start to end (measured in cell count) is always chosen
-    ///   - Disconnected pieces are simply not part of the path
+    ///     Defines a single traversal route for <see cref="IssueObject" /> enemies to follow.
+    ///     The path is dynamically built from pieces placed on a <see cref="PathBuildBoard" />,
+    ///     with optional fixed start/end transforms bookending the player-built section.
+    ///     Call <see cref="Rebuild" /> before enemies spawn (e.g., at wave start) to construct
+    ///     the waypoint list from currently placed pieces.
+    ///     Internally uses BREADTH-FIRST SEARCH through occupied grid cells, treating the
+    ///     whole placed-piece network as a graph. This means:
+    ///     - T-junctions and branches work correctly
+    ///     - Corners/turns work as long as pieces are orthogonally adjacent (share an edge)
+    ///     - The SHORTEST route from start to end (measured in cell count) is always chosen
+    ///     - Disconnected pieces are simply not part of the path
     /// </summary>
     public class WaypointPath : MonoBehaviour
     {
@@ -34,20 +32,20 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
         private Transform endPoint;
 
-        // The final ordered list of world-space positions enemies traverse.
-        // Built by Rebuild() — do not modify directly.
-        private readonly List<Vector3> _waypoints = new();
+        // Cells that ARE part of the final path. Cached for gizmo color-coding.
+        private readonly List<Vector2Int> _pathCells = new();
 
         // Cells visited by BFS but NOT part of the final path. Used only for gizmo
         // visualization so the player can see which placed pieces were ignored.
         private readonly List<Vector2Int> _unusedCells = new();
 
-        // Cells that ARE part of the final path. Cached for gizmo color-coding.
-        private readonly List<Vector2Int> _pathCells = new();
+        // The final ordered list of world-space positions enemies traverse.
+        // Built by Rebuild() — do not modify directly.
+        private readonly List<Vector3> _waypoints = new();
 
         /// <summary>
-        /// The total number of waypoints in the current path. Used by IssueObject
-        /// to detect when it has reached the end of the route.
+        ///     The total number of waypoints in the current path. Used by IssueObject
+        ///     to detect when it has reached the end of the route.
         /// </summary>
         public int Count => _waypoints.Count;
 
@@ -55,10 +53,10 @@ namespace _project.Scripts.Object_Scripts
         public string InvalidReason { get; private set; }
 
         /// <summary>
-        /// Draws the route as gizmos in the Scene view:
-        ///   - YELLOW lines between consecutive waypoints (the route)
-        ///   - GREEN cubes for cells ON the path
-        ///   - RED cubes for placed cells that are NOT reachable / not on the shortest path
+        ///     Draws the route as gizmos in the Scene view:
+        ///     - YELLOW lines between consecutive waypoints (the route)
+        ///     - GREEN cubes for cells ON the path
+        ///     - RED cubes for placed cells that are NOT reachable / not on the shortest path
         /// </summary>
         private void OnDrawGizmos()
         {
@@ -85,8 +83,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Returns the world-space position of the waypoint at the given index.
-        /// Called by IssueObject each frame to get its current movement target.
+        ///     Returns the world-space position of the waypoint at the given index.
+        ///     Called by IssueObject each frame to get its current movement target.
         /// </summary>
         public Vector3 GetPosition(int index)
         {
@@ -95,16 +93,14 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Rebuilds the waypoint list using BFS through occupied grid cells.
-        ///
         ///     Algorithm:
-        ///       1. Determine START candidates from occupied cells edge-adjacent to
-        ///          <see cref="startPoint"/> and GOAL candidates from occupied cells
-        ///          edge-adjacent to <see cref="endPoint"/>.
-        ///       2. BFS outward from every START candidate through 4-way-adjacent occupied cells,
-        ///          recording the parent of each visited cell so we can reconstruct the path.
-        ///       3. If any GOAL was reached, walk parents back to build the cell sequence.
-        ///       4. Convert cells to world positions and bookend with start/end Transforms.
-        ///
+        ///     1. Determine START candidates from occupied cells edge-adjacent to
+        ///     <see cref="startPoint" /> and GOAL candidates from occupied cells
+        ///     edge-adjacent to <see cref="endPoint" />.
+        ///     2. BFS outward from every START candidate through 4-way-adjacent occupied cells,
+        ///     recording the parent of each visited cell so we can reconstruct the path.
+        ///     3. If any GOAL was reached, walk parents back to build the cell sequence.
+        ///     4. Convert cells to world positions and bookend with start/end Transforms.
         ///     Entities therefore follow the SHORTEST chain of orthogonally adjacent occupied
         ///     cells from start to goal. Diagonal adjacency is not allowed — pieces must share
         ///     an edge. T-junctions and branches work naturally because BFS considers every
@@ -181,9 +177,9 @@ namespace _project.Scripts.Object_Scripts
         // ============================================================
 
         /// <summary>
-        /// Runs breadth-first search over occupied cells. Returns the cell sequence
-        /// from any start to any goal (inclusive) along the shortest orthogonally-connected
-        /// route, or null if every goal is unreachable.
+        ///     Runs breadth-first search over occupied cells. Returns the cell sequence
+        ///     from any start to any goal (inclusive) along the shortest orthogonally-connected
+        ///     route, or null if every goal is unreachable.
         /// </summary>
         private List<Vector2Int> BreadthFirstSearch(
             IReadOnlyList<Vector2Int> starts,
@@ -256,6 +252,7 @@ namespace _project.Scripts.Object_Scripts
                 path.Add(node);
                 node = cameFrom[node];
             }
+
             path.Add(node);
 
             // We built the path goal → start; reverse to get start → goal
@@ -268,9 +265,9 @@ namespace _project.Scripts.Object_Scripts
         // ============================================================
 
         /// <summary>
-        /// Returns occupied cells that share an edge with the endpoint marker square.
-        /// Endpoint validation is strict: no radius search, no diagonal matching, and no
-        /// nearest occupied fallback.
+        ///     Returns occupied cells that share an edge with the endpoint marker square.
+        ///     Endpoint validation is strict: no radius search, no diagonal matching, and no
+        ///     nearest occupied fallback.
         /// </summary>
         private List<Vector2Int> GetOccupiedEndpointNeighbors(Transform anchor)
         {
@@ -302,8 +299,8 @@ namespace _project.Scripts.Object_Scripts
         // ============================================================
 
         /// <summary>
-        /// After BFS succeeds, mark every occupied cell NOT on the path as "unused"
-        /// so the gizmo can color them red (visible feedback for the player).
+        ///     After BFS succeeds, mark every occupied cell NOT on the path as "unused"
+        ///     so the gizmo can color them red (visible feedback for the player).
         /// </summary>
         private void RecordUnusedCells(List<Vector2Int> pathCells)
         {
@@ -315,8 +312,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        /// Mark every occupied cell as unused — called when BFS fails entirely
-        /// (no startPoint, no endPoint, or start/goal unreachable from each other).
+        ///     Mark every occupied cell as unused — called when BFS fails entirely
+        ///     (no startPoint, no endPoint, or start/goal unreachable from each other).
         /// </summary>
         private void RecordAllOccupiedAsUnused()
         {

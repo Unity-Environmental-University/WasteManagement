@@ -10,6 +10,7 @@ namespace _project.Scripts.Core
         string DisplayName { get; }
         string Description { get; }
         int RequiredLevel { get; }
+        int InfraValue { get; }
         Sprite DisplaySprite { get; }
         bool RemoveAfterPurchase { get; }
         void Purchase();
@@ -19,6 +20,7 @@ namespace _project.Scripts.Core
     {
         PlaceableType PlaceableType { get; }
         GameObject Place(Transform location);
+        
     }
 
     public interface IPathPiecePlaceable : IPlaceable
@@ -41,6 +43,7 @@ namespace _project.Scripts.Core
     {
         public string cardType; // "ChemicalSolvent" | "UpgradedMeshNet" | "SuperiorMaintenance"
         public int requiredLevel;
+        public int infraValue;
         public Sprite sprite;
     }
 
@@ -54,6 +57,7 @@ namespace _project.Scripts.Core
         public string DisplayName => "Placeholder Item";
         public string Description => "Temporary shop entry for layout testing.";
         public int RequiredLevel => 1;
+        public int InfraValue => 1;
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
 
@@ -66,16 +70,18 @@ namespace _project.Scripts.Core
     {
         private readonly ICard _card;
 
-        public CardShopItem(ICard card, int requiredLevel, Sprite displaySprite)
+        public CardShopItem(ICard card, int requiredLevel, Sprite displaySprite, int infraValue)
         {
             _card = card;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName => _card.Name;
         public string Description => _card.Description ?? string.Empty;
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
 
@@ -89,18 +95,21 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public TowerShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        public TowerShopItem(string displayName, string description, int requiredLevel, GameObject prefab,
+            Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Tower;
@@ -123,18 +132,21 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public SifterShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        public SifterShopItem(string displayName, string description, int requiredLevel, GameObject prefab,
+            Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Utility;
@@ -154,18 +166,20 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public CesspitShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        public CesspitShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Utility;
@@ -185,18 +199,21 @@ namespace _project.Scripts.Core
     {
         private readonly GameObject _prefab;
 
-        public TreatmentTankShopItem(string displayName, string description, int requiredLevel, GameObject prefab, Sprite displaySprite)
+        public TreatmentTankShopItem(string displayName, string description, int requiredLevel, GameObject prefab,
+            Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             _prefab = prefab;
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue {get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PlaceableType PlaceableType => PlaceableType.Utility;
@@ -216,42 +233,48 @@ namespace _project.Scripts.Core
     {
         private readonly int _length;
 
-        public PathPieceShopItem(string displayName, string description, int requiredLevel, int length, Sprite displaySprite)
+        public PathPieceShopItem(string displayName, string description, int requiredLevel, int length, Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             _length = length;
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => false;
 
         public void Purchase()
         {
-            var placeable = new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length, DisplaySprite);
+            var placeable = new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length, DisplaySprite,
+                InfraValue);
             GameMaster.Instance.placementInventory.Add(placeable);
         }
     }
 
     public class PathPiecePlaceable : IPathPiecePlaceable
     {
-        public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length, Sprite displaySprite)
+        public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length,
+            Sprite displaySprite, int infraValue)
         {
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
             Length = Mathf.Max(2, length);
             DisplaySprite = displaySprite;
+            InfraValue = infraValue;
         }
 
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }
+        public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public int Length { get; }

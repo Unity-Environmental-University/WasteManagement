@@ -21,6 +21,7 @@ namespace _project.Scripts.Core
         [Header("State")] public int currentLevel;
         [Header("State")] public GamePhase currentPhase;
         [Header("State")] public int moveCount;
+        [Header("State")] public int infrastructureValue;
 
         public float waveDuration = 60;
 

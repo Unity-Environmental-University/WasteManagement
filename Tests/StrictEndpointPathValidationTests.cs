@@ -251,14 +251,14 @@ namespace _project.Scripts.Tests
 
         private void PlaceVertical(PathBuildBoard board, int column, int row, int length)
         {
-            var piece = new PathPiecePlaceable("Pipe", "", 1, length, null);
+            var piece = new PathPiecePlaceable("Pipe", "", 1, length, null,0);
             piece.ToggleOrientation();
             Assert.IsTrue(GetCell(board, column, row).TryPlace(piece));
         }
 
         private void PlaceHorizontal(PathBuildBoard board, int column, int row, int length)
         {
-            var piece = new PathPiecePlaceable("Pipe", "", 1, length, null);
+            var piece = new PathPiecePlaceable("Pipe", "", 1, length, null, 0);
             Assert.IsTrue(GetCell(board, column, row).TryPlace(piece));
         }
 
