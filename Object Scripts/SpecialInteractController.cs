@@ -95,7 +95,7 @@ namespace _project.Scripts.Object_Scripts
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
                 placed.TryGetComponent<WasteSifter>(out var sifter))
-                sifter.SetSlot(this);
+                sifter.SetSlot(this, pending.InfraValue);
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
                 placed.TryGetComponent<Cesspit>(out var cesspit))
@@ -110,7 +110,7 @@ namespace _project.Scripts.Object_Scripts
             var gm = GameMaster.Instance;
             gm.placementInventory.ConsumeSelected();
             if (gm.turnController) gm.turnController.RegisterMove();
-            gm.turnController.infrastructureValue += gm.placementInventory.SelectedItem.InfraValue;
+            gm.turnController.infrastructureValue += pending.InfraValue;
             RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
         }
@@ -123,11 +123,13 @@ namespace _project.Scripts.Object_Scripts
             return acceptedType == PlaceableType.Any || acceptedType == item.PlaceableType;
         }
 
-        public void ClearOccupied()
+        public void ClearOccupied(int infraValue = 0)
         {
             if (!_isOccupied) return;
 
             _isOccupied = false;
+            if (infraValue > 0 && GameMaster.Instance && GameMaster.Instance.turnController)
+                GameMaster.Instance.turnController.infrastructureValue -= infraValue;
             RefreshInteractionState();
         }
 
@@ -136,12 +138,12 @@ namespace _project.Scripts.Object_Scripts
             var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
             if (_placementInventory == inventory) return;
 
-            if (_placementInventory != null)
+            if (_placementInventory is not null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
 
             _placementInventory = inventory;
 
-            if (_placementInventory != null)
+            if (_placementInventory is not null)
                 _placementInventory.SelectionChanged += HandleSelectionChanged;
         }
 

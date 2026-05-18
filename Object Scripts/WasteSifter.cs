@@ -13,6 +13,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private int siftPower = 1;
         private bool _isBreaking;
         private SpecialInteractController _slot;
+        private int _infraValue;
 
         private void Start()
         {
@@ -31,9 +32,10 @@ namespace _project.Scripts.Object_Scripts
             if (!survived && !_isBreaking) StartCoroutine(BreakSifter());
         }
 
-        public void SetSlot(SpecialInteractController slot)
+        public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {
             _slot = slot;
+            _infraValue = infraValue;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -51,7 +53,7 @@ namespace _project.Scripts.Object_Scripts
         {
             _isBreaking = true;
             yield return new WaitForSeconds(4f);
-            _slot?.ClearOccupied();
+            _slot?.ClearOccupied(_infraValue);
             if (healthBar) healthBar.gameObject.SetActive(false);
             Destroy(gameObject);
         }
