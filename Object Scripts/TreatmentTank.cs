@@ -20,7 +20,14 @@ namespace _project.Scripts.Object_Scripts
             UpdateFullnessBar();
         }
 
-        public void SetSlot(SpecialInteractController slot) { }
+        private SpecialInteractController _slot;
+        private int _infraValue;
+
+        public void SetSlot(SpecialInteractController slot, int infraValue = 0)
+        {
+            _slot = slot;
+            _infraValue = infraValue;
+        }
 
         // CARD UPGRADE HOOK: future card upgrades (e.g., capacity, efficiency)
         // would mutate maxFullness / sludgePerIssue here, parallel to TowerController.

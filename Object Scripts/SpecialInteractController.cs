@@ -99,11 +99,11 @@ namespace _project.Scripts.Object_Scripts
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
                 placed.TryGetComponent<Cesspit>(out var cesspit))
-                cesspit.SetSlot(this);
+                cesspit.SetSlot(this, pending.InfraValue);
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
                 placed.TryGetComponent<TreatmentTank>(out var tank))
-                tank.SetSlot(this);
+                tank.SetSlot(this, pending.InfraValue);
 
             _isOccupied = true;
             _isHovered = false;

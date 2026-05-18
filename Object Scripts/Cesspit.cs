@@ -21,6 +21,8 @@ namespace _project.Scripts.Object_Scripts
 
         private bool _spawningRunaways;
         private Coroutine _runawayCoroutine;
+        private SpecialInteractController _slot;
+        private int _infraValue;
         
         private void OnEnable()
         {
@@ -54,8 +56,10 @@ namespace _project.Scripts.Object_Scripts
                 StartRunaways();
         }
 
-        public void SetSlot(SpecialInteractController slot)
+        public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {
+            _slot = slot;
+            _infraValue = infraValue;
         }
 
         private void OnTriggerEnter(Collider other)
