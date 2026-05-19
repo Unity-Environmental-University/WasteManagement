@@ -178,6 +178,24 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
         }
 
+        [Test]
+        public void OnMouseDown_PathPlacementAddsInfrastructureValue()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var piece = new PathPiecePlaceable("Pipe", "", 1, 2, null, 3);
+            var targetCell = GetCell(board, 1, 1);
+
+            gm.turnController.currentPhase = GamePhase.Card;
+            gm.placementInventory.Add(piece);
+
+            targetCell.SendMessage("OnMouseDown");
+
+            Assert.AreEqual(3, gm.turnController.infrastructureValue);
+            Assert.AreEqual(1, gm.turnController.moveCount);
+            Assert.IsNull(gm.PendingPlacement);
+        }
+
     private PathFixture CreatePathFixture(int lowerColumn = 1, int upperColumn = 1, int lowerRow = -1, int upperRow = 10)
         {
             var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();

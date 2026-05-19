@@ -33,7 +33,8 @@ namespace _project.Scripts.Object_Scripts
         private void OnMouseDown()
         {
             var gm = GameMaster.Instance;
-            if (!gm || !gm.turnController || gm.turnController.currentPhase != GamePhase.Card)
+            var turnController = gm ? gm.turnController : null;
+            if (!gm || !turnController || turnController.currentPhase != GamePhase.Card)
                 return;
 
             if (gm.PendingPlacement is not IPathPiecePlaceable pending) return;
@@ -42,7 +43,8 @@ namespace _project.Scripts.Object_Scripts
             if (!placed) return;
 
             gm.placementInventory.ConsumeSelected();
-            if (gm.turnController) gm.turnController.RegisterMove();
+            turnController.RegisterMove();
+            turnController.infrastructureValue += pending.InfraValue;
             _board?.RefreshVisuals();
         }
 
