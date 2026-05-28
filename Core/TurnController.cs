@@ -106,7 +106,11 @@ namespace _project.Scripts.Core
                     BeginWaveSequence();
                     break;
                 case GamePhase.Tower:
-                    currentLevel = _gm.popManager ? _gm.popManager.GetLevelByPopulationSize() : currentLevel;
+                    if (_gm.popManager)
+                    {
+                        _gm.popManager.ApplyInfrastructurePopulationGrowth(infrastructureValue);
+                        currentLevel = _gm.popManager.GetLevelByPopulationSize();
+                    }
                     EnterCardSequence();
                     break;
                 default:

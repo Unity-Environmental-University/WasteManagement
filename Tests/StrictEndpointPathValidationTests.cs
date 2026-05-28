@@ -49,7 +49,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void Rebuild_ReturnsFalse_WhenPathIsNearLowerEndpointButNotEdgeAdjacent()
         {
-            var fixture = CreatePathFixture(0, 1);
+            var fixture = CreatePathFixture(0);
             PlaceVertical(fixture.Board, 1, 0, 10);
 
             Assert.IsFalse(fixture.Path.Rebuild());
@@ -113,7 +113,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void Rebuild_LeavesCountZero_WhenValidationFails()
         {
-            var fixture = CreatePathFixture(0, 1);
+            var fixture = CreatePathFixture(0);
             PlaceVertical(fixture.Board, 1, 0, 10);
 
             fixture.Path.Rebuild();
@@ -124,7 +124,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void Rebuild_ReturnsFalse_WhenValidationFails()
         {
-            var fixture = CreatePathFixture(0, 1);
+            var fixture = CreatePathFixture(0);
             PlaceVertical(fixture.Board, 1, 0, 10);
 
             Assert.IsFalse(fixture.Path.Rebuild());
@@ -133,7 +133,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void Rebuild_DoesNotEmitDirectStartToEndFallback_WhenValidationFails()
         {
-            var fixture = CreatePathFixture(0, 1);
+            var fixture = CreatePathFixture(0);
             PlaceVertical(fixture.Board, 1, 0, 10);
 
             fixture.Path.Rebuild();
@@ -215,7 +215,7 @@ namespace _project.Scripts.Tests
 
         private TurnFixture CreateTurnFixture(bool validPath)
         {
-            var pathFixture = validPath ? CreatePathFixture() : CreatePathFixture(0, 1);
+            var pathFixture = validPath ? CreatePathFixture() : CreatePathFixture(0);
             PlaceVertical(pathFixture.Board, 1, 0, 10);
 
             var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();

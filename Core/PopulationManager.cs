@@ -5,6 +5,8 @@ namespace _project.Scripts.Core
     public class PopulationManager : MonoBehaviour
     {
         [SerializeField] private int startingPopSize = 4;
+        [SerializeField] private int mediumInfrastructurePopSize = 11;
+        [SerializeField] private int largeInfrastructurePopSize = 21;
         private int _populationSize;
 
         private void Awake()
@@ -23,7 +25,30 @@ namespace _project.Scripts.Core
         {
             SetPopulationSize(_populationSize + delta);
         }
-        
+
+        public void ApplyInfrastructurePopulationGrowth(int infrastructureValue)
+        {
+            var targetPopulation = infrastructureValue switch
+            {
+                <= 10 => startingPopSize,
+                <= 20 => mediumInfrastructurePopSize,
+                _ => largeInfrastructurePopSize
+            };
+
+            SetPopulationSize(Mathf.Max(_populationSize, targetPopulation));
+        }
+
+#if UNITY_EDITOR
+        private void OnValidate()
+        {
+            // startingPopSize must stay within level 1 (≤10); medium must cross into level 2 (>10);
+            // large must cross into level 3 (>20).
+            startingPopSize = Mathf.Clamp(startingPopSize, 1, 10);
+            mediumInfrastructurePopSize = Mathf.Max(mediumInfrastructurePopSize, 11);
+            largeInfrastructurePopSize = Mathf.Max(largeInfrastructurePopSize, 21);
+        }
+#endif
+
         public int GetLevelByPopulationSize()
         {
             EnsureStartingPopulation();
@@ -32,7 +57,6 @@ namespace _project.Scripts.Core
             {
                 <= 10 => 1,
                 <= 20 => 2,
-                <= 25 => 3,
                 _ => 3
             };
         }
