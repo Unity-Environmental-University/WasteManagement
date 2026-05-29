@@ -59,6 +59,12 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public IReadOnlyList<PlacedPathPiece> PlacedPieces => _placedPieces;
 
+        /// <summary>Number of columns (X axis) in the grid.</summary>
+        public int Columns => columns;
+
+        /// <summary>Number of rows (Z axis) in the grid.</summary>
+        public int Rows => rows;
+
         /// <summary>
         ///     Initializes the grid by attempting to bind existing cells or building new ones.
         ///     Refreshes visuals after setup.
@@ -535,6 +541,16 @@ namespace _project.Scripts.Object_Scripts
         {
             var basePos = GetCellWorldPosition(position);
             return new Vector3(basePos.x, basePos.y + cellHeight * 0.5f + pipeVisualHeight, basePos.z);
+        }
+
+        /// <summary>
+        ///     Returns a world-space position centered on the top surface of the given cell —
+        ///     suitable for parenting objects (such as placement slots) that should sit on the board.
+        /// </summary>
+        public Vector3 GetCellTopPosition(Vector2Int position)
+        {
+            var basePos = GetCellWorldPosition(position);
+            return new Vector3(basePos.x, basePos.y + cellHeight * 0.5f, basePos.z);
         }
 
         /// <summary>
