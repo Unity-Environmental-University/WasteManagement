@@ -74,6 +74,11 @@ namespace _project.Scripts.Core
             // TODO: re-enable hand UI when card system is back in use
             // _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager.ShowPrepUI();
+            _gm.interfaceManager.UpdateInfoBar(
+                infrastructureValue,
+                _gm.popManager.GetPopulationSize(),
+                currentLevel
+            );
 
             if (_gm.shopManager) _gm.shopManager.OpenShop();
 

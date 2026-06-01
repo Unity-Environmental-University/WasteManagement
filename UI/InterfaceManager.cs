@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using _project.Scripts.Core;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -14,6 +15,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Image mTowerUpgrades;
         [SerializeField] private Image rTowerUpgrades;
         [SerializeField] private Image lTowerUpgrades;
+        [SerializeField] private TextMeshProUGUI infoBarText;
 
         [Header("Hand")]
         [SerializeField] private Transform handContainer;
@@ -61,6 +63,11 @@ namespace _project.Scripts.UI
             nextButton.gameObject.SetActive(true);
             openShopButton.gameObject.SetActive(true);
             closeShopButton.gameObject.SetActive(true);
+        }
+
+        public void UpdateInfoBar(int infraVal, int popVal, int currentLevel)
+        {
+            infoBarText.text = $"infra: {infraVal} Population: {popVal} Level: {currentLevel}";
         }
 
         public void NextButtonPressed()
