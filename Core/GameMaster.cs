@@ -52,6 +52,7 @@ namespace _project.Scripts.Core
             if (!placementInventory) placementInventory = GetComponent<PlacementInventory>();
             if (!placementInventory) placementInventory = gameObject.AddComponent<PlacementInventory>();
             if (!shopManager) shopManager = GetComponentInChildren<ShopManager>();
+            if (!pathBuildBoard) pathBuildBoard = GetComponentInChildren<PathBuildBoard>();
 
             var missing = new List<string>();
             if (!turnController) missing.Add(nameof(turnController));
@@ -61,6 +62,7 @@ namespace _project.Scripts.Core
             if (!deckManager) missing.Add(nameof(deckManager));
             if (!placementInventory) missing.Add(nameof(placementInventory));
             if (!shopManager) missing.Add(nameof(shopManager));
+            if (!pathBuildBoard) missing.Add(nameof(pathBuildBoard));
             if (missing.Count > 0)
                 Debug.LogWarning($"[CardGameMaster] Missing components: {string.Join(", ", missing)}");
         }

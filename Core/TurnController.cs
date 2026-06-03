@@ -70,12 +70,12 @@ namespace _project.Scripts.Core
             SwitchCamera();
             var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
 
-            _gm.placementInventory.SelectFirstAvailable();
-            _gm.deckManager.DrawNewHand();
+            _gm.placementInventory?.SelectFirstAvailable();
+            _gm.deckManager?.DrawNewHand();
             // TODO: re-enable hand UI when card system is back in use
             // _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
-            _gm.interfaceManager.ShowPrepUI();
-            _gm.interfaceManager.UpdateInfoBar(
+            _gm.interfaceManager?.ShowPrepUI();
+            _gm.interfaceManager?.UpdateInfoBar(
                 infrastructureValue,
                 populationSize,
                 currentLevel
