@@ -67,6 +67,7 @@ namespace _project.Scripts.UI
 
         public void UpdateInfoBar(int infraVal, int popVal, int currentLevel)
         {
+            if (!infoBarText) return;
             infoBarText.text = $"infra: {infraVal} Population: {popVal} Level: {currentLevel}";
         }
 

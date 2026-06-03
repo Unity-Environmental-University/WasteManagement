@@ -68,6 +68,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Card;
             OnCardPhaseEntered?.Invoke();
             SwitchCamera();
+            var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
 
             _gm.placementInventory.SelectFirstAvailable();
             _gm.deckManager.DrawNewHand();
@@ -76,7 +77,7 @@ namespace _project.Scripts.Core
             _gm.interfaceManager.ShowPrepUI();
             _gm.interfaceManager.UpdateInfoBar(
                 infrastructureValue,
-                _gm.popManager.GetPopulationSize(),
+                populationSize,
                 currentLevel
             );
 

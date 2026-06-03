@@ -178,6 +178,18 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
         }
 
+        [UnityTest]
+        public IEnumerator EndPhase_TowerToCard_DoesNotThrowWhenInfoBarTextIsUnset()
+        {
+            var fixture = CreateTurnFixture(true);
+            fixture.TurnController.currentPhase = GamePhase.Tower;
+
+            fixture.TurnController.EndPhase();
+            yield return null;
+
+            Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
+        }
+
         [Test]
         public void OnMouseDown_PathPlacementAddsInfrastructureValue()
         {
