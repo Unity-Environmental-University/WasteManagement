@@ -55,20 +55,15 @@ namespace _project.Scripts.UI
 
         public void ShowPrepUI()
         {
-            /* disabled for testing
-            lTowerUpgrades.gameObject.SetActive(true);
-            mTowerUpgrades.gameObject.SetActive(true);
-            rTowerUpgrades.gameObject.SetActive(true);
-            */
             nextButton.gameObject.SetActive(true);
             openShopButton.gameObject.SetActive(true);
             closeShopButton.gameObject.SetActive(true);
         }
 
-        public void UpdateInfoBar(int infraVal, int popVal, int currentLevel)
+        public void UpdateInfoBar(int moveCount, int popVal, int currentLevel)
         {
             if (!infoBarText) return;
-            infoBarText.text = $"infra: {infraVal} Population: {popVal} Level: {currentLevel}";
+            infoBarText.text = $"Moves Made: {moveCount} Population: {popVal} Level: {currentLevel}";
         }
 
         public void NextButtonPressed()

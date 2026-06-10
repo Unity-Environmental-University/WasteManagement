@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Linq;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -13,10 +14,6 @@ namespace _project.Scripts.Core
 
     public class TurnController : MonoBehaviour
     {
-        public static event Action OnCardPhaseEntered;
-        public static event Action OnTowerPhaseEntered;
-        private static TurnController Instance { get; set; }
-        private GameMaster _gm = GameMaster.Instance;
         [Header("State")] public int currentTurn;
         [Header("State")] public int currentLevel;
         [Header("State")] public GamePhase currentPhase;
@@ -24,6 +21,8 @@ namespace _project.Scripts.Core
         [Header("State")] public int infrastructureValue;
 
         public float waveDuration = 60;
+        private GameMaster _gm = GameMaster.Instance;
+        private static TurnController Instance { get; set; }
 
         private void Awake()
         {
@@ -41,7 +40,10 @@ namespace _project.Scripts.Core
             if (!_gm) _gm = GameMaster.Instance;
             GameStartSequence();
         }
-        
+
+        public static event Action OnCardPhaseEntered;
+        public static event Action OnTowerPhaseEntered;
+
         /// <summary>
         ///     This should initialize game variables and set up the game state for a new game/run.
         /// </summary>
@@ -61,6 +63,16 @@ namespace _project.Scripts.Core
         {
             moveCount++;
             if (_gm.debugging) Debug.Log($"[TurnController] Move registered (total: {moveCount}).");
+            RefreshInfoBar();
+        }
+
+        /// <summary>
+        ///     Pushes the current move count, population, and level to the info bar UI.
+        /// </summary>
+        private void RefreshInfoBar()
+        {
+            var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
+            _gm.interfaceManager?.UpdateInfoBar(moveCount, populationSize, currentLevel);
         }
 
         private void EnterCardSequence()
@@ -68,18 +80,12 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Card;
             OnCardPhaseEntered?.Invoke();
             SwitchCamera();
-            var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
-
             _gm.placementInventory?.SelectFirstAvailable();
             _gm.deckManager?.DrawNewHand();
             // TODO: re-enable hand UI when card system is back in use
             // _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager?.ShowPrepUI();
-            _gm.interfaceManager?.UpdateInfoBar(
-                infrastructureValue,
-                populationSize,
-                currentLevel
-            );
+            RefreshInfoBar();
 
             if (_gm.shopManager) _gm.shopManager.OpenShop();
 
@@ -117,13 +123,14 @@ namespace _project.Scripts.Core
                         _gm.popManager.ApplyInfrastructurePopulationGrowth(infrastructureValue);
                         currentLevel = _gm.popManager.GetLevelByPopulationSize();
                     }
+
                     EnterCardSequence();
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(currentPhase), currentPhase, null);
             }
         }
-        
+
         private void BeginWaveSequence()
         {
             currentPhase = GamePhase.Tower;
@@ -132,12 +139,11 @@ namespace _project.Scripts.Core
             _gm.placementInventory.ClearSelection();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
-            foreach (var s in _gm.entitySpawners)
-                if (s)
-                    s.StartSpawner();
+            foreach (var s in _gm.entitySpawners.Where(s => s))
+                s.StartSpawner();
 
             StartCoroutine(WaveTimer(waveDuration));
-            
+
             Debug.Log("Beginning Wave!");
         }
 
@@ -172,10 +178,7 @@ namespace _project.Scripts.Core
 
         public void GameLost()
         {
-            foreach (var s in _gm.entitySpawners)
-            {
-                s.StopSpawner();
-            }
+            foreach (var s in _gm.entitySpawners) s.StopSpawner();
             Debug.Log("[TurnController] Game Lost!");
         }
     }
