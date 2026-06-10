@@ -45,6 +45,16 @@ namespace _project.Scripts.Core
             return true;
         }
 
+        public bool SelectItem(IPlaceable item)
+        {
+            return item != null && SelectItem(_items.IndexOf(item));
+        }
+
+        public bool Contains(IPlaceable item)
+        {
+            return item != null && _items.Contains(item);
+        }
+
         public bool SelectFirstAvailable()
         {
             if (SelectedItem != null) return true;

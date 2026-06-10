@@ -233,13 +233,14 @@ namespace _project.Scripts.Tests
             var targetCell = GetCell(board, 1, 1);
 
             gm.turnController.currentPhase = GamePhase.Card;
-            gm.placementInventory.Add(piece);
+            board.SetActivePiece(piece);
 
             targetCell.SendMessage("OnMouseDown");
 
             Assert.AreEqual(3, gm.turnController.infrastructureValue);
             Assert.AreEqual(1, gm.turnController.moveCount);
             Assert.IsNull(gm.PendingPlacement);
+            Assert.AreEqual(piece, board.ActivePiece);
         }
 
     private PathFixture CreatePathFixture(int lowerColumn = 1, int upperColumn = 1, int lowerRow = -1, int upperRow = 10)

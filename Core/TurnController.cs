@@ -137,6 +137,7 @@ namespace _project.Scripts.Core
             OnTowerPhaseEntered?.Invoke();
             SwitchCamera();
             _gm.placementInventory.ClearSelection();
+            if (_gm.pathBuildBoard) _gm.pathBuildBoard.ClearActivePiece();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
             foreach (var s in _gm.entitySpawners.Where(s => s))

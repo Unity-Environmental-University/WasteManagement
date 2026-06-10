@@ -263,9 +263,15 @@ namespace _project.Scripts.Core
 
         public void Purchase()
         {
-            var placeable = new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length, DisplaySprite,
-                InfraValue);
-            GameMaster.Instance.placementInventory.Add(placeable);
+            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (!board)
+            {
+                Debug.LogWarning("[PathPieceShopItem] No PathBuildBoard available; purchase ignored.");
+                return;
+            }
+
+            board.SetActivePiece(new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length,
+                DisplaySprite, InfraValue));
         }
     }
 

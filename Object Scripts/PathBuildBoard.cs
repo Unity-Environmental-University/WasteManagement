@@ -59,6 +59,8 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public IReadOnlyList<PlacedPathPiece> PlacedPieces => _placedPieces;
 
+        public IPathPiecePlaceable ActivePiece { get; private set; }
+
         /// <summary>Number of columns (X axis) in the grid.</summary>
         public int Columns => columns;
 
@@ -78,13 +80,12 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Monitors the pending placement piece from GameMaster and refreshes visuals when it changes.
-        ///     Handles R-key input to toggle the orientation of the selected piece.
+        ///     Monitors the active path build piece and refreshes visuals when it changes.
+        ///     Handles R-key input to toggle the orientation of the active piece.
         /// </summary>
         private void Update()
         {
-            var selectedPiece =
-                GameMaster.Instance ? GameMaster.Instance.PendingPlacement as IPathPiecePlaceable : null;
+            var selectedPiece = ActivePiece;
             if (selectedPiece != _lastPreviewedPiece)
             {
                 _lastPreviewedPiece = selectedPiece;
@@ -97,6 +98,18 @@ namespace _project.Scripts.Object_Scripts
             selectedPiece.ToggleOrientation();
             RefreshVisuals();
         }
+
+        public void SetActivePiece(IPathPiecePlaceable piece)
+        {
+            if (piece != null && ActivePiece != null && piece.Orientation != ActivePiece.Orientation)
+                piece.ToggleOrientation();
+
+            ActivePiece = piece;
+            _lastPreviewedPiece = ActivePiece;
+            RefreshVisuals();
+        }
+
+        public void ClearActivePiece() => SetActivePiece(null);
 
         /// <summary>
         ///     Clears all cells and placed pieces, then rebuilds the grid from scratch.
@@ -115,7 +128,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Updates all cell colors based on occupancy and displays a preview visual for the pending piece.
+        ///     Updates all cell colors based on occupancy and displays a preview visual for the active path piece.
         ///     Shows valid (blue) or invalid (red) preview based on placement feasibility.
         /// </summary>
         public void RefreshVisuals()
@@ -137,8 +150,7 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var selectedPiece =
-                GameMaster.Instance ? GameMaster.Instance.PendingPlacement as IPathPiecePlaceable : null;
+            var selectedPiece = ActivePiece;
             if (selectedPiece == null)
             {
                 HidePreviewVisual();

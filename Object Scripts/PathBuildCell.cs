@@ -26,9 +26,9 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Handles mouse click on this cell. Attempts to place the pending path piece if:
         ///     - GameMaster exists and is in the Card phase
-        ///     - A valid IPathPiecePlaceable is pending
+        ///     - A valid IPathPiecePlaceable is active on the board
         ///     - The piece placement succeeds
-        ///     Consumes the selected item from inventory and refreshes board visuals on success.
+        ///     Refreshes board visuals on success.
         /// </summary>
         private void OnMouseDown()
         {
@@ -37,12 +37,12 @@ namespace _project.Scripts.Object_Scripts
             if (!gm || !turnController || turnController.currentPhase != GamePhase.Card)
                 return;
 
-            if (gm.PendingPlacement is not IPathPiecePlaceable pending) return;
+            var pending = _board ? _board.ActivePiece : null;
+            if (pending == null) return;
 
             var placed = pending.Place(transform);
             if (!placed) return;
 
-            gm.placementInventory.ConsumeSelected();
             turnController.RegisterMove();
             turnController.infrastructureValue += pending.InfraValue;
             _board?.RefreshVisuals();
