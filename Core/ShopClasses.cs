@@ -158,7 +158,18 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            return Object.Instantiate(_prefab, location.position, location.rotation);
+            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (!board) return null;
+
+            var cell = board.WorldToCell(location.position);
+            if (!board.IsOccupied(cell))
+                return null;
+
+            var rotation = location.rotation;
+            if (board.TryGetPathFacingRotation(location.position, out var pathRotation))
+                rotation = pathRotation;
+
+            return Object.Instantiate(_prefab, location.position, rotation);
         }
     }
 

@@ -554,6 +554,33 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
+        ///     Calculates a rotation for utility objects placed directly on a path piece.
+        /// </summary>
+        public bool TryGetPathFacingRotation(Vector3 worldPosition, out Quaternion rotation)
+        {
+            rotation = Quaternion.identity;
+
+            if (_pieceIds == null || _placedPieces.Count == 0)
+                return false;
+
+            var cell = WorldToCell(worldPosition);
+            var pieceId = _pieceIds[cell.x, cell.y];
+            if (pieceId <= 0)
+                return false;
+
+            var piece = _placedPieces.Find(p => p.id == pieceId);
+            if (piece == null)
+                return false;
+
+            var direction = piece.orientation == PathPieceOrientation.Horizontal
+                ? transform.TransformDirection(Vector3.right)
+                : transform.TransformDirection(Vector3.forward);
+
+            rotation = Quaternion.LookRotation(direction, Vector3.up);
+            return true;
+        }
+
+        /// <summary>
         ///     Converts a world-space position into the nearest grid cell coordinate.
         ///     Used to map fixed anchor Transforms (e.g., WaypointPath.startPoint/endPoint)
         ///     onto the grid so we can test piece adjacency against them.

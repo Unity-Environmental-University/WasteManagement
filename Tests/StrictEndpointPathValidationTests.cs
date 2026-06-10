@@ -141,6 +141,40 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, fixture.Path.Count);
         }
 
+        [Test]
+        public void TryGetPathFacingRotation_FacesAlongHorizontalPipe_WhenPlacedOnPipe()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            PlaceHorizontal(board, 1, 1, 3);
+
+            Assert.IsTrue(board.TryGetPathFacingRotation(board.GetCellTopPosition(new Vector2Int(1, 1)),
+                out var rotation));
+
+            AssertFaces(rotation, Vector3.right);
+        }
+
+        [Test]
+        public void TryGetPathFacingRotation_FacesAlongVerticalPipe_WhenPlacedOnPipe()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            PlaceVertical(board, 1, 1, 3);
+
+            Assert.IsTrue(board.TryGetPathFacingRotation(board.GetCellTopPosition(new Vector2Int(1, 1)),
+                out var rotation));
+
+            AssertFaces(rotation, Vector3.forward);
+        }
+
+        [Test]
+        public void TryGetPathFacingRotation_ReturnsFalse_WhenPlacedOffPipe()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            PlaceVertical(board, 1, 1, 3);
+
+            Assert.IsFalse(board.TryGetPathFacingRotation(board.GetCellTopPosition(new Vector2Int(2, 1)),
+                out _));
+        }
+
         [UnityTest]
         public IEnumerator EndPhase_InvalidPath_KeepsCardPhase()
         {
@@ -290,6 +324,11 @@ namespace _project.Scripts.Tests
         {
             var piece = new PathPiecePlaceable("Pipe", "", 1, length, null, 0);
             Assert.IsTrue(GetCell(board, column, row).TryPlace(piece));
+        }
+
+        private static void AssertFaces(Quaternion rotation, Vector3 expectedDirection)
+        {
+            Assert.Greater(Vector3.Dot(rotation * Vector3.forward, expectedDirection.normalized), 0.99f);
         }
 
         private PathBuildCell GetCell(PathBuildBoard board, int column, int row)
