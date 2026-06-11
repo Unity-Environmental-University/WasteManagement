@@ -140,8 +140,9 @@ namespace _project.Scripts.Core
             if (_gm.pathBuildBoard) _gm.pathBuildBoard.ClearActivePiece();
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
+            var spawnRateMultiplier = _gm.popManager ? _gm.popManager.GetIssueSpawnRateMultiplier() : 1f;
             foreach (var s in _gm.entitySpawners.Where(s => s))
-                s.StartSpawner();
+                s.StartSpawner(spawnRateMultiplier);
 
             StartCoroutine(WaveTimer(waveDuration));
 

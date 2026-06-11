@@ -18,7 +18,7 @@ namespace _project.Scripts.Object_Scripts
             spawnPoint = spawnPoint?.transform;
         }
 
-        public bool StartSpawner()
+        public bool StartSpawner(float spawnRateMultiplier = 1f)
         {
             if (!path)
             {
@@ -32,8 +32,13 @@ namespace _project.Scripts.Object_Scripts
                 return false;
             }
 
-            _spawnCoroutine = StartCoroutine(SpawnTimer(spawnInterval));
+            _spawnCoroutine = StartCoroutine(SpawnTimer(GetEffectiveInterval(spawnRateMultiplier)));
             return true;
+        }
+
+        private float GetEffectiveInterval(float spawnRateMultiplier)
+        {
+            return spawnInterval / Mathf.Max(spawnRateMultiplier, 0.01f);
         }
 
         public void StopSpawner()

@@ -7,6 +7,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int startingPopSize = 4;
         [SerializeField] private int mediumInfrastructurePopSize = 11;
         [SerializeField] private int largeInfrastructurePopSize = 21;
+        [SerializeField] private float spawnRateGrowthPerPop = 0.1f;
         private int _populationSize;
 
         private void Awake()
@@ -38,6 +39,16 @@ namespace _project.Scripts.Core
             SetPopulationSize(Mathf.Max(_populationSize, targetPopulation));
         }
 
+        /// <summary>
+        ///     Spawn-rate multiplier for issue spawners: 1x at the starting population,
+        ///     growing by <see cref="spawnRateGrowthPerPop" /> per resident above it.
+        /// </summary>
+        public float GetIssueSpawnRateMultiplier()
+        {
+            EnsureStartingPopulation();
+            return Mathf.Max(1f, 1f + (_populationSize - startingPopSize) * spawnRateGrowthPerPop);
+        }
+
 #if UNITY_EDITOR
         private void OnValidate()
         {
@@ -46,6 +57,7 @@ namespace _project.Scripts.Core
             startingPopSize = Mathf.Clamp(startingPopSize, 1, 10);
             mediumInfrastructurePopSize = Mathf.Max(mediumInfrastructurePopSize, 11);
             largeInfrastructurePopSize = Mathf.Max(largeInfrastructurePopSize, 21);
+            spawnRateGrowthPerPop = Mathf.Max(spawnRateGrowthPerPop, 0f);
         }
 #endif
 

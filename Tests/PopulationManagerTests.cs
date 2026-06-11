@@ -65,6 +65,35 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(3, populationManager.GetLevelByPopulationSize());
         }
 
+        [Test]
+        public void GetIssueSpawnRateMultiplier_StartingPopulation_IsBaseRate()
+        {
+            var populationManager = CreatePopulationManager();
+
+            Assert.AreEqual(1f, populationManager.GetIssueSpawnRateMultiplier());
+        }
+
+        [Test]
+        public void GetIssueSpawnRateMultiplier_GrowsWithPopulation()
+        {
+            var populationManager = CreatePopulationManager();
+
+            populationManager.ApplyInfrastructurePopulationGrowth(11);
+
+            // Pop 11 vs starting 4 at 0.1 growth per resident = 1.7x.
+            Assert.AreEqual(1.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
+        }
+
+        [Test]
+        public void GetIssueSpawnRateMultiplier_PopulationBelowStarting_DoesNotDropBelowBaseRate()
+        {
+            var populationManager = CreatePopulationManager();
+
+            populationManager.ChangePopulationSize(-10);
+
+            Assert.AreEqual(1f, populationManager.GetIssueSpawnRateMultiplier());
+        }
+
         private PopulationManager CreatePopulationManager()
         {
             var go = new GameObject("Population Manager");
