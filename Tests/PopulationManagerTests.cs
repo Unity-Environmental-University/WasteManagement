@@ -20,49 +20,86 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void ApplyInfrastructurePopulationGrowth_LowInfrastructure_DoesNotAddStartingPopulationRepeatedly()
+        public void ApplyPostWaveGrowth_CleanWave_GrowsByBaseRate()
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyInfrastructurePopulationGrowth(0);
-            populationManager.ApplyInfrastructurePopulationGrowth(0);
+            populationManager.ApplyPostWaveGrowth(0);
 
-            Assert.AreEqual(4, populationManager.GetPopulationSize());
-            Assert.AreEqual(1, populationManager.GetLevelByPopulationSize());
+            // Starting pop 4 + base growth 3.
+            Assert.AreEqual(7, populationManager.GetPopulationSize());
         }
 
         [Test]
-        public void ApplyInfrastructurePopulationGrowth_MediumInfrastructure_AdvancesToLevelTwo()
+        public void ApplyPostWaveGrowth_CleanWaves_GrowConsistently()
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyInfrastructurePopulationGrowth(11);
+            populationManager.ApplyPostWaveGrowth(0);
+            populationManager.ApplyPostWaveGrowth(0);
+            populationManager.ApplyPostWaveGrowth(0);
 
-            Assert.AreEqual(11, populationManager.GetPopulationSize());
+            Assert.AreEqual(13, populationManager.GetPopulationSize());
             Assert.AreEqual(2, populationManager.GetLevelByPopulationSize());
         }
 
         [Test]
-        public void ApplyInfrastructurePopulationGrowth_HighInfrastructure_AdvancesToLevelThree()
+        public void ApplyPostWaveGrowth_Infrastructure_AddsOnlySmallBonus()
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyInfrastructurePopulationGrowth(26);
+            populationManager.ApplyPostWaveGrowth(20);
 
-            Assert.AreEqual(21, populationManager.GetPopulationSize());
-            Assert.AreEqual(3, populationManager.GetLevelByPopulationSize());
+            // Base 3 + 20 infra * 0.1 bonus = 5.
+            Assert.AreEqual(9, populationManager.GetPopulationSize());
         }
 
         [Test]
-        public void ApplyInfrastructurePopulationGrowth_LowerInfrastructure_DoesNotShrinkPopulation()
+        public void ApplyPostWaveGrowth_LakePollution_GreatlyReducesGrowth()
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyInfrastructurePopulationGrowth(26);
-            populationManager.ApplyInfrastructurePopulationGrowth(0);
+            populationManager.RecordLakePollution(2f);
+            populationManager.ApplyPostWaveGrowth(0);
 
-            Assert.AreEqual(21, populationManager.GetPopulationSize());
-            Assert.AreEqual(3, populationManager.GetLevelByPopulationSize());
+            // Base 3 - 2 pollution = 1.
+            Assert.AreEqual(5, populationManager.GetPopulationSize());
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_HeavyPollution_HaltsGrowthButNeverShrinks()
+        {
+            var populationManager = CreatePopulationManager();
+
+            populationManager.RecordLakePollution(50f);
+            populationManager.ApplyPostWaveGrowth(0);
+
+            Assert.AreEqual(4, populationManager.GetPopulationSize());
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_PollutionResetsBetweenWaves()
+        {
+            var populationManager = CreatePopulationManager();
+
+            populationManager.RecordLakePollution(50f);
+            populationManager.ApplyPostWaveGrowth(0);
+            populationManager.ApplyPostWaveGrowth(0);
+
+            // The polluted wave halts growth; the following clean wave grows normally.
+            Assert.AreEqual(7, populationManager.GetPopulationSize());
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_Stink_ReducesGrowth()
+        {
+            var populationManager = CreatePopulationManager();
+
+            populationManager.StinkValue = 4f;
+            populationManager.ApplyPostWaveGrowth(0);
+
+            // Base 3 - 4 stink * 0.5 penalty = 1.
+            Assert.AreEqual(5, populationManager.GetPopulationSize());
         }
 
         [Test]
@@ -78,7 +115,8 @@ namespace _project.Scripts.Tests
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyInfrastructurePopulationGrowth(11);
+            populationManager.GetLevelByPopulationSize(); // ensure starting population of 4
+            populationManager.ChangePopulationSize(7);
 
             // Pop 11 vs starting 4 at 0.1 growth per resident = 1.7x.
             Assert.AreEqual(1.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);

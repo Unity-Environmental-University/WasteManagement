@@ -5,10 +5,21 @@ namespace _project.Scripts.Core
     public class PopulationManager : MonoBehaviour
     {
         [SerializeField] private int startingPopSize = 4;
-        [SerializeField] private int mediumInfrastructurePopSize = 11;
-        [SerializeField] private int largeInfrastructurePopSize = 21;
         [SerializeField] private float spawnRateGrowthPerPop = 0.1f;
+
+        [Header("Post-Wave Growth")]
+        [SerializeField] private int baseGrowthPerWave = 3;
+        [SerializeField] private float infrastructureGrowthBonus = 0.1f;
+        [SerializeField] private float pollutionGrowthPenalty = 1f;
+        [SerializeField] private float stinkGrowthPenalty = 0.5f;
+
         private int _populationSize;
+        private float _wavePollution;
+
+        /// <summary>
+        ///     Town stink level (planned feature). Reduces or halts growth as it rises.
+        /// </summary>
+        public float StinkValue { get; set; }
 
         private void Awake()
         {
@@ -27,16 +38,34 @@ namespace _project.Scripts.Core
             SetPopulationSize(_populationSize + delta);
         }
 
-        public void ApplyInfrastructurePopulationGrowth(int infrastructureValue)
+        /// <summary>
+        ///     Records pollution from waste that reached the lake during the current wave.
+        ///     Consumed (and reset) by the next <see cref="ApplyPostWaveGrowth" />.
+        /// </summary>
+        public void RecordLakePollution(float amount)
         {
-            var targetPopulation = infrastructureValue switch
-            {
-                <= 10 => startingPopSize,
-                <= 20 => mediumInfrastructurePopSize,
-                _ => largeInfrastructurePopSize
-            };
+            _wavePollution += Mathf.Max(0f, amount);
+        }
 
-            SetPopulationSize(Mathf.Max(_populationSize, targetPopulation));
+        public float GetWavePollution() => _wavePollution;
+
+        /// <summary>
+        ///     Grows the population after a wave: a steady base rate plus a small
+        ///     infrastructure bonus, greatly reduced by pollution that reached the lake
+        ///     this wave and reduced by town stink. Growth is halted (never negative)
+        ///     when penalties outweigh the gains.
+        /// </summary>
+        public void ApplyPostWaveGrowth(int infrastructureValue)
+        {
+            EnsureStartingPopulation();
+
+            var growth = baseGrowthPerWave
+                         + infrastructureValue * infrastructureGrowthBonus
+                         - _wavePollution * pollutionGrowthPenalty
+                         - StinkValue * stinkGrowthPenalty;
+
+            _wavePollution = 0f;
+            SetPopulationSize(_populationSize + Mathf.Max(0, Mathf.FloorToInt(growth)));
         }
 
         /// <summary>
@@ -52,12 +81,13 @@ namespace _project.Scripts.Core
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            // startingPopSize must stay within level 1 (≤10); medium must cross into level 2 (>10);
-            // large must cross into level 3 (>20).
+            // startingPopSize must stay within level 1 (≤10).
             startingPopSize = Mathf.Clamp(startingPopSize, 1, 10);
-            mediumInfrastructurePopSize = Mathf.Max(mediumInfrastructurePopSize, 11);
-            largeInfrastructurePopSize = Mathf.Max(largeInfrastructurePopSize, 21);
             spawnRateGrowthPerPop = Mathf.Max(spawnRateGrowthPerPop, 0f);
+            baseGrowthPerWave = Mathf.Max(baseGrowthPerWave, 0);
+            infrastructureGrowthBonus = Mathf.Max(infrastructureGrowthBonus, 0f);
+            pollutionGrowthPenalty = Mathf.Max(pollutionGrowthPenalty, 0f);
+            stinkGrowthPenalty = Mathf.Max(stinkGrowthPenalty, 0f);
         }
 #endif
 

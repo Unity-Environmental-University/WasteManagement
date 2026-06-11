@@ -120,7 +120,7 @@ namespace _project.Scripts.Core
                 case GamePhase.Tower:
                     if (_gm.popManager)
                     {
-                        _gm.popManager.ApplyInfrastructurePopulationGrowth(infrastructureValue);
+                        _gm.popManager.ApplyPostWaveGrowth(infrastructureValue);
                         currentLevel = _gm.popManager.GetLevelByPopulationSize();
                     }
 

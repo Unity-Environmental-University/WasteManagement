@@ -19,6 +19,9 @@ namespace _project.Scripts.Object_Scripts
             var damage = issue.ProcessCost * 5;
             health -= damage;
             UpdateLakeColor();
+
+            var popManager = GameMaster.Instance ? GameMaster.Instance.popManager : null;
+            if (popManager) popManager.RecordLakePollution(issue.ProcessCost);
             
             if (health <= 0) GameMaster.Instance.turnController.GameLost();
         }
