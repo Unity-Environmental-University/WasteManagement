@@ -14,6 +14,8 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 10f;
         [SerializeField] private float runawayMoveSpeed = 12f;
+        [SerializeField] private Color runawayColor = new(1f, 0.45f, 0f);
+        [SerializeField] private Material runawayMaterial;
         
         [FormerlySerializedAs("healthBar")] public HealthBar fullnessBar;
         [FormerlySerializedAs("maxHealth")] public float maxFullness;
@@ -143,6 +145,7 @@ namespace _project.Scripts.Object_Scripts
                 issue.AssignType();
                 issue.SetDirectDestination(runawayDestination.position);
                 issue.SetMoveSpeed(runawayMoveSpeed);
+                issue.SetVisualOverride(runawayColor, runawayMaterial);
                 issue.EnableClickPop();
             }
         }

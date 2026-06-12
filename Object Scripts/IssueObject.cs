@@ -17,6 +17,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float moveSpeed = 2f;
         [SerializeField] private IssueType type;
         [SerializeField] private WaypointPath path;
+        [SerializeField] private Renderer issueRenderer;
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
         
@@ -28,6 +29,7 @@ namespace _project.Scripts.Object_Scripts
         private int _waypointIndex;
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
+        private Color? _visualOverrideColor;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
         private int Size { get; set; }
@@ -101,14 +103,16 @@ namespace _project.Scripts.Object_Scripts
 
         private void SetMaterialColor()
         {
-            var mat = Size switch
+            var renderer = GetIssueRenderer();
+            if (!renderer) return;
+
+            renderer.material.color = _visualOverrideColor ?? Size switch
             {
                 1 => Color.red,
                 2 => Color.deepSkyBlue,
                 3 => Color.softGreen,
                 _ => throw new ArgumentOutOfRangeException()
             };
-            gameObject.GetComponent<Renderer>().material.color = mat;
         }
 
         private void OnMouseDown()
@@ -192,6 +196,27 @@ namespace _project.Scripts.Object_Scripts
         public void SetMoveSpeed(float speed)
         {
             moveSpeed = Mathf.Max(0f, speed);
+        }
+
+        public void SetVisualOverride(Color color, Material material = null)
+        {
+            _visualOverrideColor = color;
+
+            // Assign the material once here rather than in SetMaterialColor — re-assigning the
+            // shared asset there would clone a fresh material instance on every repaint.
+            var renderer = GetIssueRenderer();
+            if (material && renderer)
+                renderer.material = material;
+
+            SetMaterialColor();
+        }
+
+        private Renderer GetIssueRenderer()
+        {
+            if (!issueRenderer)
+                issueRenderer = GetComponent<Renderer>();
+
+            return issueRenderer;
         }
 
         public static event Action<IssueObject> OnReachedEnd;

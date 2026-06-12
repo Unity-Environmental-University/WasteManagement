@@ -38,7 +38,7 @@ namespace _project.Scripts.Object_Scripts
                 return;
 
             var pending = _board ? _board.ActivePiece : null;
-            if (pending == null) return;
+            if (pending == null || PathBuildBoard.NonPathSelectionActive()) return;
 
             var placed = pending.Place(transform);
             if (!placed) return;

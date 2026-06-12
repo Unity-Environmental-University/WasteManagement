@@ -186,6 +186,19 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void IssueVisualOverride_PersistsAfterProcessingChangesSize()
+        {
+            var issue = CreatePrimitive("Runaway Issue").AddComponent<IssueObject>();
+            var runawayColor = new Color(1f, 0.45f, 0f);
+
+            issue.SetSize(3);
+            issue.SetVisualOverride(runawayColor);
+            issue.Process(1, "Test Process");
+
+            Assert.AreEqual(runawayColor, issue.GetComponent<Renderer>().material.color);
+        }
+
+        [Test]
         public void SifterPlace_ReturnsNull_WhenSlotIsOutsideBoardNearOccupiedEdge()
         {
             var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();

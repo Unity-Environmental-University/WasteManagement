@@ -49,6 +49,7 @@ namespace _project.Scripts.Object_Scripts
         private PathBuildCell[,] _cells;
         private PathBuildCell _hoveredCell;
         private IPathPiecePlaceable _lastPreviewedPiece;
+        private PlacementInventory _placementInventory;
         private int _nextPieceId = 1;
         private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
         private GameObject _previewVisual;
@@ -85,6 +86,8 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void Update()
         {
+            BindInventory();
+
             var selectedPiece = ActivePiece;
             if (selectedPiece != _lastPreviewedPiece)
             {
@@ -110,6 +113,44 @@ namespace _project.Scripts.Object_Scripts
         }
 
         public void ClearActivePiece() => SetActivePiece(null);
+
+        /// <summary>
+        ///     True while a non-path item (e.g., a sifter or cesspit) is selected in the placement
+        ///     inventory. The active path piece is kept but its preview and cell placement are
+        ///     suppressed until the utility selection is cleared or consumed.
+        /// </summary>
+        public static bool NonPathSelectionActive()
+        {
+            var gm = GameMaster.Instance;
+            var pending = gm ? gm.PendingPlacement : null;
+            return pending != null && pending.PlaceableType != PlaceableType.Path;
+        }
+
+        /// <summary>
+        ///     Lazily subscribes to the placement inventory's SelectionChanged event so the
+        ///     preview refreshes when the selection flips between path and non-path items.
+        /// </summary>
+        private void BindInventory()
+        {
+            var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
+            if (_placementInventory == inventory) return;
+
+            if (_placementInventory is not null)
+                _placementInventory.SelectionChanged -= HandleSelectionChanged;
+
+            _placementInventory = inventory;
+
+            if (_placementInventory is not null)
+                _placementInventory.SelectionChanged += HandleSelectionChanged;
+        }
+
+        private void HandleSelectionChanged(IPlaceable pending) => RefreshVisuals();
+
+        private void OnDestroy()
+        {
+            if (_placementInventory is not null)
+                _placementInventory.SelectionChanged -= HandleSelectionChanged;
+        }
 
         /// <summary>
         ///     Clears all cells and placed pieces, then rebuilds the grid from scratch.
@@ -151,7 +192,7 @@ namespace _project.Scripts.Object_Scripts
             }
 
             var selectedPiece = ActivePiece;
-            if (selectedPiece == null)
+            if (selectedPiece == null || NonPathSelectionActive())
             {
                 HidePreviewVisual();
                 return;
