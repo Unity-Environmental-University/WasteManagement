@@ -103,6 +103,11 @@ namespace _project.Scripts.Object_Scripts
             _runawayCoroutine = null;
         }
 
+        public void StopRunaways()
+        {
+            PauseRunaways();
+        }
+
         private void ResumeRunaways()
         {
             if (!_spawningRunaways) return;
@@ -113,18 +118,23 @@ namespace _project.Scripts.Object_Scripts
 
         private void ResolveRunawayReferences()
         {
-            if (!runawayPrefab && GameMaster.Instance)
-                foreach (var spawner in GameMaster.Instance.entitySpawners.Where(spawner =>
-                             spawner && spawner.SpawnPrefab))
-                {
+            if (GameMaster.Instance?.entitySpawners == null) return;
+
+            var resolvedPathDestination = false;
+            foreach (var spawner in GameMaster.Instance.entitySpawners.Where(spawner => spawner))
+            {
+                if (!runawayPrefab && spawner.SpawnPrefab)
                     runawayPrefab = spawner.SpawnPrefab;
-                    break;
+
+                if (spawner.Path && spawner.Path.Destination)
+                {
+                    runawayDestination = spawner.Path.Destination;
+                    resolvedPathDestination = true;
                 }
 
-            if (runawayDestination) return;
-            var lake = FindAnyObjectByType<LakeController>();
-            if (lake)
-                runawayDestination = lake.transform;
+                if (runawayPrefab && resolvedPathDestination)
+                    break;
+            }
         }
 
         private IEnumerator SpawnRunaway()

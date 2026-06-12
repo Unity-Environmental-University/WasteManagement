@@ -277,6 +277,39 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
+        public IEnumerator WaveTimer_StopsCesspitRunawaysWhenSpawnersStop()
+        {
+            var fixture = CreateTurnFixture(true);
+            fixture.TurnController.waveDuration = 0f;
+            var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
+            cesspit.maxFullness = 1f;
+            cesspit.fullness = 1f;
+
+            yield return null;
+            Assert.IsNotNull(GetField<Coroutine>(cesspit, "_runawayCoroutine"));
+
+            fixture.TurnController.EndPhase();
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
+            Assert.IsNull(GetField<Coroutine>(cesspit, "_runawayCoroutine"));
+        }
+
+        [UnityTest]
+        public IEnumerator Cesspit_UsesIssuePathDestinationForRunaways()
+        {
+            var fixture = CreateTurnFixture(true);
+            var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
+            var oldDestination = CreateGameObject("Old Runaway Destination").transform;
+            SetField(cesspit, "runawayDestination", oldDestination);
+
+            yield return null;
+
+            Assert.AreSame(fixture.Path.Destination, GetField<Transform>(cesspit, "runawayDestination"));
+        }
+
+        [UnityTest]
         public IEnumerator EndPhase_TowerToCard_DoesNotThrowWhenInfoBarTextIsUnset()
         {
             var fixture = CreateTurnFixture(true);

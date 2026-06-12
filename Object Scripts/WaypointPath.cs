@@ -48,6 +48,7 @@ namespace _project.Scripts.Object_Scripts
         ///     to detect when it has reached the end of the route.
         /// </summary>
         public int Count => _waypoints.Count;
+        public Transform Destination => endPoint;
 
         public bool IsValid { get; private set; }
         public string InvalidReason { get; private set; }
@@ -126,7 +127,7 @@ namespace _project.Scripts.Object_Scripts
                 return FailRebuild();
             }
 
-            // RESOLVE START AND GOAL CANDIDATES
+            // RESOLVE START AND GOAL CANDIDATES.
             // Endpoint markers are strict: a placed path cell must share an edge with each
             // marker square. The middle of the route remains normal occupied-cell BFS.
             var starts = GetOccupiedEndpointNeighbors(startPoint);

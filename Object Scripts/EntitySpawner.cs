@@ -12,6 +12,7 @@ namespace _project.Scripts.Object_Scripts
         
         public float spawnInterval;
         public GameObject SpawnPrefab => spawnerObject;
+        public WaypointPath Path => path;
 
         private void Awake()
         {

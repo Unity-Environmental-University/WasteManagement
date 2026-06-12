@@ -190,6 +190,9 @@ namespace _project.Scripts.Core
         private void StopAllSpawners()
         {
             foreach (var spawner in _gm.entitySpawners.Where(spawner => spawner)) spawner.StopSpawner();
+
+            foreach (var cesspit in FindObjectsByType<Cesspit>(FindObjectsInactive.Exclude))
+                cesspit.StopRunaways();
         }
     }
 }
