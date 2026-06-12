@@ -26,7 +26,6 @@ namespace _project.Scripts.Object_Scripts
         private const float BaseSiftCost = 5f;
         private Transform _startPoint;
         private int _waypointIndex;
-        private bool _useDirectDestination;
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
@@ -34,7 +33,19 @@ namespace _project.Scripts.Object_Scripts
         private int Size { get; set; }
         public float SiftCost => BaseSiftCost * Size;
         public float ProcessCost => BaseProcessCost * Size;
-        public bool IsDirectDestination => _useDirectDestination;
+        public bool IsDirectDestination { get; private set; }
+
+        public static int ActiveCount { get; private set; }
+
+        private void OnEnable()
+        {
+            ActiveCount++;
+        }
+
+        private void OnDisable()
+        {
+            ActiveCount--;
+        }
 
         private void Awake()
         {
@@ -55,7 +66,7 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void Update()
         {
-            if (_useDirectDestination)
+            if (IsDirectDestination)
             {
                 transform.position = Vector3.MoveTowards(transform.position, _directDestination, moveSpeed * Time.deltaTime);
 
@@ -82,7 +93,7 @@ namespace _project.Scripts.Object_Scripts
             // Move toward the target at moveSpeed units/second (frame-rate independent)
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
 
-            // ADVANCE: If within ~0.1 units of the waypoint (0.01 squared), snap to next waypoint
+            // ADVANCE: If within ~0.1 units of the waypoint (0.01 squared), snap to the next waypoint.
             // Using sqrMagnitude avoids an expensive sqrt — compare squared distances instead
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)
                 _waypointIndex++;
@@ -163,13 +174,13 @@ namespace _project.Scripts.Object_Scripts
         public void SetPath(WaypointPath p)
         {
             path = p;
-            _useDirectDestination = false;
+            IsDirectDestination = false;
         }
 
         public void SetDirectDestination(Vector3 destination)
         {
             _directDestination = destination;
-            _useDirectDestination = true;
+            IsDirectDestination = true;
             path = null;
         }
 

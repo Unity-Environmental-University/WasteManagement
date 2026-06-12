@@ -12,7 +12,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private int processPower = 3;
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
-        [SerializeField] private float runawaySpawnInterval = 4f;
+        [SerializeField] private float runawaySpawnInterval = 10f;
         [SerializeField] private float runawayMoveSpeed = 12f;
         
         [FormerlySerializedAs("healthBar")] public HealthBar fullnessBar;
@@ -64,6 +64,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnTriggerEnter(Collider other)
         {
+            if (IsFull) return;
             if (!other.gameObject.CompareTag("IssueObject")) return;
             var issue = other.GetComponent<IssueObject>();
             if (issue != null && issue.IsDirectDestination)

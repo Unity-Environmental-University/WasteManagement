@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Linq;
+using _project.Scripts.Object_Scripts;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -169,8 +170,10 @@ namespace _project.Scripts.Core
         {
             yield return new WaitForSeconds(duration);
 
-            foreach (var spawner in _gm.entitySpawners)
-                spawner.StopSpawner();
+            StopAllSpawners();
+
+            while (IssueObject.ActiveCount > 0)
+                yield return null;
 
             currentTurn++;
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
@@ -180,8 +183,13 @@ namespace _project.Scripts.Core
 
         public void GameLost()
         {
-            foreach (var s in _gm.entitySpawners) s.StopSpawner();
+            StopAllSpawners();
             Debug.Log("[TurnController] Game Lost!");
+        }
+
+        private void StopAllSpawners()
+        {
+            foreach (var spawner in _gm.entitySpawners.Where(spawner => spawner)) spawner.StopSpawner();
         }
     }
 }

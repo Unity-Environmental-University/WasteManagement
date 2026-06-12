@@ -575,7 +575,9 @@ namespace _project.Scripts.Object_Scripts
             if (_pieceIds == null || _placedPieces.Count == 0)
                 return false;
 
-            var cell = WorldToCell(worldPosition);
+            if (!TryWorldToCell(worldPosition, out var cell))
+                return false;
+
             var pieceId = _pieceIds[cell.x, cell.y];
             if (pieceId <= 0)
                 return false;
@@ -607,6 +609,16 @@ namespace _project.Scripts.Object_Scripts
             var row = Mathf.Clamp(cell.y, 0, rows - 1);
 
             return new Vector2Int(column, row);
+        }
+
+        /// <summary>
+        ///     Converts a world-space position into the nearest grid cell coordinate,
+        ///     returning false if the position falls outside the board bounds.
+        /// </summary>
+        public bool TryWorldToCell(Vector3 worldPosition, out Vector2Int cell)
+        {
+            cell = WorldToCellUnclamped(worldPosition);
+            return IsInBounds(cell.x, cell.y);
         }
 
         /// <summary>

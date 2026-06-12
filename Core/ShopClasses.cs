@@ -161,8 +161,7 @@ namespace _project.Scripts.Core
             var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
             if (!board) return null;
 
-            var cell = board.WorldToCell(location.position);
-            if (!board.IsOccupied(cell))
+            if (!board.TryWorldToCell(location.position, out var cell) || !board.IsOccupied(cell))
                 return null;
 
             var rotation = location.rotation;

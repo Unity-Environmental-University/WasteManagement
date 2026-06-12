@@ -175,6 +175,32 @@ namespace _project.Scripts.Tests
                 out _));
         }
 
+        [Test]
+        public void TryGetPathFacingRotation_ReturnsFalse_WhenPlacedOutsideBoardNearOccupiedEdge()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            PlaceVertical(board, 1, 0, 2);
+
+            Assert.IsFalse(board.TryGetPathFacingRotation(board.GetCellTopPosition(new Vector2Int(1, -1)),
+                out _));
+        }
+
+        [Test]
+        public void SifterPlace_ReturnsNull_WhenSlotIsOutsideBoardNearOccupiedEdge()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var prefab = CreatePrimitive("Sifter Prefab");
+            var slot = CreateGameObject("Outside Slot").transform;
+            var item = new SifterShopItem("Sifter", "", 1, prefab, null, 1);
+
+            gm.pathBuildBoard = board;
+            PlaceVertical(board, 1, 0, 2);
+            slot.position = board.GetCellTopPosition(new Vector2Int(1, -1));
+
+            Assert.IsNull(item.Place(slot));
+        }
+
         [UnityTest]
         public IEnumerator EndPhase_InvalidPath_KeepsCardPhase()
         {
@@ -210,6 +236,31 @@ namespace _project.Scripts.Tests
             yield return null;
 
             Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
+        }
+
+        [UnityTest]
+        public IEnumerator WaveTimer_WaitsForActiveIssuesBeforeApplyingPostWaveGrowth()
+        {
+            var fixture = CreateTurnFixture(true);
+            fixture.TurnController.waveDuration = 0f;
+
+            fixture.TurnController.EndPhase();
+            var issue = CreatePrimitive("Late Issue").AddComponent<IssueObject>();
+            issue.SetPath(fixture.Path);
+            issue.SetMoveSpeed(0f);
+
+            yield return null;
+
+            Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
+            fixture.GameMaster.popManager.RecordLakePollution(3f);
+
+            Object.Destroy(issue.gameObject);
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
+            Assert.AreEqual(4, fixture.GameMaster.popManager.GetPopulationSize());
+            Assert.AreEqual(0f, fixture.GameMaster.popManager.GetWavePollution());
         }
 
         [UnityTest]
@@ -269,6 +320,7 @@ namespace _project.Scripts.Tests
             var turnController = gm.GetComponent<TurnController>();
             turnController.enabled = false;
             var placementInventory = gm.GetComponent<PlacementInventory>();
+            var popManager = gm.gameObject.AddComponent<PopulationManager>();
             var interfaceManager = CreateInterfaceManager();
             var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
             var topDownCamera = CreateGameObject("Top Camera").AddComponent<Camera>();
@@ -283,16 +335,18 @@ namespace _project.Scripts.Tests
 
             gm.turnController = turnController;
             gm.placementInventory = placementInventory;
+            gm.popManager = popManager;
             gm.interfaceManager = interfaceManager;
             gm.mainCamera = mainCamera;
             gm.topDownCamera = topDownCamera;
+            gm.pathBuildBoard = pathFixture.Board;
             gm.entitySpawners = new List<EntitySpawner> { spawner };
 
             SetField(turnController, "_gm", gm);
             turnController.currentPhase = GamePhase.Card;
             turnController.waveDuration = 1000f;
 
-            return new TurnFixture(turnController, spawner);
+            return new TurnFixture(gm, turnController, spawner, pathFixture.Path);
         }
 
         private InterfaceManager CreateInterfaceManager()
@@ -346,6 +400,14 @@ namespace _project.Scripts.Tests
             return go;
         }
 
+        private GameObject CreatePrimitive(string name)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            _created.Add(go);
+            return go;
+        }
+
         private static void SetField<T>(object target, string fieldName, T value)
         {
             var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -378,14 +440,19 @@ namespace _project.Scripts.Tests
 
         private readonly struct TurnFixture
         {
-            public TurnFixture(TurnController turnController, EntitySpawner spawner)
+            public TurnFixture(GameMaster gameMaster, TurnController turnController, EntitySpawner spawner,
+                WaypointPath path)
             {
+                GameMaster = gameMaster;
                 TurnController = turnController;
                 Spawner = spawner;
+                Path = path;
             }
 
+            public GameMaster GameMaster { get; }
             public TurnController TurnController { get; }
             public EntitySpawner Spawner { get; }
+            public WaypointPath Path { get; }
         }
     }
 }
