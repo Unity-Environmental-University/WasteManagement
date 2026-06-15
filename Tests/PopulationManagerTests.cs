@@ -103,11 +103,11 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void GetIssueSpawnRateMultiplier_StartingPopulation_IsBaseRate()
+        public void GetIssueSpawnRateMultiplier_StartingPopulation_IsLighterThanBaseline()
         {
             var populationManager = CreatePopulationManager();
 
-            Assert.AreEqual(1f, populationManager.GetIssueSpawnRateMultiplier());
+            Assert.AreEqual(0.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
         }
 
         [Test]
@@ -115,21 +115,45 @@ namespace _project.Scripts.Tests
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.GetLevelByPopulationSize(); // ensure starting population of 4
-            populationManager.ChangePopulationSize(7);
+            IncreasePopulationAboveStart(populationManager);
 
-            // Pop 11 vs starting 4 at 0.1 growth per resident = 1.7x.
-            Assert.AreEqual(1.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
+            // Pop 11 vs starting 4 at 0.05 growth per resident from a 0.7x starting rate = 1.05x.
+            Assert.AreEqual(1.05f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
         }
 
         [Test]
-        public void GetIssueSpawnRateMultiplier_PopulationBelowStarting_DoesNotDropBelowBaseRate()
+        public void GetIssueSpawnRateMultiplier_PopulationBelowStarting_DoesNotDropBelowStartingRate()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.ChangePopulationSize(-10);
 
-            Assert.AreEqual(1f, populationManager.GetIssueSpawnRateMultiplier());
+            Assert.AreEqual(0.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
+        }
+
+        [Test]
+        public void GetScaledWaveDuration_StartingPopulation_IsShorterThanBaseDuration()
+        {
+            var populationManager = CreatePopulationManager();
+
+            Assert.AreEqual(18f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
+        }
+
+        [Test]
+        public void GetScaledWaveDuration_GrowsWithPopulation()
+        {
+            var populationManager = CreatePopulationManager();
+
+            IncreasePopulationAboveStart(populationManager);
+
+            // Pop 11 vs starting 4 at 0.04 growth per resident from a 0.6x starting duration = 0.88x.
+            Assert.AreEqual(26.4f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
+        }
+
+        private static void IncreasePopulationAboveStart(PopulationManager populationManager)
+        {
+            populationManager.GetLevelByPopulationSize();
+            populationManager.ChangePopulationSize(7);
         }
 
         private PopulationManager CreatePopulationManager()

@@ -21,7 +21,7 @@ namespace _project.Scripts.Core
         [Header("State")] public int moveCount;
         [Header("State")] public int infrastructureValue;
 
-        public float waveDuration = 60;
+        public float waveDuration = 30;
         private GameMaster _gm = GameMaster.Instance;
         private static TurnController Instance { get; set; }
 
@@ -142,12 +142,15 @@ namespace _project.Scripts.Core
             _gm.interfaceManager.ClearHand();
             _gm.interfaceManager.HidePrepUI();
             var spawnRateMultiplier = _gm.popManager ? _gm.popManager.GetIssueSpawnRateMultiplier() : 1f;
+            var scaledWaveDuration = _gm.popManager
+                ? _gm.popManager.GetScaledWaveDuration(waveDuration)
+                : Mathf.Max(0f, waveDuration);
             foreach (var s in _gm.entitySpawners.Where(s => s))
                 s.StartSpawner(spawnRateMultiplier);
 
-            StartCoroutine(WaveTimer(waveDuration));
+            StartCoroutine(WaveTimer(scaledWaveDuration));
 
-            Debug.Log("Beginning Wave!");
+            Debug.Log($"Beginning Wave! Duration: {scaledWaveDuration:F1}s, spawn rate: x{spawnRateMultiplier:F2}");
         }
 
         private bool CanBeginWave()

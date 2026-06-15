@@ -5,7 +5,12 @@ namespace _project.Scripts.Core
     public class PopulationManager : MonoBehaviour
     {
         [SerializeField] private int startingPopSize = 4;
-        [SerializeField] private float spawnRateGrowthPerPop = 0.1f;
+
+        [Header("Wave Pressure")]
+        [SerializeField] private float startingSpawnRateMultiplier = 0.7f;
+        [SerializeField] private float spawnRateGrowthPerPop = 0.05f;
+        [SerializeField] private float startingWaveDurationMultiplier = 0.6f;
+        [SerializeField] private float waveDurationGrowthPerPop = 0.04f;
 
         [Header("Post-Wave Growth")]
         [SerializeField] private int baseGrowthPerWave = 3;
@@ -69,13 +74,24 @@ namespace _project.Scripts.Core
         }
 
         /// <summary>
-        ///     Spawn-rate multiplier for issue spawners: 1x at the starting population,
+        ///     Spawn-rate multiplier for issue spawners: lower at the starting population,
         ///     growing by <see cref="spawnRateGrowthPerPop" /> per resident above it.
         /// </summary>
         public float GetIssueSpawnRateMultiplier()
         {
+            return GetPopulationScaledValue(startingSpawnRateMultiplier, spawnRateGrowthPerPop, 0.01f);
+        }
+
+        public float GetScaledWaveDuration(float baseDuration)
+        {
+            return Mathf.Max(0f, baseDuration) *
+                   GetPopulationScaledValue(startingWaveDurationMultiplier, waveDurationGrowthPerPop, 0f);
+        }
+
+        private float GetPopulationScaledValue(float startingValue, float growthPerPop, float minimum)
+        {
             EnsureStartingPopulation();
-            return Mathf.Max(1f, 1f + (_populationSize - startingPopSize) * spawnRateGrowthPerPop);
+            return Mathf.Max(minimum, startingValue + PopulationAboveStart() * growthPerPop);
         }
 
 #if UNITY_EDITOR
@@ -83,7 +99,10 @@ namespace _project.Scripts.Core
         {
             // startingPopSize must stay within level 1 (≤10).
             startingPopSize = Mathf.Clamp(startingPopSize, 1, 10);
+            startingSpawnRateMultiplier = Mathf.Max(startingSpawnRateMultiplier, 0.01f);
             spawnRateGrowthPerPop = Mathf.Max(spawnRateGrowthPerPop, 0f);
+            startingWaveDurationMultiplier = Mathf.Max(startingWaveDurationMultiplier, 0f);
+            waveDurationGrowthPerPop = Mathf.Max(waveDurationGrowthPerPop, 0f);
             baseGrowthPerWave = Mathf.Max(baseGrowthPerWave, 0);
             infrastructureGrowthBonus = Mathf.Max(infrastructureGrowthBonus, 0f);
             pollutionGrowthPenalty = Mathf.Max(pollutionGrowthPenalty, 0f);
@@ -101,6 +120,11 @@ namespace _project.Scripts.Core
                 <= 20 => 2,
                 _ => 3
             };
+        }
+
+        private int PopulationAboveStart()
+        {
+            return Mathf.Max(0, _populationSize - startingPopSize);
         }
 
         private void EnsureStartingPopulation()
