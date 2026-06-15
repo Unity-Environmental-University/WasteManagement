@@ -23,6 +23,7 @@ namespace _project.Scripts.Core
 
         public float waveDuration = 30;
         private GameMaster _gm = GameMaster.Instance;
+        private bool _waitingForPostRoundContinue;
         private static TurnController Instance { get; set; }
 
         private void Awake()
@@ -119,17 +120,72 @@ namespace _project.Scripts.Core
                     BeginWaveSequence();
                     break;
                 case GamePhase.Tower:
-                    if (_gm.popManager)
-                    {
-                        _gm.popManager.ApplyPostWaveGrowth(infrastructureValue);
-                        currentLevel = _gm.popManager.GetLevelByPopulationSize();
-                    }
-
-                    EnterCardSequence();
+                    CompleteWaveAndShowSummary();
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(currentPhase), currentPhase, null);
             }
+        }
+
+        private void CompleteWaveAndShowSummary()
+        {
+            if (_waitingForPostRoundContinue) return;
+
+            var summary = BuildPostRoundSummary();
+            _waitingForPostRoundContinue = true;
+
+            if (_gm.interfaceManager)
+                _gm.interfaceManager.ShowPostRoundSummary(summary, ContinueFromPostRoundSummary);
+            else
+                ContinueFromPostRoundSummary();
+        }
+
+        private PostRoundSummaryData BuildPostRoundSummary()
+        {
+            PostWaveGrowthResult growthResult;
+            if (_gm.popManager)
+            {
+                growthResult = _gm.popManager.ApplyPostWaveGrowth(infrastructureValue);
+                currentLevel = growthResult.LevelAfter;
+            }
+            else
+            {
+                growthResult = PostWaveGrowthResult.None(currentLevel);
+            }
+
+            var unlocks = _gm.shopManager
+                ? _gm.shopManager.GetUnlockNamesForLevelRange(growthResult.LevelBefore, growthResult.LevelAfter)
+                : Array.Empty<string>();
+            var nextSpawnRateMultiplier = _gm.popManager ? _gm.popManager.GetIssueSpawnRateMultiplier() : 1f;
+
+            return new PostRoundSummaryData(currentTurn, moveCount, growthResult, nextSpawnRateMultiplier, unlocks,
+                GetCesspitSummary());
+        }
+
+        private static CesspitSummary GetCesspitSummary()
+        {
+            var count = 0;
+            var fullCount = 0;
+            var fullness = 0f;
+            var capacity = 0f;
+
+            foreach (var cesspit in FindObjectsByType<Cesspit>(FindObjectsInactive.Exclude))
+            {
+                count++;
+                if (cesspit.IsFull)
+                    fullCount++;
+
+                fullness += cesspit.fullness;
+                capacity += cesspit.maxFullness;
+            }
+
+            return new CesspitSummary(count, fullCount, fullness, capacity);
+        }
+
+        private void ContinueFromPostRoundSummary()
+        {
+            _waitingForPostRoundContinue = false;
+            EnterCardSequence();
         }
 
         private void BeginWaveSequence()

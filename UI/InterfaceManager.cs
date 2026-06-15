@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using _project.Scripts.Core;
 using TMPro;
@@ -16,6 +17,8 @@ namespace _project.Scripts.UI
         [SerializeField] private Image rTowerUpgrades;
         [SerializeField] private Image lTowerUpgrades;
         [SerializeField] private TextMeshProUGUI infoBarText;
+        [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
+        private PostRoundSummaryPanel _postRoundSummaryPanel;
 
         [Header("Hand")]
         [SerializeField] private Transform handContainer;
@@ -64,6 +67,24 @@ namespace _project.Scripts.UI
         {
             if (!infoBarText) return;
             infoBarText.text = $"Moves Made: {moveCount} Population: {popVal} Level: {currentLevel}";
+        }
+
+        public void ShowPostRoundSummary(PostRoundSummaryData summary, Action onContinue)
+        {
+            if (!_postRoundSummaryPanel)
+                _postRoundSummaryPanel = GetComponentInChildren<PostRoundSummaryPanel>(true);
+
+            if (!_postRoundSummaryPanel && postRoundSummaryPanelPrefab)
+                _postRoundSummaryPanel = Instantiate(postRoundSummaryPanelPrefab, transform);
+
+            if (!_postRoundSummaryPanel)
+            {
+                Debug.LogWarning($"{nameof(InterfaceManager)} is missing a post-round summary panel prefab.", this);
+                onContinue?.Invoke();
+                return;
+            }
+
+            _postRoundSummaryPanel.Show(summary, onContinue);
         }
 
         public void NextButtonPressed()

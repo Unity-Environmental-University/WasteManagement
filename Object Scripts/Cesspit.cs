@@ -78,7 +78,7 @@ namespace _project.Scripts.Object_Scripts
             issue.Process(processPower, "Deposited into Cesspit");
         }
 
-        private bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+        public bool IsFull => maxFullness > 0f && fullness >= maxFullness;
 
         private void UpdateFullnessBar()
         {
