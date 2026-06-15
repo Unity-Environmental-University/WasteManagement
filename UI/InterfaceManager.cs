@@ -24,7 +24,7 @@ namespace _project.Scripts.UI
 
         private void Start()
         {
-            quitButton.onClick.AddListener(Application.Quit);
+            if (quitButton) quitButton.onClick.AddListener(Application.Quit);
         }
 
         public void PopulateHand(IReadOnlyList<ICard> hand)
