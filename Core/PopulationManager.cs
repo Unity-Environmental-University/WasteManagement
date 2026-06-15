@@ -2,6 +2,38 @@ using UnityEngine;
 
 namespace _project.Scripts.Core
 {
+    public readonly struct PostWaveGrowthResult
+    {
+        public PostWaveGrowthResult(int populationBefore, int populationAfter, int levelBefore, int levelAfter,
+            int appliedGrowth, float rawGrowth, float pollution, float stink)
+        {
+            PopulationBefore = populationBefore;
+            PopulationAfter = populationAfter;
+            LevelBefore = levelBefore;
+            LevelAfter = levelAfter;
+            AppliedGrowth = appliedGrowth;
+            RawGrowth = rawGrowth;
+            Pollution = pollution;
+            Stink = stink;
+        }
+
+        public int PopulationBefore { get; }
+        public int PopulationAfter { get; }
+        public int LevelBefore { get; }
+        public int LevelAfter { get; }
+        public int AppliedGrowth { get; }
+        public float RawGrowth { get; }
+        public float Pollution { get; }
+        public float Stink { get; }
+        public bool LeveledUp => LevelAfter > LevelBefore;
+
+        /// <summary>An empty result for when no population manager is available, reporting only the known level.</summary>
+        public static PostWaveGrowthResult None(int level)
+        {
+            return new PostWaveGrowthResult(0, 0, level, level, 0, 0f, 0f, 0f);
+        }
+    }
+
     public class PopulationManager : MonoBehaviour
     {
         [SerializeField] private int startingPopSize = 4;
@@ -60,17 +92,31 @@ namespace _project.Scripts.Core
         ///     this wave and reduced by town stink. Growth is halted (never negative)
         ///     when penalties outweigh the gains.
         /// </summary>
-        public void ApplyPostWaveGrowth(int infrastructureValue)
+        public PostWaveGrowthResult ApplyPostWaveGrowth(int infrastructureValue)
         {
             EnsureStartingPopulation();
+            var populationBefore = _populationSize;
+            var levelBefore = CalculateLevelByPopulationSize(populationBefore);
+            var pollution = _wavePollution;
 
             var growth = baseGrowthPerWave
                          + infrastructureValue * infrastructureGrowthBonus
-                         - _wavePollution * pollutionGrowthPenalty
+                         - pollution * pollutionGrowthPenalty
                          - StinkValue * stinkGrowthPenalty;
 
             _wavePollution = 0f;
-            SetPopulationSize(_populationSize + Mathf.Max(0, Mathf.FloorToInt(growth)));
+            var appliedGrowth = Mathf.Max(0, Mathf.FloorToInt(growth));
+            SetPopulationSize(_populationSize + appliedGrowth);
+
+            return new PostWaveGrowthResult(
+                populationBefore,
+                _populationSize,
+                levelBefore,
+                CalculateLevelByPopulationSize(_populationSize),
+                appliedGrowth,
+                growth,
+                pollution,
+                StinkValue);
         }
 
         /// <summary>
@@ -113,8 +159,12 @@ namespace _project.Scripts.Core
         public int GetLevelByPopulationSize()
         {
             EnsureStartingPopulation();
-            var size = _populationSize;
-            return size switch
+            return CalculateLevelByPopulationSize(_populationSize);
+        }
+
+        private static int CalculateLevelByPopulationSize(int populationSize)
+        {
+            return populationSize switch
             {
                 <= 10 => 1,
                 <= 20 => 2,
