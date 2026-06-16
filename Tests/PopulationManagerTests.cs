@@ -103,6 +103,40 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void GetCurrentStink_ActiveSources_AddToBaseStink()
+        {
+            var populationManager = CreatePopulationManager();
+            populationManager.StinkValue = 1f;
+            CreateStinkSource(2f);
+            CreateStinkSource(3f);
+
+            Assert.AreEqual(6f, populationManager.GetCurrentStink(), 0.0001f);
+        }
+
+        [Test]
+        public void GetCurrentStink_ReductionsCannotGoBelowZero()
+        {
+            var populationManager = CreatePopulationManager();
+            populationManager.StinkValue = 1f;
+            CreateStinkSource(-5f);
+
+            Assert.AreEqual(0f, populationManager.GetCurrentStink(), 0.0001f);
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_UtilityStinkSources_ReduceGrowth()
+        {
+            var populationManager = CreatePopulationManager();
+            CreateStinkSource(4f);
+
+            var result = populationManager.ApplyPostWaveGrowth(0);
+
+            // Base 3 - 4 stink * 0.5 penalty = 1.
+            Assert.AreEqual(5, populationManager.GetPopulationSize());
+            Assert.AreEqual(4f, result.Stink, 0.0001f);
+        }
+
+        [Test]
         public void GetIssueSpawnRateMultiplier_StartingPopulation_IsLighterThanBaseline()
         {
             var populationManager = CreatePopulationManager();
@@ -161,6 +195,28 @@ namespace _project.Scripts.Tests
             var go = new GameObject("Population Manager");
             _created.Add(go);
             return go.AddComponent<PopulationManager>();
+        }
+
+        private void CreateStinkSource(float currentStink)
+        {
+            var go = new GameObject("Stink Source");
+            _created.Add(go);
+            go.AddComponent<TestStinkSource>().CurrentStink = currentStink;
+        }
+
+        private sealed class TestStinkSource : MonoBehaviour, IStinkSource
+        {
+            public float CurrentStink { get; set; }
+
+            private void OnEnable()
+            {
+                StinkSourceRegistry.Register(this);
+            }
+
+            private void OnDisable()
+            {
+                StinkSourceRegistry.Unregister(this);
+            }
         }
     }
 }

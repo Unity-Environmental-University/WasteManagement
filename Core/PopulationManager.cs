@@ -50,13 +50,20 @@ namespace _project.Scripts.Core
         [SerializeField] private float pollutionGrowthPenalty = 1f;
         [SerializeField] private float stinkGrowthPenalty = 0.5f;
 
+        [Header("Stink")]
+        [SerializeField] private float baseStinkValue;
+
         private int _populationSize;
         private float _wavePollution;
 
         /// <summary>
-        ///     Town stink level (planned feature). Reduces or halts growth as it rises.
+        ///     Current town stink level. Includes the base value plus active lake and utility stink sources.
         /// </summary>
-        public float StinkValue { get; set; }
+        public float StinkValue
+        {
+            get => GetCurrentStink();
+            set => baseStinkValue = Mathf.Max(0f, value);
+        }
 
         private void Awake()
         {
@@ -86,6 +93,11 @@ namespace _project.Scripts.Core
 
         public float GetWavePollution() => _wavePollution;
 
+        public float GetCurrentStink()
+        {
+            return StinkSourceRegistry.GetCurrentStink(baseStinkValue);
+        }
+
         /// <summary>
         ///     Grows the population after a wave: a steady base rate plus a small
         ///     infrastructure bonus, greatly reduced by pollution that reached the lake
@@ -98,11 +110,12 @@ namespace _project.Scripts.Core
             var populationBefore = _populationSize;
             var levelBefore = CalculateLevelByPopulationSize(populationBefore);
             var pollution = _wavePollution;
+            var stink = GetCurrentStink();
 
             var growth = baseGrowthPerWave
                          + infrastructureValue * infrastructureGrowthBonus
                          - pollution * pollutionGrowthPenalty
-                         - StinkValue * stinkGrowthPenalty;
+                         - stink * stinkGrowthPenalty;
 
             _wavePollution = 0f;
             var appliedGrowth = Mathf.Max(0, Mathf.FloorToInt(growth));
@@ -116,7 +129,7 @@ namespace _project.Scripts.Core
                 appliedGrowth,
                 growth,
                 pollution,
-                StinkValue);
+                stink);
         }
 
         /// <summary>
@@ -153,6 +166,7 @@ namespace _project.Scripts.Core
             infrastructureGrowthBonus = Mathf.Max(infrastructureGrowthBonus, 0f);
             pollutionGrowthPenalty = Mathf.Max(pollutionGrowthPenalty, 0f);
             stinkGrowthPenalty = Mathf.Max(stinkGrowthPenalty, 0f);
+            baseStinkValue = Mathf.Max(baseStinkValue, 0f);
         }
 #endif
 
