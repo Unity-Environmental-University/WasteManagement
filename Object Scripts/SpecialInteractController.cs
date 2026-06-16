@@ -111,6 +111,7 @@ namespace _project.Scripts.Object_Scripts
             gm.placementInventory.ConsumeSelected();
             if (gm.turnController) gm.turnController.RegisterMove();
             gm.turnController.infrastructureValue += pending.InfraValue;
+            gm.interfaceManager?.RefreshStinkMeter();
             RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
         }
@@ -130,6 +131,7 @@ namespace _project.Scripts.Object_Scripts
             _isOccupied = false;
             if (infraValue > 0 && GameMaster.Instance && GameMaster.Instance.turnController)
                 GameMaster.Instance.turnController.infrastructureValue -= infraValue;
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
             RefreshInteractionState();
         }
 
