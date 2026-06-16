@@ -7,7 +7,7 @@ using UnityEngine.Serialization;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class Cesspit : MonoBehaviour
+    public class Cesspit : MonoBehaviour, IStinkSource
     { 
         [SerializeField] private int processPower = 3;
         [SerializeField] private GameObject runawayPrefab;
@@ -16,6 +16,10 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float runawayMoveSpeed = 12f;
         [SerializeField] private Color runawayColor = new(1f, 0.45f, 0f);
         [SerializeField] private Material runawayMaterial;
+
+        [Header("Stink")]
+        [SerializeField] private float baseStink = 1f;
+        [SerializeField] private float fullStinkBonus = 2f;
         
         [FormerlySerializedAs("healthBar")] public HealthBar fullnessBar;
         [FormerlySerializedAs("maxHealth")] public float maxFullness;
@@ -25,9 +29,12 @@ namespace _project.Scripts.Object_Scripts
         private Coroutine _runawayCoroutine;
         private SpecialInteractController _slot;
         private int _infraValue;
+
+        public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus);
         
         private void OnEnable()
         {
+            StinkSourceRegistry.Register(this);
             TurnController.OnCardPhaseEntered += PauseRunaways;
             TurnController.OnTowerPhaseEntered += ResumeRunaways;
         }
@@ -36,6 +43,7 @@ namespace _project.Scripts.Object_Scripts
         {
             TurnController.OnCardPhaseEntered -= PauseRunaways;
             TurnController.OnTowerPhaseEntered -= ResumeRunaways;
+            StinkSourceRegistry.Unregister(this);
         }
 
         private void Start()
@@ -53,6 +61,7 @@ namespace _project.Scripts.Object_Scripts
         {
             fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
             UpdateFullnessBar();
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
 
             if (IsFull)
                 StartRunaways();
@@ -79,6 +88,8 @@ namespace _project.Scripts.Object_Scripts
         }
 
         public bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+
+        private float FullnessRatio => maxFullness > 0f ? Mathf.Clamp01(fullness / maxFullness) : 0f;
 
         private void UpdateFullnessBar()
         {

@@ -1,19 +1,36 @@
 using System.Collections;
+using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class WasteSifter : MonoBehaviour
+    public class WasteSifter : MonoBehaviour, IStinkSource
     {
         public HealthBar healthBar;
         public float maxHealth;
         public float health;
         
         [SerializeField] private int siftPower = 1;
+
+        [Header("Stink")]
+        [SerializeField] private float stinkReduction = 0.5f;
+
         private bool _isBreaking;
         private SpecialInteractController _slot;
         private int _infraValue;
+
+        public float CurrentStink => -Mathf.Max(0f, stinkReduction);
+
+        private void OnEnable()
+        {
+            StinkSourceRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            StinkSourceRegistry.Unregister(this);
+        }
 
         private void Start()
         {

@@ -3,16 +3,30 @@ using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class LakeController : MonoBehaviour
+    public class LakeController : MonoBehaviour, IStinkSource
     {
         private const float BaseHealth = 100f;
         public float health;
 
+        [Header("Stink")]
+        [SerializeField] private float stinkPerPollution = 0.05f;
+
         [SerializeField] private Material mat;
         private Color _originalColor;
+
+        public float CurrentStink => Mathf.Max(0f, BaseHealth - health) * stinkPerPollution;
         
-        private void OnEnable() => IssueObject.OnReachedEnd += OnIssueReachedEnd;
-        private void OnDisable() => IssueObject.OnReachedEnd -= OnIssueReachedEnd;
+        private void OnEnable()
+        {
+            StinkSourceRegistry.Register(this);
+            IssueObject.OnReachedEnd += OnIssueReachedEnd;
+        }
+
+        private void OnDisable()
+        {
+            IssueObject.OnReachedEnd -= OnIssueReachedEnd;
+            StinkSourceRegistry.Unregister(this);
+        }
 
         private void OnIssueReachedEnd(IssueObject issue)
         {
@@ -22,6 +36,7 @@ namespace _project.Scripts.Object_Scripts
 
             var popManager = GameMaster.Instance ? GameMaster.Instance.popManager : null;
             if (popManager) popManager.RecordLakePollution(issue.ProcessCost);
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
             
             if (health <= 0) GameMaster.Instance.turnController.GameLost();
         }

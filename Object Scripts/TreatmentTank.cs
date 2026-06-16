@@ -1,13 +1,18 @@
+using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class TreatmentTank : MonoBehaviour
+    public class TreatmentTank : MonoBehaviour, IStinkSource
     {
         [Header("Throughput")]
         [SerializeField] private float sludgePerIssue = 1f;
         [SerializeField] private GameObject effluentPrefab;
+
+        [Header("Stink")]
+        [SerializeField] private float baseStink = 0.5f;
+        [SerializeField] private float fullStinkBonus = 1.5f;
 
         [Header("Fullness")]
         public HealthBar fullnessBar;
@@ -22,6 +27,18 @@ namespace _project.Scripts.Object_Scripts
 
         private SpecialInteractController _slot;
         private int _infraValue;
+
+        public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus);
+
+        private void OnEnable()
+        {
+            StinkSourceRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            StinkSourceRegistry.Unregister(this);
+        }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {
@@ -63,9 +80,12 @@ namespace _project.Scripts.Object_Scripts
         {
             fullness = Mathf.Clamp(v, 0f, maxFullness);
             UpdateFullnessBar();
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
         }
 
         private bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+
+        private float FullnessRatio => maxFullness > 0f ? Mathf.Clamp01(fullness / maxFullness) : 0f;
 
         private void UpdateFullnessBar()
         {

@@ -67,6 +67,11 @@ namespace _project.Scripts.UI
         public void UpdateInfo(int moveCount, int populationSize, int currentLevel)
         {
             UpdateInfoBar(moveCount, populationSize, currentLevel);
+            RefreshStinkMeter();
+        }
+
+        public void RefreshStinkMeter()
+        {
             var popManager = GameMaster.Instance ? GameMaster.Instance.popManager : null;
             var stink = popManager ? popManager.StinkValue : 0f;
             UpdateStinkMeter(stink);
