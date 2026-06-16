@@ -274,6 +274,36 @@ namespace _project.Scripts.Core
         }
     }
 
+    public class PathBreakShopItem : IShopItem
+    {
+        public PathBreakShopItem(string displayName, string description, int requiredLevel, Sprite displaySprite)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public int InfraValue => 0;
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => false;
+
+        public void Purchase()
+        {
+            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (!board)
+            {
+                Debug.LogWarning("[PathBreakShopItem] No PathBuildBoard available; purchase ignored.");
+                return;
+            }
+
+            board.SetActiveBreakTool();
+        }
+    }
+
     public class PathPiecePlaceable : IPathPiecePlaceable
     {
         public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length,

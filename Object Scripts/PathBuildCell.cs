@@ -24,7 +24,8 @@ namespace _project.Scripts.Object_Scripts
         public int Row { get; private set; }
 
         /// <summary>
-        ///     Handles mouse click on this cell. Attempts to place the pending path piece if:
+        ///     Handles mouse click on this cell. Breaks an existing path piece when the break tool
+        ///     is active, or attempts to place the pending path piece if:
         ///     - GameMaster exists and is in the Card phase
         ///     - A valid IPathPiecePlaceable is active on the board
         ///     - The piece placement succeeds
@@ -37,8 +38,19 @@ namespace _project.Scripts.Object_Scripts
             if (!gm || !turnController || turnController.currentPhase != GamePhase.Card)
                 return;
 
+            if (PathBuildBoard.IsUtilityItemSelected()) return;
+
+            if (_board && _board.ActiveTool == PathBuildTool.Break)
+            {
+                if (!_board.TryBreak(this, out var removedInfraValue)) return;
+
+                turnController.RegisterMove();
+                turnController.infrastructureValue -= removedInfraValue;
+                return;
+            }
+
             var pending = _board ? _board.ActivePiece : null;
-            if (pending == null || PathBuildBoard.NonPathSelectionActive()) return;
+            if (pending == null) return;
 
             var placed = pending.Place(transform);
             if (!placed) return;

@@ -18,6 +18,13 @@ namespace _project.Scripts.Object_Scripts
         Vertical
     }
 
+    public enum PathBuildTool
+    {
+        None,
+        Place,
+        Break
+    }
+
     /// <summary>
     ///     Manages a grid of PathBuildCell objects for placing path pieces.
     ///     Handles grid generation, piece placement validation, visual previewing, and R-key rotation.
@@ -40,6 +47,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color validPreviewColor = new(0.35f, 0.8f, 1f, 1f);
         [SerializeField] private Color invalidPreviewColor = new(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color placedPipeColor = new(0.8f, 0.8f, 0.8f, 1f);
+        [SerializeField] private Color breakPreviewColor = new(1f, 0.55f, 0.2f, 1f);
         [SerializeField] private float pipeVisualHeight = 0.2f;
 
         public float entityOnBoardHeight;
@@ -51,6 +59,7 @@ namespace _project.Scripts.Object_Scripts
         private IPathPiecePlaceable _lastPreviewedPiece;
         private PlacementInventory _placementInventory;
         private int _nextPieceId = 1;
+        private int _highlightedPieceId; // Placed piece currently tinted for break preview (0 = none)
         private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
         private GameObject _previewVisual;
         private Transform _visualRoot;
@@ -59,6 +68,8 @@ namespace _project.Scripts.Object_Scripts
         ///     Read-only collection of all path pieces that have been successfully placed on the board.
         /// </summary>
         public IReadOnlyList<PlacedPathPiece> PlacedPieces => _placedPieces;
+
+        public PathBuildTool ActiveTool { get; private set; }
 
         public IPathPiecePlaceable ActivePiece { get; private set; }
 
@@ -95,9 +106,9 @@ namespace _project.Scripts.Object_Scripts
                 RefreshVisuals();
             }
 
-            if (selectedPiece == null) return;
+            if (Keyboard.current == null || selectedPiece == null || ActiveTool != PathBuildTool.Place) return;
 
-            if (Keyboard.current == null || !Keyboard.current[Key.R].wasPressedThisFrame) return;
+            if (!Keyboard.current[Key.R].wasPressedThisFrame) return;
             selectedPiece.ToggleOrientation();
             RefreshVisuals();
         }
@@ -108,18 +119,27 @@ namespace _project.Scripts.Object_Scripts
                 piece.ToggleOrientation();
 
             ActivePiece = piece;
+            ActiveTool = piece == null ? PathBuildTool.None : PathBuildTool.Place;
             _lastPreviewedPiece = ActivePiece;
             RefreshVisuals();
         }
 
         public void ClearActivePiece() => SetActivePiece(null);
 
+        public void SetActiveBreakTool()
+        {
+            ActivePiece = null;
+            ActiveTool = PathBuildTool.Break;
+            _lastPreviewedPiece = null;
+            RefreshVisuals();
+        }
+
         /// <summary>
         ///     True while a non-path item (e.g., a sifter or cesspit) is selected in the placement
-        ///     inventory. The active path piece is kept but its preview and cell placement are
+        ///     inventory. The active path piece is kept, but its preview and cell placement are
         ///     suppressed until the utility selection is cleared or consumed.
         /// </summary>
-        public static bool NonPathSelectionActive()
+        public static bool IsUtilityItemSelected()
         {
             var gm = GameMaster.Instance;
             var pending = gm ? gm.PendingPlacement : null;
@@ -127,7 +147,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Lazily subscribes to the placement inventory's SelectionChanged event so the
+        ///     Lazily subscribes to the placement inventory's SelectionChanged event, so the
         ///     preview refreshes when the selection flips between path and non-path items.
         /// </summary>
         private void BindInventory()
@@ -164,6 +184,7 @@ namespace _project.Scripts.Object_Scripts
             _placedPieces.Clear();
             _placedVisuals.Clear();
             _nextPieceId = 1;
+            _highlightedPieceId = 0;
             BuildGridIfNeeded();
             RefreshVisuals();
         }
@@ -176,13 +197,27 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_cells == null) return;
 
+            var breakPreviewPieceId = GetBreakPreviewPieceId();
+
             for (var column = 0; column < columns; column++)
             for (var row = 0; row < rows; row++)
             {
                 var cell = _cells[column, row];
                 if (!cell) continue;
 
-                cell.SetColor(_pieceIds[column, row] > 0 ? occupiedColor : emptyColor);
+                var pieceId = _pieceIds[column, row];
+                var cellColor = emptyColor;
+                if (pieceId > 0)
+                    cellColor = pieceId == breakPreviewPieceId ? breakPreviewColor : occupiedColor;
+                cell.SetColor(cellColor);
+            }
+
+            RefreshPlacedVisualColors(breakPreviewPieceId);
+
+            if (ActiveTool == PathBuildTool.Break)
+            {
+                HidePreviewVisual();
+                return;
             }
 
             if (!_hoveredCell)
@@ -192,7 +227,7 @@ namespace _project.Scripts.Object_Scripts
             }
 
             var selectedPiece = ActivePiece;
-            if (selectedPiece == null || NonPathSelectionActive())
+            if (selectedPiece == null || IsUtilityItemSelected())
             {
                 HidePreviewVisual();
                 return;
@@ -248,7 +283,8 @@ namespace _project.Scripts.Object_Scripts
             {
                 id = _nextPieceId++,
                 length = piece.Length,
-                orientation = piece.Orientation
+                orientation = piece.Orientation,
+                infraValue = piece.InfraValue
             };
 
             foreach (var cell in footprint)
@@ -264,6 +300,46 @@ namespace _project.Scripts.Object_Scripts
             HidePreviewVisual();
             RefreshVisuals();
             return anchorCell.gameObject;
+        }
+
+        /// <summary>
+        ///     Removes the placed path piece occupying the supplied cell.
+        /// </summary>
+        /// <param name="cell">Any cell occupied by the piece to remove.</param>
+        /// <param name="infraValue">The infrastructure value that should be removed from the turn total.</param>
+        /// <returns>True if a placed piece was removed, otherwise false.</returns>
+        public bool TryBreak(PathBuildCell cell, out int infraValue)
+        {
+            infraValue = 0;
+            if (cell == null || _pieceIds == null || !IsInBounds(cell.Column, cell.Row))
+                return false;
+
+            var pieceId = _pieceIds[cell.Column, cell.Row];
+            if (pieceId <= 0) return false;
+
+            var pieceIndex = _placedPieces.FindIndex(piece => piece.id == pieceId);
+            if (pieceIndex < 0)
+                return false;
+
+            var piece = _placedPieces[pieceIndex];
+            infraValue = piece.infraValue;
+
+            foreach (var occupied in piece.cells)
+                if (IsInBounds(occupied.x, occupied.y) && _pieceIds[occupied.x, occupied.y] == piece.id)
+                    _pieceIds[occupied.x, occupied.y] = 0;
+
+            if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
+            {
+                if (Application.isPlaying)
+                    Destroy(visual);
+                else
+                    DestroyImmediate(visual);
+            }
+
+            _placedVisuals.Remove(piece.id);
+            _placedPieces.RemoveAt(pieceIndex);
+            RefreshVisuals();
+            return true;
         }
 
         /// <summary>
@@ -508,9 +584,7 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var rend = visual.GetComponent<Renderer>();
-            if (rend)
-                rend.material.color = color;
+            SetVisualColor(visual, color);
 
             var firstPosition = firstCell.transform.localPosition;
             var lastPosition = lastCell.transform.localPosition;
@@ -552,6 +626,37 @@ namespace _project.Scripts.Object_Scripts
                     return false;
 
             return true;
+        }
+
+        private int GetBreakPreviewPieceId()
+        {
+            if (ActiveTool != PathBuildTool.Break || !_hoveredCell || _pieceIds == null ||
+                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row))
+                return 0;
+
+            return _pieceIds[_hoveredCell.Column, _hoveredCell.Row];
+        }
+
+        private void RefreshPlacedVisualColors(int breakPreviewPieceId)
+        {
+            if (breakPreviewPieceId == _highlightedPieceId) return;
+
+            SetPlacedVisualColor(_highlightedPieceId, placedPipeColor);
+            SetPlacedVisualColor(breakPreviewPieceId, breakPreviewColor);
+            _highlightedPieceId = breakPreviewPieceId;
+        }
+
+        private void SetPlacedVisualColor(int pieceId, Color color)
+        {
+            if (pieceId > 0 && _placedVisuals.TryGetValue(pieceId, out var visual))
+                SetVisualColor(visual, color);
+        }
+
+        private static void SetVisualColor(GameObject visual, Color color)
+        {
+            if (!visual || !visual.TryGetComponent<Renderer>(out var rend)) return;
+
+            rend.material.color = color;
         }
 
         /// <summary>
@@ -713,6 +818,9 @@ namespace _project.Scripts.Object_Scripts
 
             /// <summary>The orientation of the piece (Horizontal or Vertical).</summary>
             public PathPieceOrientation orientation;
+
+            /// <summary>The infrastructure value contributed by this piece.</summary>
+            public int infraValue;
 
             /// <summary>The grid cells occupied by this piece.</summary>
             public List<Vector2Int> cells = new();

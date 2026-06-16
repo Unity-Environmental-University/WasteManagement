@@ -51,10 +51,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int treatmentTankInfraValue = 8;
         [SerializeField] private GameObject treatmentTankPrefab;
         [SerializeField] private Sprite treatmentTankSprite;
-
-        //TODO: Determine Path Infra Values
         [SerializeField] private int pipeInfraValue;
-        //
 
         [Header("Path Items")] [SerializeField]
         private string shortPipeDisplayName = "Short Pipe";
@@ -65,6 +62,10 @@ namespace _project.Scripts.Core
         [SerializeField] private string longPipeDisplayName = "Long Pipe";
         [SerializeField] private string longPipeDescription = "Straight pipe segment covering 3 cells.";
         [SerializeField] private Sprite longPipeSprite;
+        [SerializeField] private string breakPipeDisplayName = "Break Pipe";
+        [SerializeField] private string breakPipeDescription = "Removes an existing pipe segment from the board.";
+        [SerializeField] private int breakPipeRequiredLevel = 1;
+        [SerializeField] private Sprite breakPipeSprite;
 
         [Header("Card Items")] [SerializeField]
         private CardShopEntry[] cardEntries;
@@ -159,6 +160,8 @@ namespace _project.Scripts.Core
                 shortPipeSprite ?? fallbackPathSprite, pipeInfraValue);
             yield return new PathPieceShopItem(longPipeDisplayName, longPipeDescription, 1, 3,
                 longPipeSprite ?? fallbackPathSprite, pipeInfraValue);
+            yield return new PathBreakShopItem(breakPipeDisplayName, breakPipeDescription, breakPipeRequiredLevel,
+                breakPipeSprite ?? fallbackPathSprite);
 
             if (towerPrefab)
                 yield return new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab,

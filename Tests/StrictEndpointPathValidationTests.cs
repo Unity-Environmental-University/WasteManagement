@@ -340,6 +340,32 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(piece, board.ActivePiece);
         }
 
+        [Test]
+        public void OnMouseDown_BreakToolRemovesPathPieceAndCountsMove()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var piece = new PathPiecePlaceable("Pipe", "", 1, 2, null, 3);
+            var targetCell = GetCell(board, 1, 1);
+
+            gm.turnController.currentPhase = GamePhase.Card;
+            board.SetActivePiece(piece);
+            targetCell.SendMessage("OnMouseDown");
+
+            Assert.AreEqual(1, board.PlacedPieces.Count);
+            Assert.IsTrue(board.IsOccupied(new Vector2Int(1, 1)));
+            Assert.IsTrue(board.IsOccupied(new Vector2Int(2, 1)));
+
+            board.SetActiveBreakTool();
+            targetCell.SendMessage("OnMouseDown");
+
+            Assert.AreEqual(0, board.PlacedPieces.Count);
+            Assert.IsFalse(board.IsOccupied(new Vector2Int(1, 1)));
+            Assert.IsFalse(board.IsOccupied(new Vector2Int(2, 1)));
+            Assert.AreEqual(2, gm.turnController.moveCount);
+            Assert.AreEqual(0, gm.turnController.infrastructureValue);
+        }
+
     private PathFixture CreatePathFixture(int lowerColumn = 1, int upperColumn = 1, int lowerRow = -1, int upperRow = 10)
         {
             var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();

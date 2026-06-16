@@ -51,8 +51,29 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(queuedItem, gameMaster.PendingPlacement);
             Assert.AreEqual(1, gameMaster.placementInventory.Items.Count);
             Assert.IsNotNull(board.ActivePiece);
+            Assert.AreEqual(PathBuildTool.Place, board.ActiveTool);
             Assert.AreEqual(2, board.ActivePiece.Length);
             Assert.AreEqual(4, board.ActivePiece.InfraValue);
+        }
+
+        [Test]
+        public void PathBreakShopItem_PurchaseActivatesBoardBreakToolWithoutChangingQueuedPlacement()
+        {
+            var gameMasterGo = CreateGameObject("Game Master");
+            var boardGo = CreateGameObject("Path Board");
+            boardGo.transform.SetParent(gameMasterGo.transform);
+            var board = boardGo.AddComponent<PathBuildBoard>();
+            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var queuedItem = new TestPlaceable();
+            var breakShopItem = new PathBreakShopItem("Break Pipe", "", 1, null);
+
+            gameMaster.placementInventory.Add(queuedItem);
+            breakShopItem.Purchase();
+
+            Assert.AreEqual(queuedItem, gameMaster.PendingPlacement);
+            Assert.AreEqual(1, gameMaster.placementInventory.Items.Count);
+            Assert.AreEqual(PathBuildTool.Break, board.ActiveTool);
+            Assert.IsNull(board.ActivePiece);
         }
 
         [Test]
