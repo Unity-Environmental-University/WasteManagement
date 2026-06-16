@@ -74,7 +74,7 @@ namespace _project.Scripts.Core
         private void RefreshInfoBar()
         {
             var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
-            _gm.interfaceManager?.UpdateInfoBar(moveCount, populationSize, currentLevel);
+            _gm.interfaceManager?.UpdateInfo(moveCount, populationSize, currentLevel);
         }
 
         private void EnterCardSequence()

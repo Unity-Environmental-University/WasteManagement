@@ -17,6 +17,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Image rTowerUpgrades;
         [SerializeField] private Image lTowerUpgrades;
         [SerializeField] private TextMeshProUGUI infoBarText;
+        [SerializeField] private Slider stinkMeter;
         [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
         private PostRoundSummaryPanel _postRoundSummaryPanel;
 
@@ -63,10 +64,26 @@ namespace _project.Scripts.UI
             closeShopButton.gameObject.SetActive(true);
         }
 
-        public void UpdateInfoBar(int moveCount, int popVal, int currentLevel)
+        public void UpdateInfo(int moveCount, int populationSize, int currentLevel)
+        {
+            UpdateInfoBar(moveCount, populationSize, currentLevel);
+            var popManager = GameMaster.Instance ? GameMaster.Instance.popManager : null;
+            var stink = popManager ? popManager.StinkValue : 0f;
+            UpdateStinkMeter(stink);
+        }
+
+        private void UpdateInfoBar(int moveCount, int popVal, int currentLevel)
         {
             if (!infoBarText) return;
             infoBarText.text = $"Moves Made: {moveCount} Population: {popVal} Level: {currentLevel}";
+        }
+
+        private void UpdateStinkMeter(float stinkValue)
+        {
+            if (!stinkMeter) return;
+
+            var clampedStinkValue = Mathf.Clamp(stinkValue, stinkMeter.minValue, stinkMeter.maxValue);
+            stinkMeter.value = clampedStinkValue;
         }
 
         public void ShowPostRoundSummary(PostRoundSummaryData summary, Action onContinue)
