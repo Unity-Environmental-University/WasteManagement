@@ -7,8 +7,8 @@ namespace _project.Scripts.Object_Scripts
     /// <summary>
     ///     Scatters a handful of buff/debuff tiles across random cells of the
     ///     <see cref="PathBuildBoard" /> grid once at game start. Each tile is randomly a
-    ///     buff or a debuff and, for now, differs only by color — no gameplay effect yet.
-    ///     No two tiles share a cell, but tiles may overlap other things on the board.
+    ///     buff or a debuff. No two tiles share a cell, but tiles may overlap other things
+    ///     on the board.
     /// </summary>
     public class BuffDebuffTileSpawner : MonoBehaviour
     {
@@ -17,13 +17,17 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] [Min(0)] private int tileCount = 3;
 
         [Tooltip("Extra height above the cell's top surface to place each tile at.")]
-        [SerializeField] private float heightOffset = 0.12f;
+        [SerializeField] private float heightOffset = 0.45f;
 
-        [Tooltip("Footprint of the generated tile across the cell (X/Z).")]
-        [SerializeField] private float tileSize = 0.8f;
+        [Tooltip("Scale of generated fallback tiles when no prefab is supplied.")]
+        [SerializeField] private Vector3 generatedTileScale = new(5.114832f, 0.48412952f, 3.690889f);
 
-        [Tooltip("Flat thickness (Y) of the generated tile.")]
-        [SerializeField] private float tileThickness = 0.08f;
+        [Header("Tile Effects")]
+        [Tooltip("Optional visual/controller prefab. Effects are assigned from Effect Options below.")]
+        [SerializeField] private BuffDebuffTileController tilePrefab;
+
+        [Tooltip("Pool of possible effects. Each spawned tile randomly gets one option.")]
+        [SerializeField] private BuffDebuffTileEffect[] effectOptions;
 
         [Header("References")]
         [Tooltip("Board to scatter tiles across. Falls back to GameMaster.Instance.pathBuildBoard.")]
@@ -53,21 +57,38 @@ namespace _project.Scripts.Object_Scripts
             {
                 var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
 
-                var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                SafeDestroy(tile.GetComponent<Collider>()); // visual only — no physics needed yet
+                var controller = CreateTile(position);
+                var tile = controller.gameObject;
                 tile.name = $"BuffDebuffTile ({cell.x},{cell.y})";
-                tile.transform.SetParent(transform);
-                tile.transform.position = position;
-                tile.transform.localScale = new Vector3(tileSize, tileThickness, tileSize);
-
-                var controller = tile.AddComponent<BuffDebuffTileController>();
                 controller.SetKind(Random.value < 0.5f ? BuffDebuffKind.Buff : BuffDebuffKind.Debuff);
+                controller.SetEffect(PickRandomEffect());
 
                 _spawnedTiles.Add(tile);
             }
 
             if (Debugging)
                 Debug.Log($"[BuffDebuffTileSpawner] Spawned {_spawnedTiles.Count} buff/debuff tiles.");
+        }
+
+        private BuffDebuffTileController CreateTile(Vector3 position)
+        {
+            if (tilePrefab)
+                return Instantiate(tilePrefab, position, Quaternion.identity, transform);
+
+            var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            tile.transform.SetParent(transform);
+            tile.transform.position = position;
+            tile.transform.localScale = generatedTileScale;
+
+            var controller = tile.AddComponent<BuffDebuffTileController>();
+            return controller;
+        }
+
+        private BuffDebuffTileEffect PickRandomEffect()
+        {
+            return effectOptions is { Length: > 0 }
+                ? effectOptions[Random.Range(0, effectOptions.Length)]
+                : null;
         }
 
         [ContextMenu("Clear Spawned Buff/Debuff Tiles")]
