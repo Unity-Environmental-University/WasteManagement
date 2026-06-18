@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using _project.Scripts.Core;
 using UnityEngine;
 
@@ -49,7 +48,7 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            foreach (var cell in PickUniqueRandomCells(slotCount))
+            foreach (var cell in GridSamplingHelper.PickUniqueRandomCells(board, slotCount))
             {
                 var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
                 var slot = Instantiate(slotPrefab, position, Quaternion.identity, transform);
@@ -57,35 +56,6 @@ namespace _project.Scripts.Object_Scripts
             }
 
             if (Debugging) Debug.Log($"[SpecialInteractSpawner] Spawned up to {slotCount} slots on the grid.");
-        }
-
-        /// <summary>
-        ///     Returns up to <paramref name="count" /> distinct random grid cells by shuffling the
-        ///     full set of cell indices and taking the first few (clamped to the cell count).
-        /// </summary>
-        private List<Vector2Int> PickUniqueRandomCells(int count)
-        {
-            var total = board.Columns * board.Rows;
-            count = Mathf.Min(count, total);
-
-            var indices = new List<int>(total);
-            for (var i = 0; i < total; i++) indices.Add(i);
-
-            // Partial Fisher-Yates: only the first `count` slots need to be settled.
-            for (var i = 0; i < count; i++)
-            {
-                var j = Random.Range(i, total);
-                (indices[i], indices[j]) = (indices[j], indices[i]);
-            }
-
-            var result = new List<Vector2Int>(count);
-            for (var i = 0; i < count; i++)
-            {
-                var index = indices[i];
-                result.Add(new Vector2Int(index % board.Columns, index / board.Columns));
-            }
-
-            return result;
         }
     }
 }
