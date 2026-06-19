@@ -80,6 +80,12 @@ namespace _project.Scripts.Object_Scripts
         public int Rows => rows;
 
         /// <summary>
+        ///     World-space size of a single cell's visual: footprint on X/Z and height on Y.
+        ///     Accounts for the board's own scale, so callers don't hardcode cell dimensions.
+        /// </summary>
+        public Vector3 CellWorldSize => Vector3.Scale(transform.lossyScale, new Vector3(cellSize, cellHeight, cellSize));
+
+        /// <summary>
         ///     Initializes the grid by attempting to bind existing cells or building new ones.
         ///     Refreshes visuals after setup.
         /// </summary>

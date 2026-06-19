@@ -22,8 +22,8 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color debuffColor = new(0.85f, 0.30f, 0.30f, 1f);
 
         [Header("Triggering")]
-        [Tooltip("Trigger size in world units, used when the tile has no collider of its own.")]
-        [SerializeField] private Vector3 triggerWorldSize = new(5.114832f, 1.5f, 3.690889f);
+        [Tooltip("How tall the trigger reaches in world units, so issues passing over the flat tile are caught.")]
+        [SerializeField] private float triggerWorldHeight = 1.5f;
 
         [Header("Effects")]
         [SerializeField] private List<BuffDebuffTileEffect> effects = new();
@@ -100,13 +100,12 @@ namespace _project.Scripts.Object_Scripts
             box.isTrigger = true;
             box.center = Vector3.zero;
 
-            // The tile mesh is scaled very flat, so convert the desired world-space trigger
-            // size into local size — otherwise the trigger would be too thin to catch issues.
-            var scale = transform.lossyScale;
-            box.size = new Vector3(
-                triggerWorldSize.x / Mathf.Max(0.0001f, Mathf.Abs(scale.x)),
-                triggerWorldSize.y / Mathf.Max(0.0001f, Mathf.Abs(scale.y)),
-                triggerWorldSize.z / Mathf.Max(0.0001f, Mathf.Abs(scale.z)));
+            // Keep the collider's X/Z footprint (already matches the tile), but make sure it reaches
+            // triggerWorldHeight in world space — the tile mesh is flat, so divide out its Y scale.
+            var scaleY = Mathf.Max(0.0001f, Mathf.Abs(transform.lossyScale.y));
+            var size = box.size;
+            size.y = triggerWorldHeight / scaleY;
+            box.size = size;
         }
 
         private void ApplyColor()

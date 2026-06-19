@@ -19,8 +19,8 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Extra height above the cell's top surface to place each tile at.")]
         [SerializeField] private float heightOffset = 0.45f;
 
-        [Tooltip("Scale of generated fallback tiles when no prefab is supplied.")]
-        [SerializeField] private Vector3 generatedTileScale = new(5.114832f, 0.48412952f, 3.690889f);
+        [Tooltip("Scale of generated fallback tiles, relative to one board cell (1,1,1 = exactly cell-sized).")]
+        [SerializeField] private Vector3 tileScaleMultiplier = Vector3.one;
 
         [Header("Tile Effects")]
         [Tooltip("Optional visual/controller prefab. Effects are assigned from Effect Options below.")]
@@ -78,7 +78,7 @@ namespace _project.Scripts.Object_Scripts
             var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
             tile.transform.SetParent(transform);
             tile.transform.position = position;
-            tile.transform.localScale = generatedTileScale;
+            tile.transform.localScale = Vector3.Scale(board.CellWorldSize, tileScaleMultiplier);
 
             var controller = tile.AddComponent<BuffDebuffTileController>();
             return controller;
