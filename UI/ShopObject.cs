@@ -37,6 +37,12 @@ namespace _project.Scripts.UI
             buyButton.onClick.RemoveAllListeners();
             buyButton.onClick.AddListener(OnBuyPressed);
             buyButton.interactable = ShopManager.HasAccess(item);
+
+            // If this UI was generated for an already-queued item (reused on shop reopen),
+            // bind now so it removes itself when the item is placed, even before any buy press.
+            var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
+            if (inventory && PlaceableItem != null && inventory.Contains(PlaceableItem))
+                BindInventory(inventory);
         }
 
         private void OnBuyPressed()
@@ -64,13 +70,7 @@ namespace _project.Scripts.UI
             var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
             if (!inventory) return;
 
-            // Bind on first purchase only: the handler removes this entry once its
-            // item leaves the inventory, so it must not run before the item enters it.
-            if (!_placementInventory)
-            {
-                _placementInventory = inventory;
-                _placementInventory.InventoryChanged += HandleInventoryChanged;
-            }
+            BindInventory(inventory);
 
             if (inventory.SelectItem(PlaceableItem))
             {
@@ -81,6 +81,14 @@ namespace _project.Scripts.UI
             ShopItem.Purchase();
             inventory.SelectItem(PlaceableItem);
             GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
+        }
+
+        private void BindInventory(PlacementInventory inventory)
+        {
+            if (_placementInventory) return;
+
+            _placementInventory = inventory;
+            _placementInventory.InventoryChanged += HandleInventoryChanged;
         }
 
         private void UnbindInventory()

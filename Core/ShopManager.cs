@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using _project.Scripts.UI;
 using UnityEngine;
 
@@ -186,8 +187,45 @@ namespace _project.Scripts.Core
             if (includeBlankTestItem && blankTestSprite)
                 SpawnShopItem(new BlankShopItem(blankTestSprite));
 
+            // Items purchased but not yet placed are still queued in the PlacementInventory.
+            // Reuse those instances when regenerating, so reopening the shop reconnects each
+            // queued item to its existing instance instead of minting a fresh one. Without
+            // this, re-buying a queued item would duplicate it and bypass finite stock counts.
+            var queued = CollectQueuedPlaceables();
+
             foreach (var item in CreateShopItems())
-                SpawnShopItem(item);
+                SpawnShopItem(ReuseQueuedInstance(item, queued));
+        }
+
+        private static List<IPlaceable> CollectQueuedPlaceables()
+        {
+            var queued = new List<IPlaceable>();
+            var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
+            if (!inventory) return queued;
+
+            queued.AddRange(inventory.Items.Where(item => item != null));
+
+            return queued;
+        }
+
+        // Replaces a freshly generated placeable with the matching queued instance if one
+        // exists. Each queued instance is claimed once so a category's stock count maps to at
+        // most that many slots (queued + buyable).
+        private static IShopItem ReuseQueuedInstance(IShopItem item, List<IPlaceable> queued)
+        {
+            if (item is not IPlaceable placeable) return item;
+
+            for (var i = 0; i < queued.Count; i++)
+            {
+                var candidate = queued[i];
+                if (candidate.PlaceableType != placeable.PlaceableType) continue;
+                if (candidate.DisplayName != placeable.DisplayName) continue;
+
+                queued.RemoveAt(i);
+                return candidate;
+            }
+
+            return item;
         }
 
         private IEnumerable<IShopItem> CreateShopItems()
