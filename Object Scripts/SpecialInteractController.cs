@@ -109,6 +109,7 @@ namespace _project.Scripts.Object_Scripts
             _isHovered = false;
             var gm = GameMaster.Instance;
             gm.placementInventory.ConsumeSelected();
+            gm.pathBuildBoard?.ClearActivePiece();
             if (gm.turnController) gm.turnController.RegisterMove();
             gm.turnController.infrastructureValue += pending.InfraValue;
             gm.interfaceManager?.RefreshStinkMeter();

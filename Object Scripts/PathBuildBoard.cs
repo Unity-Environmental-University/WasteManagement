@@ -160,11 +160,22 @@ namespace _project.Scripts.Object_Scripts
 
             _placementInventory = inventory;
 
-            if (_placementInventory is not null)
-                _placementInventory.SelectionChanged += HandleSelectionChanged;
+            if (_placementInventory is null) return;
+            _placementInventory.SelectionChanged += HandleSelectionChanged;
+            HandleSelectionChanged(_placementInventory.SelectedItem);
         }
 
-        private void HandleSelectionChanged(IPlaceable pending) => RefreshVisuals();
+        private void HandleSelectionChanged(IPlaceable pending)
+        {
+            if (pending != null && pending.PlaceableType != PlaceableType.Path)
+            {
+                ActivePiece = null;
+                ActiveTool = PathBuildTool.None;
+                _lastPreviewedPiece = null;
+            }
+
+            RefreshVisuals();
+        }
 
         private void OnDestroy()
         {

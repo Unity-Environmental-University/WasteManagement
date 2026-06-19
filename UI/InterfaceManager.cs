@@ -20,6 +20,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Slider stinkMeter;
         [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
         [SerializeField] private LossScreenPanel lossScreenPanelPrefab;
+        [SerializeField] private PathToolBar pathToolBar;
         private PostRoundSummaryPanel _postRoundSummaryPanel;
         private LossScreenPanel _lossScreenPanel;
 
@@ -31,6 +32,7 @@ namespace _project.Scripts.UI
         private void Start()
         {
             if (quitButton) quitButton.onClick.AddListener(Application.Quit);
+            EnsurePathToolBar();
         }
 
         public void PopulateHand(IReadOnlyList<ICard> hand)
@@ -57,6 +59,8 @@ namespace _project.Scripts.UI
             nextButton.gameObject.SetActive(false);
             openShopButton.gameObject.SetActive(false);
             closeShopButton.gameObject.SetActive(false);
+            EnsurePathToolBar();
+            pathToolBar.SetVisible(false);
         }
 
         public void ShowPrepUI()
@@ -64,6 +68,8 @@ namespace _project.Scripts.UI
             nextButton.gameObject.SetActive(true);
             openShopButton.gameObject.SetActive(true);
             closeShopButton.gameObject.SetActive(true);
+            EnsurePathToolBar();
+            pathToolBar.SetVisible(true);
         }
 
         public void UpdateInfo(int moveCount, int populationSize, int currentLevel)
@@ -148,6 +154,10 @@ namespace _project.Scripts.UI
             nextButton.gameObject.SetActive(false);
             openShopButton.gameObject.SetActive(false);
             closeShopButton.gameObject.SetActive(true);
+            // The pipe toolbar stays available while the shop is open; its
+            // visibility is governed by the card/tower phase, not the shop.
+            EnsurePathToolBar();
+            pathToolBar.SetVisible(true);
         }
 
         public void RecoverUIForShop()
@@ -156,6 +166,29 @@ namespace _project.Scripts.UI
             nextButton.gameObject.SetActive(true);
             openShopButton.gameObject.SetActive(true);
             closeShopButton.gameObject.SetActive(false);
+            EnsurePathToolBar();
+            pathToolBar.SetVisible(true);
+        }
+
+        private void EnsurePathToolBar()
+        {
+            if (pathToolBar)
+            {
+                pathToolBar.EnsureBuilt();
+                return;
+            }
+
+            pathToolBar = GetComponentInChildren<PathToolBar>(true);
+            if (pathToolBar)
+            {
+                pathToolBar.EnsureBuilt();
+                return;
+            }
+
+            var toolbarObject = new GameObject("Path Tool Bar", typeof(RectTransform), typeof(PathToolBar));
+            toolbarObject.transform.SetParent(transform, false);
+            pathToolBar = toolbarObject.GetComponent<PathToolBar>();
+            pathToolBar.EnsureBuilt();
         }
     }
 }

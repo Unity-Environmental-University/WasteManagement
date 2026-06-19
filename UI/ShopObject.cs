@@ -72,10 +72,15 @@ namespace _project.Scripts.UI
                 _placementInventory.InventoryChanged += HandleInventoryChanged;
             }
 
-            if (inventory.SelectItem(PlaceableItem)) return;
+            if (inventory.SelectItem(PlaceableItem))
+            {
+                GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
+                return;
+            }
 
             ShopItem.Purchase();
             inventory.SelectItem(PlaceableItem);
+            GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
         }
 
         private void UnbindInventory()

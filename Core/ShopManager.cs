@@ -51,9 +51,11 @@ namespace _project.Scripts.Core
         [SerializeField] private int treatmentTankInfraValue = 8;
         [SerializeField] private GameObject treatmentTankPrefab;
         [SerializeField] private Sprite treatmentTankSprite;
-        [SerializeField] private int pipeInfraValue;
 
-        [Header("Path Items")] [SerializeField]
+        [Header("Path Tools")] [SerializeField]
+        private int pipeInfraValue;
+
+        [SerializeField]
         private string shortPipeDisplayName = "Short Pipe";
 
         [SerializeField] private string shortPipeDescription = "Straight pipe segment covering 2 cells.";
@@ -61,6 +63,7 @@ namespace _project.Scripts.Core
         [SerializeField] private Sprite shortPipeSprite;
         [SerializeField] private string longPipeDisplayName = "Long Pipe";
         [SerializeField] private string longPipeDescription = "Straight pipe segment covering 3 cells.";
+        [SerializeField] private int longPipeRequiredLevel = 1;
         [SerializeField] private Sprite longPipeSprite;
         [SerializeField] private string breakPipeDisplayName = "Break Pipe";
         [SerializeField] private string breakPipeDescription = "Removes an existing pipe segment from the board.";
@@ -74,9 +77,14 @@ namespace _project.Scripts.Core
 
         [SerializeField] private Sprite blankTestSprite;
         public static ShopManager Instance { get; private set; }
-        private static bool Debugging => GameMaster.Instance.debugging;
+        private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
 
-        private static int CurrentLevel => GameMaster.Instance.turnController.currentLevel;
+        private static int CurrentLevel =>
+            GameMaster.Instance && GameMaster.Instance.turnController ? GameMaster.Instance.turnController.currentLevel : 1;
+
+        public bool CanSelectShortPipeTool => CurrentLevel >= shortPipeRequiredLevel;
+        public bool CanSelectLongPipeTool => CurrentLevel >= longPipeRequiredLevel;
+        public bool CanSelectBreakPipeTool => CurrentLevel >= breakPipeRequiredLevel;
 
         private void Awake()
         {
@@ -108,6 +116,37 @@ namespace _project.Scripts.Core
         public void RemoveShopItem(GameObject shopItemGo)
         {
             if (shopItemGo) Destroy(shopItemGo);
+        }
+
+        public void SelectShortPipeTool()
+        {
+            SelectPathPieceTool(shortPipeDisplayName, shortPipeDescription, shortPipeRequiredLevel, 2, shortPipeSprite);
+        }
+
+        public void SelectLongPipeTool()
+        {
+            SelectPathPieceTool(longPipeDisplayName, longPipeDescription, longPipeRequiredLevel, 3, longPipeSprite);
+        }
+
+        public void SelectBreakPipeTool()
+        {
+            if (!HasPathToolAccess(breakPipeDisplayName, breakPipeDescription, breakPipeRequiredLevel)) return;
+
+            var gm = GameMaster.Instance;
+            var board = gm ? gm.pathBuildBoard : null;
+            if (!board)
+            {
+                Debug.LogWarning("[ShopManager] No PathBuildBoard available; break tool ignored.");
+                return;
+            }
+
+            gm.placementInventory?.ClearSelection();
+            board.SetActiveBreakTool();
+        }
+
+        public void ClearPathTool()
+        {
+            GameMaster.Instance?.pathBuildBoard?.ClearActivePiece();
         }
 
         public static bool HasAccess(IShopItem item)
@@ -153,16 +192,6 @@ namespace _project.Scripts.Core
 
         private IEnumerable<IShopItem> CreateShopItems()
         {
-            var fallbackPathSprite = shortPipeSprite ?? (longPipeSprite
-                ? longPipeSprite
-                : blankTestSprite);
-            yield return new PathPieceShopItem(shortPipeDisplayName, shortPipeDescription, shortPipeRequiredLevel, 2,
-                shortPipeSprite ?? fallbackPathSprite, pipeInfraValue);
-            yield return new PathPieceShopItem(longPipeDisplayName, longPipeDescription, 1, 3,
-                longPipeSprite ?? fallbackPathSprite, pipeInfraValue);
-            yield return new PathBreakShopItem(breakPipeDisplayName, breakPipeDescription, breakPipeRequiredLevel,
-                breakPipeSprite ?? fallbackPathSprite);
-
             if (towerPrefab)
                 yield return new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab,
                     towerSprite, towerInfraValue);
@@ -196,6 +225,33 @@ namespace _project.Scripts.Core
             if (!shopItemPrefab || !shopItemsParent) return;
             var ui = Instantiate(shopItemPrefab, shopItemsParent);
             ui.Setup(item);
+        }
+
+        private void SelectPathPieceTool(string displayName, string description, int requiredLevel, int length,
+            Sprite displaySprite)
+        {
+            if (!HasPathToolAccess(displayName, description, requiredLevel)) return;
+
+            var gm = GameMaster.Instance;
+            var board = gm ? gm.pathBuildBoard : null;
+            if (!board)
+            {
+                Debug.LogWarning("[ShopManager] No PathBuildBoard available; path tool ignored.");
+                return;
+            }
+
+            gm.placementInventory?.ClearSelection();
+            board.SetActivePiece(new PathPiecePlaceable(displayName, description, requiredLevel, length, displaySprite,
+                pipeInfraValue));
+        }
+
+        private static bool HasPathToolAccess(string displayName, string description, int requiredLevel)
+        {
+            if (CurrentLevel >= requiredLevel) return true;
+
+            if (Debugging)
+                Debug.Log($"[ShopManager] {displayName} requires level {requiredLevel}. {description}");
+            return false;
         }
 
         private static ICard CreateCard(string cardType)

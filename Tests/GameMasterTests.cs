@@ -35,7 +35,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathPieceShopItem_PurchaseActivatesBoardToolWithoutChangingQueuedPlacement()
+        public void PathPieceShopItem_PurchaseActivatesBoardToolAndClearsQueuedPlacementSelection()
         {
             var gameMasterGo = CreateGameObject("Game Master");
             var boardGo = CreateGameObject("Path Board");
@@ -48,8 +48,9 @@ namespace _project.Scripts.Tests
             gameMaster.placementInventory.Add(queuedItem);
             pipeShopItem.Purchase();
 
-            Assert.AreEqual(queuedItem, gameMaster.PendingPlacement);
+            Assert.IsNull(gameMaster.PendingPlacement);
             Assert.AreEqual(1, gameMaster.placementInventory.Items.Count);
+            Assert.AreEqual(queuedItem, gameMaster.placementInventory.Items[0]);
             Assert.IsNotNull(board.ActivePiece);
             Assert.AreEqual(PathBuildTool.Place, board.ActiveTool);
             Assert.AreEqual(2, board.ActivePiece.Length);
@@ -57,7 +58,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathBreakShopItem_PurchaseActivatesBoardBreakToolWithoutChangingQueuedPlacement()
+        public void PathBreakShopItem_PurchaseActivatesBoardBreakToolAndClearsQueuedPlacementSelection()
         {
             var gameMasterGo = CreateGameObject("Game Master");
             var boardGo = CreateGameObject("Path Board");
@@ -70,9 +71,30 @@ namespace _project.Scripts.Tests
             gameMaster.placementInventory.Add(queuedItem);
             breakShopItem.Purchase();
 
-            Assert.AreEqual(queuedItem, gameMaster.PendingPlacement);
+            Assert.IsNull(gameMaster.PendingPlacement);
             Assert.AreEqual(1, gameMaster.placementInventory.Items.Count);
+            Assert.AreEqual(queuedItem, gameMaster.placementInventory.Items[0]);
             Assert.AreEqual(PathBuildTool.Break, board.ActiveTool);
+            Assert.IsNull(board.ActivePiece);
+        }
+
+        [Test]
+        public void PathBuildBoard_UpdateClearsActivePathTool_WhenUtilitySelectionIsPending()
+        {
+            var gameMasterGo = CreateGameObject("Game Master");
+            var boardGo = CreateGameObject("Path Board");
+            boardGo.transform.SetParent(gameMasterGo.transform);
+            var board = boardGo.AddComponent<PathBuildBoard>();
+            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var queuedItem = new TestPlaceable();
+            var pipe = new PathPiecePlaceable("Short Pipe", "", 1, 2, null, 4);
+
+            board.SetActivePiece(pipe);
+            gameMaster.placementInventory.Add(queuedItem);
+            board.SendMessage("Update", SendMessageOptions.DontRequireReceiver);
+
+            Assert.AreEqual(queuedItem, gameMaster.PendingPlacement);
+            Assert.AreEqual(PathBuildTool.None, board.ActiveTool);
             Assert.IsNull(board.ActivePiece);
         }
 

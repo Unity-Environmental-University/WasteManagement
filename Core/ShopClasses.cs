@@ -262,13 +262,15 @@ namespace _project.Scripts.Core
 
         public void Purchase()
         {
-            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            var gm = GameMaster.Instance;
+            var board = gm ? gm.pathBuildBoard : null;
             if (!board)
             {
                 Debug.LogWarning("[PathPieceShopItem] No PathBuildBoard available; purchase ignored.");
                 return;
             }
 
+            gm.placementInventory?.ClearSelection();
             board.SetActivePiece(new PathPiecePlaceable(DisplayName, Description, RequiredLevel, _length,
                 DisplaySprite, InfraValue));
         }
@@ -293,13 +295,15 @@ namespace _project.Scripts.Core
 
         public void Purchase()
         {
-            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            var gm = GameMaster.Instance;
+            var board = gm ? gm.pathBuildBoard : null;
             if (!board)
             {
                 Debug.LogWarning("[PathBreakShopItem] No PathBuildBoard available; purchase ignored.");
                 return;
             }
 
+            gm.placementInventory?.ClearSelection();
             board.SetActiveBreakTool();
         }
     }
