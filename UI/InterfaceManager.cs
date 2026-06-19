@@ -19,7 +19,9 @@ namespace _project.Scripts.UI
         [SerializeField] private TextMeshProUGUI infoBarText;
         [SerializeField] private Slider stinkMeter;
         [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
+        [SerializeField] private LossScreenPanel lossScreenPanelPrefab;
         private PostRoundSummaryPanel _postRoundSummaryPanel;
+        private LossScreenPanel _lossScreenPanel;
 
         [Header("Hand")]
         [SerializeField] private Transform handContainer;
@@ -107,6 +109,25 @@ namespace _project.Scripts.UI
             }
 
             _postRoundSummaryPanel.Show(summary, onContinue);
+        }
+
+        public void ShowLossScreen(int turn, int moveCount, int populationSize, int level)
+        {
+            if (!_lossScreenPanel)
+                _lossScreenPanel = GetComponentInChildren<LossScreenPanel>(true);
+
+            if (!_lossScreenPanel && lossScreenPanelPrefab)
+                _lossScreenPanel = Instantiate(lossScreenPanelPrefab, transform);
+
+            if (!_lossScreenPanel)
+            {
+                Debug.LogWarning($"{nameof(InterfaceManager)} is missing a loss screen panel prefab.", this);
+                return;
+            }
+
+            HidePrepUI();
+            ClearHand();
+            _lossScreenPanel.Show(turn, moveCount, populationSize, level);
         }
 
         public void NextButtonPressed()

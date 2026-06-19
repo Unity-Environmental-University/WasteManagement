@@ -23,6 +23,7 @@ namespace _project.Scripts.Core
 
         public float waveDuration = 30;
         private GameMaster _gm = GameMaster.Instance;
+        private bool _gameLost;
         private bool _waitingForPostRoundContinue;
         private static TurnController Instance { get; set; }
 
@@ -113,6 +114,8 @@ namespace _project.Scripts.Core
 
         public void EndPhase()
         {
+            if (_gameLost) return;
+
             switch (currentPhase)
             {
                 case GamePhase.Card:
@@ -184,6 +187,8 @@ namespace _project.Scripts.Core
 
         private void ContinueFromPostRoundSummary()
         {
+            if (_gameLost) return;
+
             _waitingForPostRoundContinue = false;
             EnterCardSequence();
         }
@@ -229,10 +234,15 @@ namespace _project.Scripts.Core
         {
             yield return new WaitForSeconds(duration);
 
+            if (_gameLost) yield break;
+
             StopAllSpawners();
 
             while (IssueObject.ActiveCount > 0)
+            {
+                if (_gameLost) yield break;
                 yield return null;
+            }
 
             currentTurn++;
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
@@ -242,7 +252,15 @@ namespace _project.Scripts.Core
 
         public void GameLost()
         {
+            if (_gameLost) return;
+
+            _gameLost = true;
+            StopAllCoroutines();
             StopAllSpawners();
+
+            var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
+            _gm.interfaceManager?.ShowLossScreen(currentTurn, moveCount, populationSize, currentLevel);
+
             Debug.Log("[TurnController] Game Lost!");
         }
 
