@@ -27,6 +27,7 @@ namespace _project.Scripts.Object_Scripts
         private const float BaseSiftCost = 5f;
         private Transform _startPoint;
         private int _waypointIndex;
+        private int _routeIndex;
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
         private Color? _visualOverrideColor;
@@ -79,14 +80,14 @@ namespace _project.Scripts.Object_Scripts
             }
 
             // GUARD: If no path is assigned OR we've consumed all waypoints, we've reached the end
-            if (!path || _waypointIndex >= path.Count)
+            if (!path || _waypointIndex >= path.GetWaypointCount(_routeIndex))
             {
                 ReachEnd();
                 return;
             }
 
             // Fetch the world-space position of the current target waypoint
-            var target = path.GetPosition(_waypointIndex);
+            var target = path.GetPosition(_routeIndex, _waypointIndex);
 
             // Lift the target up so the issue rides ON TOP of the pipe instead of inside it
             // (scaled by this issue's size so bigger issues sit higher)
@@ -174,11 +175,25 @@ namespace _project.Scripts.Object_Scripts
         public void SetType(IssueType t) => type = t;
         public WaypointPath GetPath() => path;
         public int GetWaypointIndex() => _waypointIndex;
+        public int GetRouteIndex() => _routeIndex;
 
         public void SetPath(WaypointPath p)
         {
             path = p;
+            _routeIndex = 0;
+            _waypointIndex = 0;
             IsDirectDestination = false;
+        }
+
+        public bool TrySplitToNextRoute()
+        {
+            if (!path || IsDirectDestination || path.RouteCount <= 1)
+                return false;
+
+            var nextRouteIndex = path.GetNextSplitRouteIndex();
+            _routeIndex = nextRouteIndex;
+            _waypointIndex = path.FindClosestWaypointIndex(nextRouteIndex, transform.position, _waypointIndex);
+            return true;
         }
 
         public void SetDirectDestination(Vector3 destination)
@@ -186,6 +201,7 @@ namespace _project.Scripts.Object_Scripts
             _directDestination = destination;
             IsDirectDestination = true;
             path = null;
+            _routeIndex = 0;
         }
 
         public void EnableClickPop()

@@ -32,6 +32,9 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
         private Transform endPoint;
 
+        [Tooltip("Maximum complete branch routes cached for splitter utilities.")]
+        [SerializeField] private int maxSplitterRoutes = 16;
+
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
 
@@ -42,12 +45,23 @@ namespace _project.Scripts.Object_Scripts
         // The final ordered list of world-space positions enemies traverse.
         // Built by Rebuild() — do not modify directly.
         private readonly List<Vector3> _waypoints = new();
+        private readonly List<List<Vector3>> _routes = new();
+        private int _nextSplitRouteIndex;
+
+        private static readonly Vector2Int[] Directions =
+        {
+            new(01, 00),
+            new(-1, 00),
+            new(00, 01),
+            new(00, -1)
+        };
 
         /// <summary>
         ///     The total number of waypoints in the current path. Used by IssueObject
         ///     to detect when it has reached the end of the route.
         /// </summary>
         public int Count => _waypoints.Count;
+        public int RouteCount => _routes.Count;
         public Transform Destination => endPoint;
 
         public bool IsValid { get; private set; }
@@ -92,6 +106,47 @@ namespace _project.Scripts.Object_Scripts
             return _waypoints[index];
         }
 
+        public int GetWaypointCount(int routeIndex)
+        {
+            return TryGetRoute(routeIndex, out var route) ? route.Count : Count;
+        }
+
+        public Vector3 GetPosition(int routeIndex, int waypointIndex)
+        {
+            return TryGetRoute(routeIndex, out var route) ? route[waypointIndex] : GetPosition(waypointIndex);
+        }
+
+        public int GetNextSplitRouteIndex()
+        {
+            if (RouteCount <= 1)
+                return 0;
+
+            var routeIndex = _nextSplitRouteIndex % RouteCount;
+            _nextSplitRouteIndex = (_nextSplitRouteIndex + 1) % RouteCount;
+            return routeIndex;
+        }
+
+        public int FindClosestWaypointIndex(int routeIndex, Vector3 position, int minimumIndex = 0)
+        {
+            if (!TryGetRoute(routeIndex, out var route) || route.Count == 0)
+                return Mathf.Max(0, minimumIndex);
+
+            var startIndex = Mathf.Clamp(minimumIndex, 0, route.Count - 1);
+            var closestIndex = startIndex;
+            var closestDistance = float.PositiveInfinity;
+
+            for (var i = startIndex; i < route.Count; i++)
+            {
+                var distance = Vector3.SqrMagnitude(position - route[i]);
+                if (distance >= closestDistance) continue;
+
+                closestDistance = distance;
+                closestIndex = i;
+            }
+
+            return closestIndex;
+        }
+
         /// <summary>
         ///     Rebuilds the waypoint list using BFS through occupied grid cells.
         ///     Algorithm:
@@ -110,10 +165,12 @@ namespace _project.Scripts.Object_Scripts
         public bool Rebuild()
         {
             _waypoints.Clear();
+            _routes.Clear();
             _pathCells.Clear();
             _unusedCells.Clear();
             IsValid = false;
             InvalidReason = null;
+            _nextSplitRouteIndex = 0;
 
             if (!pathBuildBoard)
             {
@@ -154,20 +211,25 @@ namespace _project.Scripts.Object_Scripts
                 return FailRebuild();
             }
 
-            _waypoints.Add(startPoint.position);
+            var routeCellPaths = FindSplitterRoutes(starts, goals, cellPath);
+            var defaultRoute = BuildWorldRoute(cellPath);
+            _routes.Add(defaultRoute);
 
             // CONVERT CELL PATH TO WAYPOINTS
+            _waypoints.AddRange(defaultRoute);
             foreach (var cell in cellPath)
-            {
                 _pathCells.Add(cell);
-                _waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+
+            for (var i = 0; i < routeCellPaths.Count; i++)
+            {
+                var routeCells = routeCellPaths[i];
+                if (HasSameCells(routeCells, cellPath)) continue;
+                _routes.Add(BuildWorldRoute(routeCells));
             }
 
             // Bucket remaining occupied cells as "unused" for the gizmo
             RecordUnusedCells(cellPath);
 
-            // Bookend with endPoint
-            _waypoints.Add(endPoint.position);
             IsValid = true;
             InvalidReason = null;
             return true;
@@ -206,15 +268,6 @@ namespace _project.Scripts.Object_Scripts
                 cameFrom[start] = start;
             }
 
-            // 4-way neighbor offsets (no diagonals): right, left, up, down
-            var directions = new[]
-            {
-                new Vector2Int(01, 00),
-                new Vector2Int(-1, 00),
-                new Vector2Int(00, 01),
-                new Vector2Int(00, -1)
-            };
-
             Vector2Int? foundGoal = null;
 
             // MAIN BFS LOOP: expand outward layer by layer
@@ -230,7 +283,7 @@ namespace _project.Scripts.Object_Scripts
                 }
 
                 // Check all 4 neighbors
-                foreach (var dir in directions)
+                foreach (var dir in Directions)
                 {
                     var next = current + dir;
 
@@ -259,6 +312,103 @@ namespace _project.Scripts.Object_Scripts
             // We built the path goal → start; reverse to get start → goal
             path.Reverse();
             return path;
+        }
+
+        private List<List<Vector2Int>> FindSplitterRoutes(
+            IReadOnlyList<Vector2Int> starts,
+            IReadOnlyCollection<Vector2Int> goals,
+            List<Vector2Int> defaultRoute)
+        {
+            var routes = new List<List<Vector2Int>>();
+            var goalSet = goals as HashSet<Vector2Int> ?? new HashSet<Vector2Int>(goals);
+            var routeLimit = Mathf.Max(1, maxSplitterRoutes);
+            var visited = new HashSet<Vector2Int>();
+            var currentRoute = new List<Vector2Int>();
+
+            foreach (var start in starts)
+            {
+                if (routes.Count >= routeLimit) break;
+                if (!pathBuildBoard.IsOccupied(start)) continue;
+
+                visited.Clear();
+                currentRoute.Clear();
+                SearchRoutes(start);
+            }
+
+            routes.Sort((a, b) => a.Count.CompareTo(b.Count));
+            if (!routes.Exists(route => HasSameCells(route, defaultRoute)))
+                routes.Insert(0, defaultRoute);
+
+            return routes;
+
+            void SearchRoutes(Vector2Int current)
+            {
+                if (routes.Count >= routeLimit) return;
+
+                visited.Add(current);
+                currentRoute.Add(current);
+
+                if (goalSet.Contains(current))
+                {
+                    AddDistinctRoute(routes, currentRoute, routeLimit);
+                }
+                else
+                {
+                    foreach (var direction in Directions)
+                    {
+                        var next = current + direction;
+                        if (visited.Contains(next)) continue;
+                        if (!pathBuildBoard.IsOccupied(next)) continue;
+
+                        SearchRoutes(next);
+                    }
+                }
+
+                currentRoute.RemoveAt(currentRoute.Count - 1);
+                visited.Remove(current);
+            }
+        }
+
+        private List<Vector3> BuildWorldRoute(List<Vector2Int> cellRoute)
+        {
+            var route = new List<Vector3>(cellRoute.Count + 2) { startPoint.position };
+
+            foreach (var cell in cellRoute)
+                route.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+
+            route.Add(endPoint.position);
+            return route;
+        }
+
+        private bool TryGetRoute(int routeIndex, out List<Vector3> route)
+        {
+            if (routeIndex >= 0 && routeIndex < _routes.Count)
+            {
+                route = _routes[routeIndex];
+                return true;
+            }
+
+            route = null;
+            return false;
+        }
+
+        private static void AddDistinctRoute(List<List<Vector2Int>> routes, List<Vector2Int> route, int routeLimit)
+        {
+            if (routes.Count >= routeLimit) return;
+            if (routes.Exists(existing => HasSameCells(existing, route))) return;
+
+            routes.Add(new List<Vector2Int>(route));
+        }
+
+        private static bool HasSameCells(IReadOnlyList<Vector2Int> a, IReadOnlyList<Vector2Int> b)
+        {
+            if (a == null || b == null || a.Count != b.Count) return false;
+
+            for (var i = 0; i < a.Count; i++)
+                if (a[i] != b[i])
+                    return false;
+
+            return true;
         }
 
         // ============================================================

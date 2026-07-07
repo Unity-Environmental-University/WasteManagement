@@ -31,6 +31,18 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
 
+        [Header("Path Splitter Item")] [SerializeField]
+        private string pathSplitterDisplayName = "Path Splitter";
+
+        [SerializeField] private string pathSplitterDescription =
+            "Routes issues evenly across available branch paths.";
+
+        [SerializeField] private int pathSplitterRequiredLevel = 1;
+        [SerializeField] private int pathSplitterInfraValue = 1;
+        [SerializeField] private int pathSplitterCount = 1;
+        [SerializeField] private GameObject pathSplitterPrefab;
+        [SerializeField] private Sprite pathSplitterSprite;
+
         [Header("Cesspit Item")] [SerializeField]
         private string cesspitDisplayName = "Cesspit";
 
@@ -238,6 +250,11 @@ namespace _project.Scripts.Core
                 for (var i = 0; i < sifterCount; i++)
                     yield return new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
                         sifterPrefab, sifterSprite, sifterInfraValue);
+
+            if (pathSplitterPrefab)
+                for (var i = 0; i < pathSplitterCount; i++)
+                    yield return new PathSplitterShopItem(pathSplitterDisplayName, pathSplitterDescription,
+                        pathSplitterRequiredLevel, pathSplitterPrefab, pathSplitterSprite, pathSplitterInfraValue);
 
             if (cesspitPrefab)
                 yield return new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
