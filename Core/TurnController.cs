@@ -47,6 +47,9 @@ namespace _project.Scripts.Core
         public static event Action OnCardPhaseEntered;
         public static event Action OnTowerPhaseEntered;
 
+        /// <summary>Fired whenever the current town level is set or changes. Payload is the new level.</summary>
+        public static event Action<int> OnLevelChanged;
+
         /// <summary>
         ///     This should initialize game variables and set up the game state for a new game/run.
         /// </summary>
@@ -55,6 +58,7 @@ namespace _project.Scripts.Core
             if (_gm.debugging) Debug.Log("Game Sequence Started!");
             currentTurn = 0;
             currentLevel = _gm.popManager ? _gm.popManager.GetLevelByPopulationSize() : 1;
+            OnLevelChanged?.Invoke(currentLevel);
             moveCount = 0;
             EnterCardSequence();
         }
@@ -150,6 +154,7 @@ namespace _project.Scripts.Core
             {
                 growthResult = _gm.popManager.ApplyPostWaveGrowth(infrastructureValue);
                 currentLevel = growthResult.LevelAfter;
+                if (growthResult.LeveledUp) OnLevelChanged?.Invoke(currentLevel);
             }
             else
             {
