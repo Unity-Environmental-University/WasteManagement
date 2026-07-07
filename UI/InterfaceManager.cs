@@ -21,6 +21,7 @@ namespace _project.Scripts.UI
         [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
         [SerializeField] private LossScreenPanel lossScreenPanelPrefab;
         [SerializeField] private PathToolBar pathToolBar;
+        [SerializeField] private PathToolBar pathToolBarPrefab;
         private PostRoundSummaryPanel _postRoundSummaryPanel;
         private LossScreenPanel _lossScreenPanel;
 
@@ -172,22 +173,18 @@ namespace _project.Scripts.UI
 
         private void EnsurePathToolBar()
         {
-            if (pathToolBar)
+            if (!pathToolBar)
+                pathToolBar = GetComponentInChildren<PathToolBar>(true);
+
+            if (!pathToolBar && pathToolBarPrefab)
+                pathToolBar = Instantiate(pathToolBarPrefab, transform);
+
+            if (!pathToolBar)
             {
-                pathToolBar.EnsureBuilt();
+                Debug.LogWarning($"{nameof(InterfaceManager)} is missing a path tool bar prefab.", this);
                 return;
             }
 
-            pathToolBar = GetComponentInChildren<PathToolBar>(true);
-            if (pathToolBar)
-            {
-                pathToolBar.EnsureBuilt();
-                return;
-            }
-
-            var toolbarObject = new GameObject("Path Tool Bar", typeof(RectTransform), typeof(PathToolBar));
-            toolbarObject.transform.SetParent(transform, false);
-            pathToolBar = toolbarObject.GetComponent<PathToolBar>();
             pathToolBar.EnsureBuilt();
         }
     }
