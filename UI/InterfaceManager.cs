@@ -54,23 +54,23 @@ namespace _project.Scripts.UI
 
         public void HidePrepUI()
         {
-            lTowerUpgrades.gameObject.SetActive(false);
-            mTowerUpgrades.gameObject.SetActive(false);
-            rTowerUpgrades.gameObject.SetActive(false);
-            nextButton.gameObject.SetActive(false);
-            openShopButton.gameObject.SetActive(false);
-            closeShopButton.gameObject.SetActive(false);
+            SetActive(lTowerUpgrades, false);
+            SetActive(mTowerUpgrades, false);
+            SetActive(rTowerUpgrades, false);
+            SetActive(nextButton, false);
+            SetActive(openShopButton, false);
+            SetActive(closeShopButton, false);
             EnsurePathToolBar();
-            pathToolBar.SetVisible(false);
+            if (pathToolBar) pathToolBar.SetVisible(false);
         }
 
         public void ShowPrepUI()
         {
-            nextButton.gameObject.SetActive(true);
-            openShopButton.gameObject.SetActive(true);
-            closeShopButton.gameObject.SetActive(true);
+            SetActive(nextButton, true);
+            SetActive(openShopButton, true);
+            SetActive(closeShopButton, true);
             EnsurePathToolBar();
-            pathToolBar.SetVisible(true);
+            if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
         public void UpdateInfo(int moveCount, int populationSize, int currentLevel)
@@ -151,24 +151,24 @@ namespace _project.Scripts.UI
 
         public void HideUIForShop()
         {
-            quitButton.gameObject.SetActive(false);
-            nextButton.gameObject.SetActive(false);
-            openShopButton.gameObject.SetActive(false);
-            closeShopButton.gameObject.SetActive(true);
+            SetActive(quitButton, false);
+            SetActive(nextButton, false);
+            SetActive(openShopButton, false);
+            SetActive(closeShopButton, true);
             // The pipe toolbar stays available while the shop is open; its
             // visibility is governed by the card/tower phase, not the shop.
             EnsurePathToolBar();
-            pathToolBar.SetVisible(true);
+            if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
         public void RecoverUIForShop()
         {
-            quitButton.gameObject.SetActive(true);
-            nextButton.gameObject.SetActive(true);
-            openShopButton.gameObject.SetActive(true);
-            closeShopButton.gameObject.SetActive(false);
+            SetActive(quitButton, true);
+            SetActive(nextButton, true);
+            SetActive(openShopButton, true);
+            SetActive(closeShopButton, false);
             EnsurePathToolBar();
-            pathToolBar.SetVisible(true);
+            if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
         private void EnsurePathToolBar()
@@ -186,6 +186,11 @@ namespace _project.Scripts.UI
             }
 
             pathToolBar.EnsureBuilt();
+        }
+
+        private static void SetActive(Component component, bool active)
+        {
+            if (component) component.gameObject.SetActive(active);
         }
     }
 }
