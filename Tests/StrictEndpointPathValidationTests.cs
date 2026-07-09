@@ -334,6 +334,33 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
+        public IEnumerator WaveTimer_RecoversLakeBeforeNextCardPhase()
+        {
+            var fixture = CreateTurnFixture(true);
+            fixture.TurnController.waveDuration = 0f;
+            var lake = CreatePrimitive("Lake").AddComponent<LakeController>();
+            lake.health = 90f;
+
+            fixture.TurnController.EndPhase();
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
+            Assert.AreEqual(92f, lake.health, 0.0001f);
+        }
+
+        [Test]
+        public void LakeController_RecoverForTurn_CapsAtFullHealth()
+        {
+            var lake = CreatePrimitive("Lake").AddComponent<LakeController>();
+            lake.health = 99f;
+
+            lake.RecoverForTurn();
+
+            Assert.AreEqual(100f, lake.health, 0.0001f);
+        }
+
+        [UnityTest]
         public IEnumerator WaveTimer_StopsCesspitRunawaysWhenSpawnersStop()
         {
             var fixture = CreateTurnFixture(true);
