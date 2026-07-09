@@ -7,6 +7,7 @@ namespace _project.Scripts.Object_Scripts
     {
         private const float BaseHealth = 100f;
         public float health;
+        [SerializeField] private float healthRecoveredPerTurn = 2f;
 
         [Header("Stink")]
         [SerializeField] private float stinkPerPollution = 0.05f;
@@ -15,6 +16,15 @@ namespace _project.Scripts.Object_Scripts
         private Color _originalColor;
 
         public float CurrentStink => Mathf.Max(0f, BaseHealth - health) * stinkPerPollution;
+
+        public void RecoverForTurn()
+        {
+            if (healthRecoveredPerTurn <= 0f || health >= BaseHealth) return;
+
+            health = Mathf.Min(BaseHealth, health + healthRecoveredPerTurn);
+            UpdateLakeColor();
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
+        }
         
         private void OnEnable()
         {
@@ -48,15 +58,21 @@ namespace _project.Scripts.Object_Scripts
             make new mat that's a copy of the original,
             set the material to the copy.
             */
+            var lakeRenderer = GetComponent<Renderer>();
+            if (!mat && lakeRenderer) mat = lakeRenderer.sharedMaterial;
+            health = BaseHealth;
+            if (!mat) return;
+
             _originalColor = mat.color;
             mat = new Material(mat);
-            GetComponent<Renderer>().material = mat;
-            health = BaseHealth;
+            lakeRenderer.material = mat;
             UpdateLakeColor();
         }
 
         private void UpdateLakeColor()
         {
+            if (!mat) return;
+
             mat.color = health switch
             {
                 < 30 => Color.saddleBrown,

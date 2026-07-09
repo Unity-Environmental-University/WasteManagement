@@ -195,7 +195,14 @@ namespace _project.Scripts.Core
             if (_gameLost) return;
 
             _waitingForPostRoundContinue = false;
+            RecoverLakeForTurn();
             EnterCardSequence();
+        }
+
+        private static void RecoverLakeForTurn()
+        {
+            var lake = FindAnyObjectByType<LakeController>();
+            if (lake) lake.RecoverForTurn();
         }
 
         private void BeginWaveSequence()
