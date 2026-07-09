@@ -25,6 +25,9 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("How tall the trigger reaches in world units, so issues passing over the flat tile are caught.")]
         [SerializeField] private float triggerWorldHeight = 1.5f;
 
+        [Tooltip("Keeps this trigger from blocking pointer clicks on utility slots occupying the same cell.")]
+        [SerializeField] private bool ignorePointerRaycasts = true;
+
         [Header("Effects")]
         [SerializeField] private List<BuffDebuffTileEffect> effects = new();
 
@@ -35,6 +38,9 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
+            if (ignorePointerRaycasts)
+                SetLayerRecursively(transform, LayerMask.NameToLayer("Ignore Raycast"));
+
             EnsureTriggerCollider();
         }
 
@@ -113,6 +119,14 @@ namespace _project.Scripts.Object_Scripts
             var color = kind == BuffDebuffKind.Buff ? buffColor : debuffColor;
             foreach (var rend in GetComponentsInChildren<Renderer>(true))
                 rend.material.color = color;
+        }
+
+        private static void SetLayerRecursively(Transform root, int layer)
+        {
+            root.gameObject.layer = layer;
+
+            for (var i = 0; i < root.childCount; i++)
+                SetLayerRecursively(root.GetChild(i), layer);
         }
     }
 }

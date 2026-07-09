@@ -198,6 +198,63 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(runawayColor, issue.GetComponent<Renderer>().material.color);
         }
 
+        [UnityTest]
+        public IEnumerator IssueObject_OnPathCollision_MergesIntoNextSizeStage()
+        {
+            var fixture = CreatePathFixture();
+            var issueA = CreatePrimitive("Issue A").AddComponent<IssueObject>();
+            var issueB = CreatePrimitive("Issue B").AddComponent<IssueObject>();
+
+            issueA.SetPath(fixture.Path);
+            issueB.SetPath(fixture.Path);
+            issueA.SetSize(1);
+            issueB.SetSize(1);
+
+            issueA.SendMessage("OnTriggerEnter", issueB.GetComponent<Collider>());
+            yield return null;
+
+            Assert.IsTrue(issueA);
+            Assert.IsFalse(issueB);
+            Assert.AreEqual(2f, issueA.ProcessCost);
+            Assert.AreEqual(Vector3.one * 2f, issueA.transform.localScale);
+        }
+
+        [UnityTest]
+        public IEnumerator IssueObject_DirectDestinationCollision_DoesNotMerge()
+        {
+            var fixture = CreatePathFixture();
+            var pathIssue = CreatePrimitive("Path Issue").AddComponent<IssueObject>();
+            var runawayIssue = CreatePrimitive("Runaway Issue").AddComponent<IssueObject>();
+
+            pathIssue.SetPath(fixture.Path);
+            runawayIssue.SetDirectDestination(Vector3.forward);
+            pathIssue.SetSize(1);
+            runawayIssue.SetSize(1);
+
+            pathIssue.SendMessage("OnTriggerEnter", runawayIssue.GetComponent<Collider>());
+            yield return null;
+
+            Assert.IsTrue(pathIssue);
+            Assert.IsTrue(runawayIssue);
+            Assert.AreEqual(1f, pathIssue.ProcessCost);
+            Assert.AreEqual(1f, runawayIssue.ProcessCost);
+        }
+
+        [Test]
+        public void BuffDebuffTile_Awake_IgnoresPointerRaycastsWhileKeepingTrigger()
+        {
+            var tileGo = CreateGameObject("Buff Tile");
+            var childGo = CreateGameObject("Buff Tile Child");
+            var ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+            childGo.transform.SetParent(tileGo.transform);
+
+            tileGo.AddComponent<BuffDebuffTileController>();
+
+            Assert.AreEqual(ignoreRaycastLayer, tileGo.layer);
+            Assert.AreEqual(ignoreRaycastLayer, childGo.layer);
+            Assert.IsTrue(tileGo.GetComponent<Collider>().isTrigger);
+        }
+
         [Test]
         public void SifterPlace_ReturnsNull_WhenSlotIsOutsideBoardNearOccupiedEdge()
         {

@@ -18,6 +18,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private IssueType type;
         [SerializeField] private WaypointPath path;
         [SerializeField] private Renderer issueRenderer;
+        [SerializeField, Min(3)] private int maxMergeSize = 6;
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
         
@@ -51,12 +52,18 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
-            if (TryGetComponent<Rigidbody>(out var rb))
-                rb.isKinematic = true;
+            if (!TryGetComponent<Rigidbody>(out var rb))
+                rb = gameObject.AddComponent<Rigidbody>();
+
+            rb.isKinematic = true;
+            rb.useGravity = false;
+
+            foreach (var issueCollider in GetComponentsInChildren<Collider>())
+                issueCollider.isTrigger = true;
 
             _baseScale = transform.localScale;
             Size = SetRandSize();
-            transform.localScale = _baseScale * Size;
+            ApplySizeVisuals();
             SetMaterialColor();
         }
 
@@ -111,7 +118,7 @@ namespace _project.Scripts.Object_Scripts
                 1 => Color.red,
                 2 => Color.deepSkyBlue,
                 3 => Color.softGreen,
-                _ => throw new ArgumentOutOfRangeException()
+                _ => Color.Lerp(Color.softGreen, Color.magenta, Mathf.InverseLerp(4f, maxMergeSize, Size))
             };
         }
 
@@ -145,7 +152,7 @@ namespace _project.Scripts.Object_Scripts
         public void Process(int power, string processLabel)
         {
             Size = Mathf.Max(0, Size - power);
-            transform.localScale = _baseScale * Size;
+            ApplySizeVisuals();
 
             if (Debugging)
                 Debug.Log($"[IssueObject] {processLabel} — remaining size: {Size}");
@@ -167,7 +174,8 @@ namespace _project.Scripts.Object_Scripts
         public void SetSize(int s)
         {
             Size = Mathf.Max(0, s);
-            transform.localScale = _baseScale * Size;
+            ApplySizeVisuals();
+            SetMaterialColor();
         }
 
         public IssueType GetIssueType() => type;
@@ -179,6 +187,13 @@ namespace _project.Scripts.Object_Scripts
         {
             path = p;
             IsDirectDestination = false;
+        }
+
+        private void OnTriggerEnter(Collider other)
+        {
+            var otherIssue = other.GetComponentInParent<IssueObject>();
+            if (CanMergeWith(otherIssue))
+                Absorb(otherIssue);
         }
 
         public void SetDirectDestination(Vector3 destination)
@@ -217,6 +232,37 @@ namespace _project.Scripts.Object_Scripts
                 issueRenderer = GetComponent<Renderer>();
 
             return issueRenderer;
+        }
+
+        private bool CanMergeWith(IssueObject other)
+        {
+            if (!other || other == this) return false;
+            if (!isActiveAndEnabled || !other.isActiveAndEnabled) return false;
+            if (IsDirectDestination || other.IsDirectDestination) return false;
+            if (!path || path != other.path) return false;
+
+            return true;
+        }
+
+        private void Absorb(IssueObject other)
+        {
+            SetSize(Mathf.Min(Mathf.Max(Size, other.Size) + 1, maxMergeSize));
+            moveSpeed = Mathf.Max(moveSpeed, other.moveSpeed);
+            _waypointIndex = Mathf.Max(_waypointIndex, other._waypointIndex);
+            transform.position = Vector3.Lerp(transform.position, other.transform.position, 0.5f);
+
+            if (Debugging)
+                Debug.Log($"[IssueObject] Merged issues — new size: {Size}");
+
+            // Deactivate before the deferred Destroy so the absorbed issue fails the
+            // isActiveAndEnabled merge check for the rest of this physics pass.
+            other.gameObject.SetActive(false);
+            Destroy(other.gameObject);
+        }
+
+        private void ApplySizeVisuals()
+        {
+            transform.localScale = _baseScale * Size;
         }
 
         public static event Action<IssueObject> OnReachedEnd;
