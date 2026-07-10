@@ -16,9 +16,20 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Absolute move speed applied to an issue that crosses a debuff tile.")]
         [SerializeField] private float debuffMoveSpeed = 1f;
 
+        [Tooltip("Minimum number of path tiles the temporary speed change lasts.")]
+        [SerializeField] [Min(1)] private int minimumTileDuration = 3;
+
+        [Tooltip("Maximum number of path tiles the temporary speed change lasts (inclusive).")]
+        [SerializeField] [Min(1)] private int maximumTileDuration = 4;
+
         public override void Apply(BuffDebuffEffectContext context)
         {
-            context.Issue.SetMoveSpeed(context.Kind == BuffDebuffKind.Buff ? buffMoveSpeed : debuffMoveSpeed);
+            var minimum = Mathf.Max(1, minimumTileDuration);
+            var maximum = Mathf.Max(minimum, maximumTileDuration);
+            var duration = Random.Range(minimum, maximum + 1);
+            var speed = context.Kind == BuffDebuffKind.Buff ? buffMoveSpeed : debuffMoveSpeed;
+
+            context.Issue.SetTemporaryMoveSpeed(speed, duration);
         }
     }
 }

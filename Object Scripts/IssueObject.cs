@@ -46,6 +46,8 @@ namespace _project.Scripts.Object_Scripts
         private int _blockedClickCount;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
+        private float _moveSpeedBeforeTemporaryEffect;
+        private int _temporaryMoveSpeedEndWaypoint = -1;
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
         private int Size { get; set; }
@@ -132,7 +134,10 @@ namespace _project.Scripts.Object_Scripts
             // ADVANCE: If within ~0.1 units of the waypoint (0.01 squared), snap to the next waypoint.
             // Using sqrMagnitude avoids an expensive sqrt — compare squared distances instead
             if (Vector3.SqrMagnitude(transform.position - target) < 0.01f)
+            {
                 _waypointIndex++;
+                RestoreMoveSpeedIfTemporaryEffectExpired();
+            }
         }
 
         private void SetMaterialColor()
@@ -337,6 +342,32 @@ namespace _project.Scripts.Object_Scripts
         public void SetMoveSpeed(float speed)
         {
             moveSpeed = Mathf.Max(0f, speed);
+            _temporaryMoveSpeedEndWaypoint = -1;
+        }
+
+        /// <summary>
+        ///     Temporarily overrides movement speed for a number of path tiles. Reapplying an
+        ///     effect replaces and refreshes the override while preserving the issue's original speed.
+        /// </summary>
+        public void SetTemporaryMoveSpeed(float speed, int tileDuration)
+        {
+            if (tileDuration <= 0 || IsDirectDestination)
+                return;
+
+            if (_temporaryMoveSpeedEndWaypoint < 0)
+                _moveSpeedBeforeTemporaryEffect = moveSpeed;
+
+            moveSpeed = Mathf.Max(0f, speed);
+            _temporaryMoveSpeedEndWaypoint = _waypointIndex + tileDuration;
+        }
+
+        private void RestoreMoveSpeedIfTemporaryEffectExpired()
+        {
+            if (_temporaryMoveSpeedEndWaypoint < 0 || _waypointIndex < _temporaryMoveSpeedEndWaypoint)
+                return;
+
+            moveSpeed = _moveSpeedBeforeTemporaryEffect;
+            _temporaryMoveSpeedEndWaypoint = -1;
         }
 
         public void SetVisualOverride(Color color, Material material = null)
