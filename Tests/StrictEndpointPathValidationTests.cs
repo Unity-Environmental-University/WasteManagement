@@ -220,9 +220,35 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
+        public IEnumerator IssueObject_BlockingMerge_PreservesSurvivorPathPosition()
+        {
+            var fixture = CreatePathFixture();
+            var issueA = CreatePrimitive("Blocking Issue A").AddComponent<IssueObject>();
+            var issueB = CreatePrimitive("Blocking Issue B").AddComponent<IssueObject>();
+            var survivorPosition = new Vector3(2f, 0f, 3f);
+
+            issueA.SetPath(fixture.Path);
+            issueB.SetPath(fixture.Path);
+            issueA.SetSize(3);
+            issueB.SetSize(3);
+            issueA.transform.position = survivorPosition;
+            issueB.transform.position = survivorPosition + new Vector3(0.25f, 0f, 0.25f);
+
+            issueA.SendMessage("OnTriggerEnter", issueB.GetComponent<Collider>());
+            yield return null;
+
+            Assert.IsTrue(issueA.IsBlockingPipe);
+            Assert.AreEqual(survivorPosition.x, issueA.transform.position.x, 0.0001f);
+            Assert.AreEqual(survivorPosition.z, issueA.transform.position.z, 0.0001f);
+        }
+
+        [UnityTest]
         public IEnumerator IssueObject_DirectDestinationCollision_DoesNotMerge()
         {
             var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+
             var pathIssue = CreatePrimitive("Path Issue").AddComponent<IssueObject>();
             var runawayIssue = CreatePrimitive("Runaway Issue").AddComponent<IssueObject>();
 

@@ -376,7 +376,6 @@ namespace _project.Scripts.Object_Scripts
 
             moveSpeed = Mathf.Max(moveSpeed, other.moveSpeed);
             _waypointIndex = Mathf.Max(_waypointIndex, other._waypointIndex);
-            transform.position = Vector3.Lerp(transform.position, other.transform.position, 0.5f);
 
             // Deactivate before the deferred Destroy so the absorbed issue fails the
             // isActiveAndEnabled merge check for the rest of this physics pass.
@@ -396,6 +395,7 @@ namespace _project.Scripts.Object_Scripts
             // An issue that merges up to pipeBlockSize stops in place and clogs the pipe;
             // SetSize starts its blocked-state feedback (burst pulse).
             SetSize(mergedSize);
+            AlignBlockingIssueHeight();
 
             if (Debugging)
                 Debug.Log($"[IssueObject] Merged issues — new size: {Size}, blocking pipe: {IsBlockingPipe}");
@@ -404,6 +404,20 @@ namespace _project.Scripts.Object_Scripts
         private void ApplySizeVisuals()
         {
             transform.localScale = _baseScale * Size;
+        }
+
+        /// <summary>
+        ///     Keeps a newly blocked issue on the pipe surface after its scale changes. Its X/Z
+        ///     position is deliberately preserved: averaging two colliding issues can put a jam
+        ///     between path segments, especially at corners.
+        /// </summary>
+        private void AlignBlockingIssueHeight()
+        {
+            if (!IsBlockingPipe || !path || _waypointIndex >= path.Count) return;
+
+            var position = transform.position;
+            position.y = path.GetPosition(_waypointIndex).y + transform.localScale.y * PathHeight;
+            transform.position = position;
         }
 
         public static event Action<IssueObject> OnReachedEnd;
