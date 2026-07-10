@@ -32,6 +32,18 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
         private Transform endPoint;
 
+        [Header("Live Build Preview")]
+        [Tooltip("Draw the route the pathfinder can currently follow while the player builds.")]
+        [SerializeField] private bool showLivePreview = true;
+
+        [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
+        [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
+        [SerializeField, Min(0.01f)] private float previewWidth = 0.12f;
+        [SerializeField, Min(0f)] private float previewHeightOffset = 0.7f;
+
+        private LineRenderer _livePreview;
+        private PathBuildBoard _subscribedBoard;
+
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
 
@@ -52,6 +64,39 @@ namespace _project.Scripts.Object_Scripts
 
         public bool IsValid { get; private set; }
         public string InvalidReason { get; private set; }
+
+        private void OnEnable()
+        {
+            BindBoardEvents();
+            RefreshLivePreview();
+        }
+
+        private void Update()
+        {
+            // Also handles references assigned after this component is enabled.
+            BindBoardEvents();
+        }
+
+        private void OnDisable()
+        {
+            if (_subscribedBoard)
+                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
+            _subscribedBoard = null;
+        }
+
+        private void BindBoardEvents()
+        {
+            if (_subscribedBoard == pathBuildBoard) return;
+
+            if (_subscribedBoard)
+                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
+
+            _subscribedBoard = pathBuildBoard;
+            if (_subscribedBoard)
+                _subscribedBoard.PathLayoutChanged += RefreshLivePreview;
+
+            RefreshLivePreview();
+        }
 
         /// <summary>
         ///     Draws the route as gizmos in the Scene view:
@@ -170,7 +215,152 @@ namespace _project.Scripts.Object_Scripts
             _waypoints.Add(endPoint.position);
             IsValid = true;
             InvalidReason = null;
+            RefreshLivePreview();
             return true;
+        }
+
+        /// <summary>
+        ///     Draws the route available right now in the Game view. A complete route uses
+        ///     the normal BFS result. An incomplete route uses the same search and ends at
+        ///     the reachable cell with the smallest grid distance to the goal.
+        /// </summary>
+        public void RefreshLivePreview()
+        {
+            var renderer = GetLivePreviewRenderer();
+            if (!renderer) return;
+
+            renderer.enabled = false;
+            renderer.positionCount = 0;
+            if (!showLivePreview || !pathBuildBoard || !startPoint || !endPoint) return;
+
+            var starts = GetOccupiedEndpointNeighbors(startPoint);
+            if (starts.Count == 0) return;
+
+            var goals = GetOccupiedEndpointNeighbors(endPoint);
+            var previewCells = FindPreviewPath(starts, goals, out var complete);
+            if (previewCells == null || previewCells.Count == 0) return;
+
+            var pointCount = previewCells.Count + 1 + (complete ? 1 : 0);
+            renderer.positionCount = pointCount;
+            renderer.SetPosition(0, GetPreviewPosition(startPoint.position));
+            for (var i = 0; i < previewCells.Count; i++)
+                renderer.SetPosition(i + 1,
+                    GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(previewCells[i])));
+            if (complete)
+                renderer.SetPosition(pointCount - 1, GetPreviewPosition(endPoint.position));
+
+            var color = complete ? completePreviewColor : incompletePreviewColor;
+            renderer.startColor = color;
+            renderer.endColor = color;
+            renderer.enabled = true;
+        }
+
+        private Vector3 GetPreviewPosition(Vector3 worldPosition)
+        {
+            var up = pathBuildBoard ? pathBuildBoard.transform.up : Vector3.up;
+            return worldPosition + up * previewHeightOffset;
+        }
+
+        private LineRenderer GetLivePreviewRenderer()
+        {
+            if (_livePreview) return _livePreview;
+            if (!showLivePreview) return null;
+
+            var previewObject = pathBuildBoard
+                ? pathBuildBoard.transform.Find("Live Path Preview")
+                : null;
+            if (!previewObject && pathBuildBoard)
+            {
+                var child = new GameObject("Live Path Preview");
+                child.transform.SetParent(pathBuildBoard.transform, false);
+                previewObject = child.transform;
+            }
+
+            if (!previewObject) return null;
+            _livePreview = previewObject.GetComponent<LineRenderer>();
+            if (!_livePreview) _livePreview = previewObject.gameObject.AddComponent<LineRenderer>();
+            _livePreview.useWorldSpace = true;
+            _livePreview.loop = false;
+            _livePreview.startWidth = previewWidth;
+            _livePreview.endWidth = previewWidth;
+            _livePreview.numCapVertices = 4;
+            _livePreview.numCornerVertices = 4;
+            _livePreview.textureMode = LineTextureMode.Stretch;
+            if (!_livePreview.sharedMaterial)
+            {
+                var shader = Shader.Find("Sprites/Default");
+                if (shader) _livePreview.sharedMaterial = new Material(shader);
+            }
+            return _livePreview;
+        }
+
+        private List<Vector2Int> FindPreviewPath(
+            IReadOnlyList<Vector2Int> starts,
+            IReadOnlyCollection<Vector2Int> goals,
+            out bool complete)
+        {
+            complete = false;
+            var goalSet = goals as HashSet<Vector2Int> ?? new HashSet<Vector2Int>(goals);
+            var targetCell = pathBuildBoard.ClampToOutsideRing(pathBuildBoard.WorldToCellUnclamped(endPoint.position));
+            var frontier = new Queue<Vector2Int>();
+            var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+            var best = starts[0];
+            var bestDistance = GridDistance(best, targetCell);
+
+            foreach (var start in starts)
+            {
+                if (cameFrom.ContainsKey(start)) continue;
+                frontier.Enqueue(start);
+                cameFrom[start] = start;
+            }
+
+            var directions = new[]
+            {
+                new Vector2Int(1, 0), new Vector2Int(-1, 0),
+                new Vector2Int(0, 1), new Vector2Int(0, -1)
+            };
+
+            while (frontier.Count > 0)
+            {
+                var current = frontier.Dequeue();
+                var distance = GridDistance(current, targetCell);
+                if (distance < bestDistance)
+                {
+                    best = current;
+                    bestDistance = distance;
+                }
+
+                if (goalSet.Contains(current))
+                {
+                    best = current;
+                    complete = true;
+                    break;
+                }
+
+                foreach (var direction in directions)
+                {
+                    var next = current + direction;
+                    if (cameFrom.ContainsKey(next) || !pathBuildBoard.IsOccupied(next)) continue;
+                    cameFrom[next] = current;
+                    frontier.Enqueue(next);
+                }
+            }
+
+            var path = new List<Vector2Int>();
+            var node = best;
+            while (cameFrom[node] != node)
+            {
+                path.Add(node);
+                node = cameFrom[node];
+            }
+            path.Add(node);
+            path.Reverse();
+            return path;
+        }
+
+        private static int GridDistance(Vector2Int a, Vector2Int b)
+        {
+            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
         }
 
         // ============================================================

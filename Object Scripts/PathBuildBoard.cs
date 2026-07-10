@@ -32,6 +32,12 @@ namespace _project.Scripts.Object_Scripts
     /// </summary>
     public class PathBuildBoard : MonoBehaviour
     {
+        /// <summary>
+        ///     Raised whenever the occupied-cell graph changes. Runtime path previews can
+        ///     subscribe to this instead of rebuilding every frame.
+        /// </summary>
+        public event Action PathLayoutChanged;
+
         [Header("Grid")] [SerializeField] private int columns = 10;
 
         [SerializeField] private int rows = 10;
@@ -95,6 +101,7 @@ namespace _project.Scripts.Object_Scripts
                 BuildGridIfNeeded();
 
             RefreshVisuals();
+            NotifyPathLayoutChanged();
         }
 
         /// <summary>
@@ -204,6 +211,7 @@ namespace _project.Scripts.Object_Scripts
             _highlightedPieceId = 0;
             BuildGridIfNeeded();
             RefreshVisuals();
+            NotifyPathLayoutChanged();
         }
 
         /// <summary>
@@ -316,6 +324,7 @@ namespace _project.Scripts.Object_Scripts
             UpdatePipeVisual(placedVisual, footprint, piece.Orientation, placedPipeColor);
             HidePreviewVisual();
             RefreshVisuals();
+            NotifyPathLayoutChanged();
             return anchorCell.gameObject;
         }
 
@@ -356,7 +365,19 @@ namespace _project.Scripts.Object_Scripts
             _placedVisuals.Remove(piece.id);
             _placedPieces.RemoveAt(pieceIndex);
             RefreshVisuals();
+            NotifyPathLayoutChanged();
             return true;
+        }
+
+        private void NotifyPathLayoutChanged()
+        {
+            PathLayoutChanged?.Invoke();
+
+            // Waypoint containers in existing scenes are intentionally inactive. Unity does
+            // not invoke OnEnable on those components, but their paths are still used by the
+            // spawners. Refresh them explicitly so their board-hosted preview remains live.
+            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
+                path.RefreshLivePreview();
         }
 
         /// <summary>
