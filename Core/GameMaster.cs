@@ -30,7 +30,14 @@ namespace _project.Scripts.Core
         public CardController selectedCard;
         public List<EntitySpawner> entitySpawners;
         public IPlaceable PendingPlacement => placementInventory ? placementInventory.SelectedItem : null;
-        
+
+        /// <summary>Finishes the current placement: consumes the selected item, clears any active path tool, and registers a move.</summary>
+        public void CompletePlacement()
+        {
+            placementInventory.ConsumeSelected();
+            pathBuildBoard?.ClearActivePiece();
+            if (turnController) turnController.RegisterMove();
+        }
 
         public static GameMaster Instance { get; private set; }
 

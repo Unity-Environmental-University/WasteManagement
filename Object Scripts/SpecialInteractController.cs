@@ -108,9 +108,7 @@ namespace _project.Scripts.Object_Scripts
             _isOccupied = true;
             _isHovered = false;
             var gm = GameMaster.Instance;
-            gm.placementInventory.ConsumeSelected();
-            gm.pathBuildBoard?.ClearActivePiece();
-            if (gm.turnController) gm.turnController.RegisterMove();
+            gm.CompletePlacement();
             gm.turnController.infrastructureValue += pending.InfraValue;
             gm.interfaceManager?.RefreshStinkMeter();
             RefreshInteractionState();
@@ -119,7 +117,7 @@ namespace _project.Scripts.Object_Scripts
 
         private bool CanAccept(IPlaceable item)
         {
-            if (item == null || item.PlaceableType == PlaceableType.Path)
+            if (item == null || item.PlaceableType == PlaceableType.Path || item.PlaceableType == PlaceableType.Targeted)
                 return false;
 
             return acceptedType == PlaceableType.Any || acceptedType == item.PlaceableType;
