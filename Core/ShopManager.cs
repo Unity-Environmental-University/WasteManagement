@@ -42,6 +42,15 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject cesspitPrefab;
         [SerializeField] private Sprite cesspitSprite;
 
+        [Header("Cesspit Cap Item")] [SerializeField]
+        private bool offerCesspitCap = true;
+
+        [SerializeField] private string cesspitCapDisplayName = "Cesspit Cap";
+        [SerializeField] private string cesspitCapDescription =
+            "Select, then click a cesspit to seal it and permanently stop runaways.";
+        [SerializeField] private int cesspitCapRequiredLevel = 1;
+        [SerializeField] private Sprite cesspitCapSprite;
+
         [Header("Treatment Tank Item")] [SerializeField]
         private string treatmentTankDisplayName = "Treatment Tank";
 
@@ -242,6 +251,10 @@ namespace _project.Scripts.Core
             if (cesspitPrefab)
                 yield return new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
                     cesspitPrefab, cesspitSprite, cesspitInfraValue);
+
+            if (offerCesspitCap)
+                yield return new CesspitCapShopItem(cesspitCapDisplayName, cesspitCapDescription,
+                    cesspitCapRequiredLevel, cesspitCapSprite);
 
             if (treatmentTankPrefab)
                 yield return new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,

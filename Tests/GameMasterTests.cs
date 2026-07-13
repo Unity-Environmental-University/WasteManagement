@@ -112,6 +112,30 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(second, inventory.SelectedItem);
         }
 
+        [Test]
+        public void CesspitCap_PurchaseThenClickSealsOnlySelectedCesspit()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var first = CreateGameObject("First Cesspit").AddComponent<Cesspit>();
+            var second = CreateGameObject("Second Cesspit").AddComponent<Cesspit>();
+            first.maxFullness = 10f;
+            first.fullness = 10f;
+            second.maxFullness = 20f;
+            second.fullness = 7f;
+            var cap = new CesspitCapShopItem("Cesspit Cap", "", 1, null);
+
+            cap.Purchase();
+            first.OnPointerClick(null);
+
+            Assert.IsTrue(first.IsSealed);
+            Assert.IsFalse(second.IsSealed);
+            Assert.AreEqual(10f, first.fullness, "Sealing should not drain the cesspit.");
+            Assert.AreEqual(7f, second.fullness);
+            Assert.IsNull(gameMaster.PendingPlacement);
+            Assert.IsNull(cap.Place(first.transform), "A cap cannot be placed on the path or an empty slot.");
+            Assert.AreEqual(0, cap.InfraValue);
+        }
+
         private GameObject CreateGameObject(string name)
         {
             var go = new GameObject(name);

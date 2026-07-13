@@ -35,7 +35,9 @@ namespace _project.Scripts.Core
         Tower = 0,
         Utility = 1,
         Any = 2,
-        Path = 3
+        Path = 3,
+        /// <summary>Consumed by clicking a target object directly; never placed via a board cell or utility slot.</summary>
+        Targeted = 4
     }
 
     [Serializable]
@@ -89,6 +91,33 @@ namespace _project.Scripts.Core
         {
             GameMaster.Instance.deckManager.AddCard(_card.Clone());
         }
+    }
+
+    public class CesspitCapShopItem : IPlaceable
+    {
+        public CesspitCapShopItem(string displayName, string description, int requiredLevel, Sprite displaySprite)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public int InfraValue => 0;
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Targeted;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        // Caps are applied by clicking a Cesspit, never by a board or utility slot.
+        public GameObject Place(Transform location) => null;
     }
 
     public class TowerShopItem : IPlaceable

@@ -3,11 +3,12 @@ using System.Linq;
 using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Serialization;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class Cesspit : MonoBehaviour, IStinkSource
+    public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler
     { 
         [SerializeField] private int processPower = 3;
         [SerializeField] private GameObject runawayPrefab;
@@ -20,7 +21,18 @@ namespace _project.Scripts.Object_Scripts
         [Header("Stink")]
         [SerializeField] private float baseStink = 1f;
         [SerializeField] private float fullStinkBonus = 2f;
-        
+
+        [Header("Fill Visual")]
+        [SerializeField] private Transform fillVisual;
+        [SerializeField] private Renderer fillRenderer;
+        [SerializeField] private Color emptyFillColor = new(0.42f, 0.45f, 0.2f);
+        [SerializeField] private Color fullFillColor = new(0.3f, 0.18f, 0.08f);
+        [SerializeField] private float minFillHeight = 0.03f;
+        [SerializeField] private float maxFillHeight = 0.45f;
+
+        [Header("Seal")]
+        [SerializeField] private GameObject sealedVisual;
+
         [FormerlySerializedAs("healthBar")] public HealthBar fullnessBar;
         [FormerlySerializedAs("maxHealth")] public float maxFullness;
         [FormerlySerializedAs("health")] public float fullness;
@@ -29,8 +41,11 @@ namespace _project.Scripts.Object_Scripts
         private Coroutine _runawayCoroutine;
         private SpecialInteractController _slot;
         private int _infraValue;
+        private bool _isSealed;
+        private Material _fillMaterial;
 
         public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus);
+        public bool IsSealed => _isSealed;
         
         private void OnEnable()
         {
@@ -51,7 +66,9 @@ namespace _project.Scripts.Object_Scripts
             ResolveRunawayReferences();
 
             if (fullnessBar) fullnessBar.gameObject.SetActive(true);
+            if (sealedVisual) sealedVisual.SetActive(_isSealed);
             UpdateFullnessBar();
+            UpdateFillVisual();
 
             if (IsFull)
                 StartRunaways();
@@ -61,10 +78,30 @@ namespace _project.Scripts.Object_Scripts
         {
             fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
             UpdateFullnessBar();
+            UpdateFillVisual();
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
 
             if (IsFull)
                 StartRunaways();
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (_isSealed) return;
+
+            var gm = GameMaster.Instance;
+            if (!gm || gm.PendingPlacement is not CesspitCapShopItem) return;
+
+            Seal();
+            gm.CompletePlacement();
+        }
+
+        private void Seal()
+        {
+            PauseRunaways();
+            _spawningRunaways = false;
+            _isSealed = true;
+            if (sealedVisual) sealedVisual.SetActive(true);
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
@@ -96,9 +133,32 @@ namespace _project.Scripts.Object_Scripts
             if (fullnessBar) fullnessBar.SetValue(fullness, maxFullness);
         }
 
+        private void UpdateFillVisual()
+        {
+            var ratio = FullnessRatio;
+
+            if (fillVisual)
+            {
+                var scale = fillVisual.localScale;
+                scale.y = Mathf.Lerp(minFillHeight, maxFillHeight, ratio);
+                fillVisual.localScale = scale;
+
+                // Cylinder mesh spans ±scale.y; keep the sludge anchored to the pit's top face (local y = 1)
+                var pos = fillVisual.localPosition;
+                pos.y = 1f + scale.y;
+                fillVisual.localPosition = pos;
+            }
+
+            if (fillRenderer)
+            {
+                _fillMaterial ??= fillRenderer.material;
+                _fillMaterial.color = Color.Lerp(emptyFillColor, fullFillColor, ratio);
+            }
+        }
+
         private void StartRunaways()
         {
-            if (_spawningRunaways)
+            if (_isSealed || _spawningRunaways)
                 return;
 
             _spawningRunaways = true;
@@ -121,7 +181,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void ResumeRunaways()
         {
-            if (!_spawningRunaways) return;
+            if (_isSealed || !_spawningRunaways) return;
             if (_runawayCoroutine != null) return;
 
             _runawayCoroutine = StartCoroutine(SpawnRunaway());
