@@ -87,13 +87,20 @@ namespace _project.Scripts.Object_Scripts
 
         public void OnPointerClick(PointerEventData eventData)
         {
-            if (_isSealed) return;
-
             var gm = GameMaster.Instance;
-            if (!gm || gm.PendingPlacement is not CesspitCapShopItem) return;
+            if (!gm) return;
 
-            Seal();
-            gm.CompletePlacement();
+            switch (gm.PendingPlacement)
+            {
+                case CesspitCapShopItem when !_isSealed:
+                    Seal();
+                    gm.CompletePlacement();
+                    break;
+                case BuryCesspitShopItem:
+                    Bury();
+                    gm.CompletePlacement();
+                    break;
+            }
         }
 
         private void Seal()
@@ -102,6 +109,23 @@ namespace _project.Scripts.Object_Scripts
             _spawningRunaways = false;
             _isSealed = true;
             if (sealedVisual) sealedVisual.SetActive(true);
+        }
+
+        /// <summary>Demolishes this cesspit: frees its slot, leaves a debuff tile on the cell, and destroys the object.</summary>
+        private void Bury()
+        {
+            PauseRunaways();
+            _spawningRunaways = false;
+
+            if (_slot) _slot.ClearOccupied(_infraValue);
+
+            var tileSpawner = FindAnyObjectByType<BuffDebuffTileSpawner>();
+            if (tileSpawner)
+                tileSpawner.SpawnDebuffTileAt(transform.position);
+            else
+                Debug.LogWarning("[Cesspit] No BuffDebuffTileSpawner in scene; buried cesspit left no debuff tile.");
+
+            Destroy(gameObject);
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)

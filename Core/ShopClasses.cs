@@ -120,6 +120,33 @@ namespace _project.Scripts.Core
         public GameObject Place(Transform location) => null;
     }
 
+    public class BuryCesspitShopItem : IPlaceable
+    {
+        public BuryCesspitShopItem(string displayName, string description, int requiredLevel, Sprite displaySprite)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            DisplaySprite = displaySprite;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public int InfraValue => 0;
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Targeted;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        // Burials are applied by clicking a Cesspit, never by a board or utility slot.
+        public GameObject Place(Transform location) => null;
+    }
+
     public class TowerShopItem : IPlaceable
     {
         private readonly GameObject _prefab;

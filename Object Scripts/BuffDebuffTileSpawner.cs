@@ -70,6 +70,32 @@ namespace _project.Scripts.Object_Scripts
                 Debug.Log($"[BuffDebuffTileSpawner] Spawned {_spawnedTiles.Count} buff/debuff tiles.");
         }
 
+        /// <summary>
+        ///     Spawns a single debuff tile snapped to the board cell containing
+        ///     <paramref name="worldPosition" /> (e.g., where a cesspit was just buried).
+        /// </summary>
+        public BuffDebuffTileController SpawnDebuffTileAt(Vector3 worldPosition)
+        {
+            if (!board) board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+
+            if (!board)
+            {
+                Debug.LogWarning("[BuffDebuffTileSpawner] Missing board; skipping.");
+                return null;
+            }
+
+            var cell = board.WorldToCell(worldPosition);
+            var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
+
+            var controller = CreateTile(position);
+            controller.gameObject.name = $"BuffDebuffTile ({cell.x},{cell.y})";
+            controller.SetKind(BuffDebuffKind.Debuff);
+            controller.SetEffect(PickRandomEffect());
+
+            _spawnedTiles.Add(controller.gameObject);
+            return controller;
+        }
+
         private BuffDebuffTileController CreateTile(Vector3 position)
         {
             if (tilePrefab)
