@@ -407,6 +407,26 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
+        public IEnumerator EndPhase_TowerToSummary_StopsCesspitRunawaysImmediately()
+        {
+            var fixture = CreateTurnFixture(true);
+            var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
+            cesspit.maxFullness = 1f;
+            cesspit.fullness = 1f;
+
+            yield return null;
+            fixture.TurnController.EndPhase();
+
+            Assert.IsNotNull(GetField<Coroutine>(cesspit, "_runawayCoroutine"));
+            Assert.IsNotNull(GetField<Coroutine>(fixture.Spawner, "_spawnCoroutine"));
+
+            fixture.TurnController.EndPhase();
+
+            Assert.IsNull(GetField<Coroutine>(cesspit, "_runawayCoroutine"));
+            Assert.IsNull(GetField<Coroutine>(fixture.Spawner, "_spawnCoroutine"));
+        }
+
+        [UnityTest]
         public IEnumerator Cesspit_UsesIssuePathDestinationForRunaways()
         {
             var fixture = CreateTurnFixture(true);
