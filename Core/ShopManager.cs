@@ -51,6 +51,17 @@ namespace _project.Scripts.Core
         [SerializeField] private int cesspitCapRequiredLevel = 1;
         [SerializeField] private Sprite cesspitCapSprite;
 
+        [Header("Bury Cesspit Item")] [SerializeField]
+        private bool offerBuryCesspit = true;
+
+        [SerializeField] private string buryCesspitDisplayName = "Bury Cesspit";
+
+        [SerializeField] private string buryCesspitDescription =
+            "Select, then click a cesspit to demolish it, leaving a debuff tile on its cell.";
+
+        [SerializeField] private int buryCesspitRequiredLevel = 3;
+        [SerializeField] private Sprite buryCesspitSprite;
+
         [Header("Treatment Tank Item")] [SerializeField]
         private string treatmentTankDisplayName = "Treatment Tank";
 
@@ -255,6 +266,10 @@ namespace _project.Scripts.Core
             if (offerCesspitCap)
                 yield return new CesspitCapShopItem(cesspitCapDisplayName, cesspitCapDescription,
                     cesspitCapRequiredLevel, cesspitCapSprite);
+
+            if (offerBuryCesspit)
+                yield return new BuryCesspitShopItem(buryCesspitDisplayName, buryCesspitDescription,
+                    buryCesspitRequiredLevel, buryCesspitSprite);
 
             if (treatmentTankPrefab)
                 yield return new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,
