@@ -44,8 +44,10 @@ namespace _project.Scripts.Object_Scripts
 
         public void StopSpawner()
         {
-            if (_spawnCoroutine != null)
-                StopCoroutine(_spawnCoroutine);
+            if (_spawnCoroutine == null) return;
+
+            StopCoroutine(_spawnCoroutine);
+            _spawnCoroutine = null;
         }
 
         public bool ValidatePath(out string reason)

@@ -25,6 +25,7 @@ namespace _project.Scripts.Core
         private GameMaster _gm = GameMaster.Instance;
         private bool _gameLost;
         private bool _waitingForPostRoundContinue;
+        private Coroutine _waveCoroutine;
         private static TurnController Instance { get; set; }
 
         private void Awake()
@@ -138,6 +139,9 @@ namespace _project.Scripts.Core
         {
             if (_waitingForPostRoundContinue) return;
 
+            StopWaveTimer();
+            StopAllSpawners();
+
             var summary = BuildPostRoundSummary();
             _waitingForPostRoundContinue = true;
 
@@ -221,7 +225,7 @@ namespace _project.Scripts.Core
             foreach (var s in _gm.entitySpawners.Where(s => s))
                 s.StartSpawner(spawnRateMultiplier);
 
-            StartCoroutine(WaveTimer(scaledWaveDuration));
+            _waveCoroutine = StartCoroutine(WaveTimer(scaledWaveDuration));
 
             Debug.Log($"Beginning Wave! Duration: {scaledWaveDuration:F1}s, spawn rate: x{spawnRateMultiplier:F2}");
         }
@@ -259,6 +263,7 @@ namespace _project.Scripts.Core
             currentTurn++;
             if (_gm.debugging) Debug.Log("[TurnController] Wave ended.");
 
+            _waveCoroutine = null;
             EndPhase();
         }
 
@@ -267,7 +272,7 @@ namespace _project.Scripts.Core
             if (_gameLost) return;
 
             _gameLost = true;
-            StopAllCoroutines();
+            StopWaveTimer();
             StopAllSpawners();
 
             var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
@@ -282,6 +287,14 @@ namespace _project.Scripts.Core
 
             foreach (var cesspit in FindObjectsByType<Cesspit>(FindObjectsInactive.Exclude))
                 cesspit.StopRunaways();
+        }
+
+        private void StopWaveTimer()
+        {
+            if (_waveCoroutine == null) return;
+
+            StopCoroutine(_waveCoroutine);
+            _waveCoroutine = null;
         }
     }
 }
