@@ -125,6 +125,9 @@ namespace _project.Scripts.Object_Scripts
             else
                 Debug.LogWarning("[Cesspit] No BuffDebuffTileSpawner in scene; buried cesspit left no debuff tile.");
 
+            // Destroy() defers OnDisable to end of frame; unregister now so the refresh excludes this pit's stink
+            StinkSourceRegistry.Unregister(this);
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
             Destroy(gameObject);
         }
 
