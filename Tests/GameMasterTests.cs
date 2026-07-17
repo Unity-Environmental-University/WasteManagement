@@ -136,6 +136,24 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, cap.InfraValue);
         }
 
+        [Test]
+        public void BuryCesspit_PurchaseThenClickConsumesPlacement_WhenCesspitIsSealed()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
+            var cap = new CesspitCapShopItem("Cesspit Cap", "", 1, null);
+            var burial = new BuryCesspitShopItem("Bury Cesspit", "", 1, null);
+
+            cap.Purchase();
+            cesspit.OnPointerClick(null);
+            Assert.IsTrue(cesspit.IsSealed);
+
+            burial.Purchase();
+            cesspit.OnPointerClick(null);
+
+            Assert.IsNull(gameMaster.PendingPlacement);
+        }
+
         private GameObject CreateGameObject(string name)
         {
             var go = new GameObject(name);
