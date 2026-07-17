@@ -69,6 +69,12 @@ namespace _project.Scripts.Object_Scripts
         private IEnumerator BreakSifter()
         {
             _isBreaking = true;
+
+            // A broken sifter stops interacting entirely; disabling the colliders covers
+            // every physics callback at once instead of guarding each handler.
+            foreach (var col in GetComponentsInChildren<Collider>())
+                col.enabled = false;
+
             yield return new WaitForSeconds(4f);
             _slot?.ClearOccupied(_infraValue);
             if (healthBar) healthBar.gameObject.SetActive(false);
