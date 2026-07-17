@@ -16,11 +16,14 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
-            spawnPoint = spawnPoint?.transform;
+            if (!spawnPoint) spawnPoint = transform;
         }
 
         public bool StartSpawner(float spawnRateMultiplier = 1f)
         {
+            // Restart semantics: never let a previous spawn loop keep running unreferenced.
+            StopSpawner();
+
             if (!path)
             {
                 Debug.LogWarning("Cannot start spawner: no waypoint path assigned.");
