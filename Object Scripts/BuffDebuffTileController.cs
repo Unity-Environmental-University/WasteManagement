@@ -78,6 +78,11 @@ namespace _project.Scripts.Object_Scripts
 
         public void SetKind(BuffDebuffKind newKind)
         {
+            // A tile that changes identity may affect each issue once more (e.g., a buff
+            // flipped to a debuff when a cesspit is buried on its cell).
+            if (kind != newKind)
+                _affectedIssueIds.Clear();
+
             kind = newKind;
             ApplyColor();
         }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using _project.Scripts.Core;
 using UnityEngine;
 
@@ -33,7 +34,7 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Board to scatter tiles across. Falls back to GameMaster.Instance.pathBuildBoard.")]
         [SerializeField] private PathBuildBoard board;
 
-        private readonly List<GameObject> _spawnedTiles = new();
+        private readonly List<BuffDebuffTileController> _spawnedTiles = new();
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
 
         private void Start()
@@ -55,15 +56,18 @@ namespace _project.Scripts.Object_Scripts
 
             foreach (var cell in GridSamplingHelper.PickUniqueRandomCells(board, tileCount))
             {
+                // One tile per cell: PickUniqueRandomCells only dedupes within this batch,
+                // so skip cells that already hold a tile from an earlier scatter or burial.
+                if (FindTileAt(cell)) continue;
+
                 var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
 
                 var controller = CreateTile(position);
-                var tile = controller.gameObject;
-                tile.name = $"BuffDebuffTile ({cell.x},{cell.y})";
+                controller.gameObject.name = $"BuffDebuffTile ({cell.x},{cell.y})";
                 controller.SetKind(Random.value < 0.5f ? BuffDebuffKind.Buff : BuffDebuffKind.Debuff);
                 controller.SetEffect(PickRandomEffect());
 
-                _spawnedTiles.Add(tile);
+                _spawnedTiles.Add(controller);
             }
 
             if (Debugging)
@@ -85,6 +89,17 @@ namespace _project.Scripts.Object_Scripts
             }
 
             var cell = board.WorldToCell(worldPosition);
+
+            // One tile per cell: if the cell already has a tile, flip it to a debuff
+            // instead of stacking a second tile (and second trigger) on top of it.
+            var existing = FindTileAt(cell);
+            if (existing)
+            {
+                existing.SetKind(BuffDebuffKind.Debuff);
+                existing.SetEffect(PickRandomEffect());
+                return existing;
+            }
+
             var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
 
             var controller = CreateTile(position);
@@ -92,8 +107,16 @@ namespace _project.Scripts.Object_Scripts
             controller.SetKind(BuffDebuffKind.Debuff);
             controller.SetEffect(PickRandomEffect());
 
-            _spawnedTiles.Add(controller.gameObject);
+            _spawnedTiles.Add(controller);
             return controller;
+        }
+
+        // Scans every tile in the scene, not just _spawnedTiles, so tiles owned by another
+        // spawner or dropped into the scene by hand still count toward one-tile-per-cell.
+        private BuffDebuffTileController FindTileAt(Vector2Int cell)
+        {
+            return FindObjectsByType<BuffDebuffTileController>()
+                .FirstOrDefault(tile => board.WorldToCell(tile.transform.position) == cell);
         }
 
         private BuffDebuffTileController CreateTile(Vector3 position)
@@ -121,7 +144,8 @@ namespace _project.Scripts.Object_Scripts
         public void ClearSpawnedTiles()
         {
             for (var i = _spawnedTiles.Count - 1; i >= 0; i--)
-                SafeDestroy(_spawnedTiles[i]);
+                if (_spawnedTiles[i])
+                    SafeDestroy(_spawnedTiles[i].gameObject);
 
             _spawnedTiles.Clear();
         }
