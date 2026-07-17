@@ -201,7 +201,12 @@ namespace _project.Scripts.Tests
         [UnityTest]
         public IEnumerator IssueObject_OnPathCollision_MergesIntoNextSizeStage()
         {
+            // The merged issue stays below pipeBlockSize, so it keeps moving after the merge —
+            // it needs a real path or its first Update treats the empty path as "reached the end".
             var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+
             var issueA = CreatePrimitive("Issue A").AddComponent<IssueObject>();
             var issueB = CreatePrimitive("Issue B").AddComponent<IssueObject>();
 
