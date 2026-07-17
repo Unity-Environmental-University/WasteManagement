@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -34,14 +36,39 @@ namespace _project.Scripts.Object_Scripts
         // Issues already affected by this tile, so the effect fires at most once per issue.
         private readonly HashSet<EntityId> _affectedIssueIds = new();
 
+        // Scene whose PhysicsRaycasters have already had the Ignore Raycast layer stripped.
+        private static SceneHandle _raycastersPatchedSceneHandle;
+
         public BuffDebuffKind Kind => kind;
 
         private void Awake()
         {
             if (ignorePointerRaycasts)
+            {
                 SetLayerRecursively(transform, LayerMask.NameToLayer("Ignore Raycast"));
+                ExcludeLayerFromPointerRaycasters();
+            }
 
             EnsureTriggerCollider();
+        }
+
+        /// <summary>
+        ///     The Ignore Raycast layer only exempts objects from default-mask physics queries;
+        ///     PhysicsRaycaster defaults to Everything, so pointer events would still hit this
+        ///     tile's tall trigger and swallow clicks meant for a slot sharing the cell. Strip
+        ///     the layer from every raycaster's event mask (including the inactive phase camera).
+        ///     Runs once per scene load; a PhysicsRaycaster instantiated after that is not
+        ///     covered and must exclude the layer itself.
+        /// </summary>
+        private static void ExcludeLayerFromPointerRaycasters()
+        {
+            var sceneHandle = SceneManager.GetActiveScene().handle;
+            if (_raycastersPatchedSceneHandle.Equals(sceneHandle)) return;
+            _raycastersPatchedSceneHandle = sceneHandle;
+
+            var mask = ~(1 << LayerMask.NameToLayer("Ignore Raycast"));
+            foreach (var raycaster in FindObjectsByType<PhysicsRaycaster>(FindObjectsInactive.Include))
+                raycaster.eventMask &= mask;
         }
 
         private void Start()
