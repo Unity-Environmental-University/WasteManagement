@@ -51,12 +51,25 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnTriggerEnter(Collider other)
         {
+            TryTreatIssue(other);
+        }
+
+        private void OnTriggerStay(Collider other)
+        {
+            // A pipe-blocking issue can be clicked back to a movable size while it is already
+            // inside the tank trigger. OnTriggerEnter will not fire again in that case.
+            TryTreatIssue(other);
+        }
+
+        private void TryTreatIssue(Collider other)
+        {
             if (!other.gameObject.CompareTag("IssueObject")) return;
             if (IsFull) return; // Pass-through when full — do not consume
 
             var issue = other.GetComponent<IssueObject>();
             if (issue == null) return;
             if (issue.IsDirectDestination) return;
+            if (issue.IsBlockingPipe) return; // Jams stay on the pipe for the player to click apart
             if (!issue.TryRegisterSifter(GetEntityId())) return;
 
             var spawnPos = issue.transform.position;
