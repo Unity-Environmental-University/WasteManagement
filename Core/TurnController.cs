@@ -105,16 +105,15 @@ namespace _project.Scripts.Core
             var top = _gm.topDownCamera;
             var main = _gm.mainCamera;
 
-            if (main.isActiveAndEnabled)
+            if (!top || !main)
             {
-                main.gameObject.SetActive(false);
-                top.gameObject.SetActive(true);
+                Debug.LogWarning("[TurnController] Missing camera reference; cannot switch cameras.");
+                return;
             }
-            else if (top.isActiveAndEnabled)
-            {
-                top.gameObject.SetActive(false);
-                main.gameObject.SetActive(true);
-            }
+
+            var isCardPhase = currentPhase == GamePhase.Card;
+            main.gameObject.SetActive(!isCardPhase);
+            top.gameObject.SetActive(isCardPhase);
         }
 
         public void EndPhase()
@@ -214,16 +213,17 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Tower;
             OnTowerPhaseEntered?.Invoke();
             SwitchCamera();
-            _gm.placementInventory.ClearSelection();
+            _gm.placementInventory?.ClearSelection();
             if (_gm.pathBuildBoard) _gm.pathBuildBoard.ClearActivePiece();
-            _gm.interfaceManager.ClearHand();
-            _gm.interfaceManager.HidePrepUI();
+            _gm.interfaceManager?.ClearHand();
+            _gm.interfaceManager?.HidePrepUI();
             var spawnRateMultiplier = _gm.popManager ? _gm.popManager.GetIssueSpawnRateMultiplier() : 1f;
             var scaledWaveDuration = _gm.popManager
                 ? _gm.popManager.GetScaledWaveDuration(waveDuration)
                 : Mathf.Max(0f, waveDuration);
-            foreach (var s in _gm.entitySpawners.Where(s => s))
-                s.StartSpawner(spawnRateMultiplier);
+            if (_gm.entitySpawners != null)
+                foreach (var s in _gm.entitySpawners.Where(s => s))
+                    s.StartSpawner(spawnRateMultiplier);
 
             _waveCoroutine = StartCoroutine(WaveTimer(scaledWaveDuration));
 
@@ -283,7 +283,9 @@ namespace _project.Scripts.Core
 
         private void StopAllSpawners()
         {
-            foreach (var spawner in _gm.entitySpawners.Where(spawner => spawner)) spawner.StopSpawner();
+            if (_gm.entitySpawners != null)
+                foreach (var spawner in _gm.entitySpawners.Where(spawner => spawner))
+                    spawner.StopSpawner();
 
             foreach (var cesspit in FindObjectsByType<Cesspit>(FindObjectsInactive.Exclude))
                 cesspit.StopRunaways();
