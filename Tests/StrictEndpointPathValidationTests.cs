@@ -302,6 +302,52 @@ namespace _project.Scripts.Tests
             Assert.IsNull(item.Place(slot));
         }
 
+        [Test]
+        public void LimeSprinklerPlace_SucceedsOnEmptyUtilityCell()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var prefab = CreatePrimitive("Lime Sprinkler Prefab");
+            var slot = CreateGameObject("Empty Utility Slot").transform;
+            var item = new LimeSprinklerShopItem("Lime Sprinkler", "", 1, prefab, null, 2);
+
+            gm.pathBuildBoard = board;
+            var cell = new Vector2Int(1, 1);
+            slot.position = board.GetCellTopPosition(cell);
+
+            Assert.IsFalse(board.IsOccupied(cell));
+            var placed = item.Place(slot);
+            _created.Add(placed);
+
+            Assert.IsNotNull(placed);
+            Assert.AreEqual(slot.position, placed.transform.position);
+        }
+
+        [Test]
+        public void NonLimePlaceables_ReturnNullOnEmptyUtilityCell()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var prefab = CreatePrimitive("Placement Prefab");
+            var slot = CreateGameObject("Empty Utility Slot").transform;
+            var cell = new Vector2Int(1, 1);
+
+            gm.pathBuildBoard = board;
+            slot.position = board.GetCellTopPosition(cell);
+
+            IPlaceable[] items =
+            {
+                new TowerShopItem("Tower", "", 1, prefab, null, 1),
+                new SifterShopItem("Sifter", "", 1, prefab, null, 1),
+                new CesspitShopItem("Cesspit", "", 1, prefab, null, 1),
+                new TreatmentTankShopItem("Treatment Tank", "", 1, prefab, null, 1)
+            };
+
+            Assert.IsFalse(board.IsOccupied(cell));
+            foreach (var item in items)
+                Assert.IsNull(item.Place(slot), $"{item.DisplayName} should require pipe beneath its slot.");
+        }
+
         [UnityTest]
         public IEnumerator EndPhase_InvalidPath_KeepsCardPhase()
         {
@@ -499,6 +545,23 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(board.IsOccupied(new Vector2Int(2, 1)));
             Assert.AreEqual(2, gm.turnController.moveCount);
             Assert.AreEqual(0, gm.turnController.infrastructureValue);
+        }
+
+        [Test]
+        public void PathBuildCell_UiInputGuard_IgnoresPassiveGraphicsButBlocksButtons()
+        {
+            var passiveGraphic = CreateGameObject("Passive UI Graphic");
+            passiveGraphic.AddComponent<Image>();
+
+            var button = CreateGameObject("Interactive UI Button");
+            button.AddComponent<Button>();
+
+            var guard = typeof(PathBuildCell).GetMethod("HandlesPointerInput",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.IsNotNull(guard);
+            Assert.IsFalse((bool)guard.Invoke(null, new object[] { passiveGraphic }));
+            Assert.IsTrue((bool)guard.Invoke(null, new object[] { button }));
         }
 
     private PathFixture CreatePathFixture(int lowerColumn = 1, int upperColumn = 1, int lowerRow = -1, int upperRow = 10)

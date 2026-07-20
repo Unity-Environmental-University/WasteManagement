@@ -40,6 +40,15 @@ namespace _project.Scripts.Core
         Targeted = 4
     }
 
+    internal static class PlacementRules
+    {
+        public static bool TryGetPipeBoard(Transform location, out PathBuildBoard board)
+        {
+            board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            return location && board && board.TryWorldToCell(location.position, out var cell) && board.IsOccupied(cell);
+        }
+    }
+
     [Serializable]
     public struct CardShopEntry
     {
@@ -177,6 +186,8 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
+            if (!PlacementRules.TryGetPipeBoard(location, out _)) return null;
+
             var go = Object.Instantiate(_prefab, location.position, location.rotation);
             var tc = go.GetComponent<TowerController>();
             if (tc) GameMaster.Instance.towerManager.RegisterTower(tc);
@@ -214,11 +225,7 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
-            if (!board) return null;
-
-            if (!board.TryWorldToCell(location.position, out var cell) || !board.IsOccupied(cell))
-                return null;
+            if (!PlacementRules.TryGetPipeBoard(location, out var board)) return null;
 
             var rotation = location.rotation;
             if (board.TryGetPathFacingRotation(location.position, out var pathRotation))
@@ -257,6 +264,8 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
+            if (!PlacementRules.TryGetPipeBoard(location, out _)) return null;
+
             return Object.Instantiate(_prefab, location.position, location.rotation);
         }
     }
@@ -291,7 +300,48 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
+            if (!PlacementRules.TryGetPipeBoard(location, out _)) return null;
+
             return Object.Instantiate(_prefab, location.position, location.rotation);
+        }
+    }
+
+    public class LimeSprinklerShopItem : IPlaceable
+    {
+        private readonly GameObject _prefab;
+
+        public LimeSprinklerShopItem(string displayName, string description, int requiredLevel, GameObject prefab,
+            Sprite displaySprite, int infraValue)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            _prefab = prefab;
+            DisplaySprite = displaySprite;
+            InfraValue = infraValue;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public int InfraValue { get; }
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Utility;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        public GameObject Place(Transform location)
+        {
+            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            var rotation = location.rotation;
+            if (board && board.TryGetPathFacingRotation(location.position, out var pathRotation))
+                rotation = pathRotation;
+
+            return Object.Instantiate(_prefab, location.position, rotation);
         }
     }
 

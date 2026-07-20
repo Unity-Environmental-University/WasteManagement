@@ -73,6 +73,17 @@ namespace _project.Scripts.Core
         [SerializeField] private GameObject treatmentTankPrefab;
         [SerializeField] private Sprite treatmentTankSprite;
 
+        [Header("Lime Sprinkler Item")] [SerializeField]
+        private string limeSprinklerDisplayName = "Lime Sprinkler";
+
+        [SerializeField] private string limeSprinklerDescription =
+            "Sprinkles lime over the pipeline. (Effect coming soon.)";
+
+        [SerializeField] private int limeSprinklerRequiredLevel = 1;
+        [SerializeField] private int limeSprinklerInfraValue = 2;
+        [SerializeField] private GameObject limeSprinklerPrefab;
+        [SerializeField] private Sprite limeSprinklerSprite;
+
         [Header("Path Tools")] [SerializeField]
         private int pipeInfraValue;
 
@@ -274,6 +285,10 @@ namespace _project.Scripts.Core
             if (treatmentTankPrefab)
                 yield return new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,
                     treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite, treatmentTankInfraValue);
+
+            if (limeSprinklerPrefab)
+                yield return new LimeSprinklerShopItem(limeSprinklerDisplayName, limeSprinklerDescription,
+                    limeSprinklerRequiredLevel, limeSprinklerPrefab, limeSprinklerSprite, limeSprinklerInfraValue);
 
             if (cardEntries == null) yield break;
 

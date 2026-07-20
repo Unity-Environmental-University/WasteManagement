@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -13,6 +16,8 @@ namespace _project.Scripts.Object_Scripts
     {
         private PathBuildBoard _board;
         private Renderer _cellRenderer;
+
+        private static readonly List<RaycastResult> UiRaycastResults = new();
 
         /// <summary>
         ///     The column index of this cell in the grid (X axis).
@@ -34,8 +39,9 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void OnMouseDown()
         {
-            // Clicks on overlay UI (shop, toolbar, panels) must not fall through to the board.
-            if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
+            // Passive UI graphics can span the whole canvas, so IsPointerOverGameObject would
+            // reject valid board clicks. Only the UI that handles a press/click should block them.
+            if (IsPointerOverInteractiveUi()) return;
 
             var gm = GameMaster.Instance;
             var turnController = gm ? gm.turnController : null;
@@ -62,6 +68,36 @@ namespace _project.Scripts.Object_Scripts
             turnController.RegisterMove();
             turnController.infrastructureValue += pending.InfraValue;
             _board?.RefreshVisuals();
+        }
+
+        private static bool IsPointerOverInteractiveUi()
+        {
+            var eventSystem = EventSystem.current;
+            var pointer = Pointer.current;
+            if (!eventSystem || pointer == null) return false;
+
+            var eventData = new PointerEventData(eventSystem)
+            {
+                position = pointer.position.ReadValue()
+            };
+
+            UiRaycastResults.Clear();
+            eventSystem.RaycastAll(eventData, UiRaycastResults);
+
+            if (UiRaycastResults.Any(result => HandlesPointerInput(result.gameObject)))
+            {
+                UiRaycastResults.Clear();
+                return true;
+            }
+
+            UiRaycastResults.Clear();
+            return false;
+        }
+
+        private static bool HandlesPointerInput(GameObject target)
+        {
+            return ExecuteEvents.GetEventHandler<IPointerDownHandler>(target) ||
+                   ExecuteEvents.GetEventHandler<IPointerClickHandler>(target);
         }
 
         /// <summary>

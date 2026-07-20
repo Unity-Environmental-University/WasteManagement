@@ -105,6 +105,10 @@ namespace _project.Scripts.Object_Scripts
                 placed.TryGetComponent<TreatmentTank>(out var tank))
                 tank.SetSlot(this, pending.InfraValue);
 
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<LimeSprinkler>(out var limeSprinkler))
+                limeSprinkler.SetSlot(this, pending.InfraValue);
+
             _isOccupied = true;
             _isHovered = false;
             var gm = GameMaster.Instance;
