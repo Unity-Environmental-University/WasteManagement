@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using _project.Scripts.Core;
 using DG.Tweening;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using Random = UnityEngine.Random;
 
 namespace _project.Scripts.Object_Scripts
@@ -38,6 +39,11 @@ namespace _project.Scripts.Object_Scripts
         private readonly HashSet<EntityId> _siftersProcessed = new();
         private const float BaseProcessCost = 1f;
         private const float BaseSiftCost = 5f;
+
+        // Speed floor (never zero): a stationary issue would never resolve, and
+        // TurnController.WaveTimer waits on ActiveCount == 0 — a zero-speed issue
+        // (e.g., a debuff tile configured to 0) would soft-lock the wave.
+        private const float MinMoveSpeed = 0.1f;
         private Transform _startPoint;
         private int _waypointIndex;
         private bool _canBePoppedByClick;
@@ -156,6 +162,9 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnMouseDown()
         {
+            // Clicks on overlay UI must not fall through to issues on the board.
+            if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
+
             var turnController = GameMaster.Instance?.turnController;
             if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
 
@@ -341,7 +350,7 @@ namespace _project.Scripts.Object_Scripts
 
         public void SetMoveSpeed(float speed)
         {
-            moveSpeed = Mathf.Max(0f, speed);
+            moveSpeed = Mathf.Max(MinMoveSpeed, speed);
             _temporaryMoveSpeedEndWaypoint = -1;
         }
 
@@ -357,7 +366,7 @@ namespace _project.Scripts.Object_Scripts
             if (_temporaryMoveSpeedEndWaypoint < 0)
                 _moveSpeedBeforeTemporaryEffect = moveSpeed;
 
-            moveSpeed = Mathf.Max(0f, speed);
+            moveSpeed = Mathf.Max(MinMoveSpeed, speed);
             _temporaryMoveSpeedEndWaypoint = _waypointIndex + tileDuration;
         }
 
