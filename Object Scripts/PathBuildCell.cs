@@ -1,5 +1,6 @@
 using _project.Scripts.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -33,6 +34,9 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void OnMouseDown()
         {
+            // Clicks on overlay UI (shop, toolbar, panels) must not fall through to the board.
+            if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
+
             var gm = GameMaster.Instance;
             var turnController = gm ? gm.turnController : null;
             if (!gm || !turnController || turnController.currentPhase != GamePhase.Card)
