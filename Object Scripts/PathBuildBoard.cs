@@ -407,7 +407,7 @@ namespace _project.Scripts.Object_Scripts
         /// <returns>True if the cell is in bounds and occupied, otherwise false.</returns>
         private bool IsOccupied(int column, int row)
         {
-            return IsInBounds(column, row) && _pieceIds[column, row] > 0;
+            return _pieceIds != null && IsInBounds(column, row) && _pieceIds[column, row] > 0;
         }
 
         /// <summary>
