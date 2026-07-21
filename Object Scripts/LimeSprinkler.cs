@@ -50,12 +50,27 @@ namespace _project.Scripts.Object_Scripts
             PlaySprinkle();
         }
 
-        // EFFECT HOOK: telegraphs an active sprinkle. Wired to the Animator so the model animates
-        // once the effect logic is filled in.
+        // EFFECT HOOK: telegraphs an active sprinkle. The base sprinkle animation loops
+        // continuously via a self-transition on the controller state, so this is only used if a
+        // one-shot reaction clip is added later. The parameter is looked up defensively because
+        // the shipped controller has no parameters — setting a missing trigger logs an error.
         private void PlaySprinkle()
         {
-            if (animator && !string.IsNullOrEmpty(sprinkleTrigger))
-                animator.SetTrigger(sprinkleTrigger);
+            if (!animator || string.IsNullOrEmpty(sprinkleTrigger)) return;
+            if (!HasTrigger(sprinkleTrigger)) return;
+
+            animator.SetTrigger(sprinkleTrigger);
+        }
+
+        private bool HasTrigger(string parameterName)
+        {
+            foreach (var parameter in animator.parameters)
+            {
+                if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == parameterName)
+                    return true;
+            }
+
+            return false;
         }
     }
 }

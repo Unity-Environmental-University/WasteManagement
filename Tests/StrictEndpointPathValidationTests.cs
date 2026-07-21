@@ -548,7 +548,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathBuildCell_UiInputGuard_IgnoresPassiveGraphicsButBlocksButtons()
+        public void PointerUi_InputGuard_IgnoresPassiveGraphicsButBlocksButtons()
         {
             var passiveGraphic = CreateGameObject("Passive UI Graphic");
             passiveGraphic.AddComponent<Image>();
@@ -556,7 +556,7 @@ namespace _project.Scripts.Tests
             var button = CreateGameObject("Interactive UI Button");
             button.AddComponent<Button>();
 
-            var guard = typeof(PathBuildCell).GetMethod("HandlesPointerInput",
+            var guard = typeof(PointerUi).GetMethod("HandlesPointerInput",
                 BindingFlags.NonPublic | BindingFlags.Static);
 
             Assert.IsNotNull(guard);

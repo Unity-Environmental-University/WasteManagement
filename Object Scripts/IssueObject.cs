@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using _project.Scripts.Core;
 using DG.Tweening;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using Random = UnityEngine.Random;
 
 namespace _project.Scripts.Object_Scripts
@@ -20,6 +19,17 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private IssueType type;
         [SerializeField] private WaypointPath path;
         [SerializeField] private Renderer issueRenderer;
+
+        [Tooltip(
+            "Models by size tier: element 0 = size 1, 1 = size 2, 2 = size 3 and above. The matching child is enabled and the rest disabled whenever Size changes.")]
+        [SerializeField]
+        private GameObject[] sizeVisuals = new GameObject[3];
+
+        [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
+        [SerializeField]
+        [Min(0f)]
+        private float turnSpeed = 540f;
+
         [SerializeField, Min(3)] private int maxMergeSize = 6;
 
         [Tooltip("At this size and above the issue is too large for the pipe — it stops moving and blocks the path.")]
@@ -49,6 +59,9 @@ namespace _project.Scripts.Object_Scripts
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
         private Color? _visualOverrideColor;
+        private Material _visualOverrideMaterial;
+        private GameObject _activeVisual;
+        private Renderer[] _activeVisualRenderers;
         private int _blockedClickCount;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
@@ -111,6 +124,7 @@ namespace _project.Scripts.Object_Scripts
 
             if (IsDirectDestination)
             {
+                FaceTravelDirection(_directDestination - transform.position);
                 transform.position =
                     Vector3.MoveTowards(transform.position, _directDestination, moveSpeed * Time.deltaTime);
 
@@ -134,6 +148,8 @@ namespace _project.Scripts.Object_Scripts
             // (scaled by this issue's size so bigger issues sit higher)
             target.y += transform.localScale.y * PathHeight;
 
+            FaceTravelDirection(target - transform.position);
+
             // Move toward the target at moveSpeed units/second (frame-rate independent)
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
 
@@ -146,24 +162,31 @@ namespace _project.Scripts.Object_Scripts
             }
         }
 
-        private void SetMaterialColor()
+        /// <summary>
+        ///     Turns the issue to face where it is heading — the model's +Z (blue) axis is its front.
+        ///     Only yaw is applied: the target's Y varies with the issue's size (it rides on top of
+        ///     the pipe), and pitching toward that would tip the model onto its nose. A near-zero
+        ///     direction is ignored so an issue sitting on its waypoint keeps its last heading
+        ///     instead of snapping to an arbitrary one.
+        /// </summary>
+        private void FaceTravelDirection(Vector3 direction)
         {
-            var renderer = GetIssueRenderer();
-            if (!renderer) return;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.0001f) return;
 
-            renderer.material.color = _visualOverrideColor ?? Size switch
-            {
-                1 => Color.red,
-                2 => Color.deepSkyBlue,
-                3 => Color.softGreen,
-                _ => Color.Lerp(Color.softGreen, Color.magenta, Mathf.InverseLerp(4f, maxMergeSize, Size))
-            };
+            var target = Quaternion.LookRotation(direction, Vector3.up);
+
+            transform.rotation = turnSpeed <= 0f
+                ? target
+                : Quaternion.RotateTowards(transform.rotation, target, turnSpeed * Time.deltaTime);
         }
 
         private void OnMouseDown()
         {
-            // Clicks on overlay UI must not fall through to issues on the board.
-            if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
+            // Clicks on overlay UI must not fall through to issues on the board. This cannot use
+            // IsPointerOverGameObject: the camera's PhysicsRaycaster makes it true over this very
+            // issue, which would reject every click. See PointerUi.
+            if (PointerUi.IsPointerOverInteractiveUi()) return;
 
             var turnController = GameMaster.Instance?.turnController;
             if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
@@ -278,8 +301,8 @@ namespace _project.Scripts.Object_Scripts
         public void SetSize(int s)
         {
             Size = Mathf.Max(0, s);
-            SetMaterialColor();
-            // UpdatePipeBlockState → RefreshBurstPulse re-applies the size scale.
+            // UpdatePipeBlockState → RefreshBurstPulse → ApplySizeVisuals re-applies the
+            // size scale and swaps in the model for the new size tier.
             UpdatePipeBlockState();
         }
 
@@ -379,25 +402,47 @@ namespace _project.Scripts.Object_Scripts
             _temporaryMoveSpeedEndWaypoint = -1;
         }
 
+        /// <summary>
+        ///     Repaints the issue with a deliberate signal colour (cesspit runaways). Size itself is
+        ///     conveyed by the small/medium/big models, so an issue with no override simply keeps the
+        ///     material its model was authored with. The override survives model swaps.
+        /// </summary>
         public void SetVisualOverride(Color color, Material material = null)
         {
             _visualOverrideColor = color;
+            if (material)
+                _visualOverrideMaterial = material;
 
-            // Assign the material once here rather than in SetMaterialColor — re-assigning the
-            // shared asset there would clone a fresh material instance on every repaint.
-            var renderer = GetIssueRenderer();
-            if (material && renderer)
-                renderer.material = material;
-
-            SetMaterialColor();
+            ApplyVisualOverride();
         }
 
-        private Renderer GetIssueRenderer()
+        private void ApplyVisualOverride()
         {
-            if (!issueRenderer)
-                issueRenderer = GetComponent<Renderer>();
+            if (!_visualOverrideColor.HasValue) return;
 
-            return issueRenderer;
+            foreach (var visualRenderer in GetVisualRenderers())
+            {
+                if (!visualRenderer) continue;
+
+                // Assign the shared asset first, then tint — reading .material clones a
+                // per-instance copy, so the override never mutates the source material.
+                if (_visualOverrideMaterial)
+                    visualRenderer.material = _visualOverrideMaterial;
+
+                visualRenderer.material.color = _visualOverrideColor.Value;
+            }
+        }
+
+        private Renderer[] GetVisualRenderers()
+        {
+            if (_activeVisualRenderers is { Length: > 0 })
+                return _activeVisualRenderers;
+
+            // Fallback for prefabs that still render from the root instead of a sizeVisuals child.
+            if (!issueRenderer)
+                issueRenderer = GetComponentInChildren<Renderer>(true);
+
+            return issueRenderer ? new[] { issueRenderer } : Array.Empty<Renderer>();
         }
 
         private bool CanMergeWith(IssueObject other)
@@ -444,6 +489,32 @@ namespace _project.Scripts.Object_Scripts
         private void ApplySizeVisuals()
         {
             transform.localScale = _baseScale * Size;
+            ApplySizeVisualModel();
+        }
+
+        /// <summary>
+        ///     Enables the model matching the current size tier (small / medium / big) and disables
+        ///     the others. Sizes past the last tier keep the largest model and grow by scale alone,
+        ///     so merged issues above size 3 still read as bigger without needing more models.
+        /// </summary>
+        private void ApplySizeVisualModel()
+        {
+            if (sizeVisuals == null || sizeVisuals.Length == 0) return;
+
+            var target = sizeVisuals[Mathf.Clamp(Size - 1, 0, sizeVisuals.Length - 1)];
+            // An unassigned tier would otherwise hide every model and leave an invisible issue.
+            if (!target) return;
+
+            foreach (var visual in sizeVisuals)
+                if (visual)
+                    visual.SetActive(visual == target);
+
+            if (target == _activeVisual) return;
+
+            _activeVisual = target;
+            _activeVisualRenderers = target.GetComponentsInChildren<Renderer>(true);
+            // A swapped-in model arrives with its own materials — re-apply any active override.
+            ApplyVisualOverride();
         }
 
         /// <summary>
