@@ -61,8 +61,9 @@ namespace _project.Scripts.UI
             }
 
             ShopItem.Purchase();
-            if (ShopItem.RemoveAfterPurchase)
-                ShopManager.Instance.RemoveShopItem(gameObject);
+            if (!ShopItem.RemoveAfterPurchase) return;
+            ShopManager.Instance.MarkPurchased(ShopItem);
+            ShopManager.Instance.RemoveShopItem(gameObject);
         }
 
         private void QueueOrSelectPlaceable()
@@ -79,6 +80,7 @@ namespace _project.Scripts.UI
             }
 
             ShopItem.Purchase();
+            ShopManager.Instance.MarkPurchased(ShopItem);
             inventory.SelectItem(PlaceableItem);
             GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
         }

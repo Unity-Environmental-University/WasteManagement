@@ -110,6 +110,11 @@ namespace _project.Scripts.Core
         [SerializeField] private Sprite blankTestSprite;
         public static ShopManager Instance { get; private set; }
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
+        
+        // Stock is created once per game run. Rebuilding the shop panel must not create a
+        // fresh set of items, otherwise every sold item returns when the panel is reopened.
+        private readonly List<IShopItem> _stockItems = new();
+        private readonly HashSet<IShopItem> _purchasedItems = new();
 
         private static int CurrentLevel =>
             GameMaster.Instance && GameMaster.Instance.turnController ? GameMaster.Instance.turnController.currentLevel : 1;
@@ -148,6 +153,13 @@ namespace _project.Scripts.Core
         public void RemoveShopItem(GameObject shopItemGo)
         {
             if (shopItemGo) Destroy(shopItemGo);
+        }
+
+        /// <summary>Marks a finite-stock item as sold for the remainder of this game run.</summary>
+        public void MarkPurchased(IShopItem item)
+        {
+            if (item != null && item.RemoveAfterPurchase)
+                _purchasedItems.Add(item);
         }
 
         public void SelectShortPipeTool()
@@ -214,18 +226,29 @@ namespace _project.Scripts.Core
         private void GenerateShopInventory()
         {
             ClearShop();
-
-            if (includeBlankTestItem && blankTestSprite)
-                SpawnShopItem(new BlankShopItem(blankTestSprite));
-
-            // Items purchased but not yet placed are still queued in the PlacementInventory.
-            // Reuse those instances when regenerating, so reopening the shop reconnects each
-            // queued item to its existing instance instead of minting a fresh one. Without
-            // this, re-buying a queued item would duplicate it and bypass finite stock counts.
             var queued = CollectQueuedPlaceables();
 
-            foreach (var item in CreateShopItems())
-                SpawnShopItem(ReuseQueuedInstance(item, queued));
+            EnsureStockCreated();
+            foreach (var item in _stockItems)
+            {
+                // A purchased placeable stays visible only while it is waiting to be placed,
+                // allowing the player to reselect it after closing the shop. Once consumed,
+                // it is no longer part of the shop's stock.
+                if (_purchasedItems.Contains(item) && (item is not IPlaceable placeable || !queued.Contains(placeable)))
+                    continue;
+
+                SpawnShopItem(item);
+            }
+        }
+
+        private void EnsureStockCreated()
+        {
+            if (_stockItems.Count > 0) return;
+
+            if (includeBlankTestItem && blankTestSprite)
+                _stockItems.Add(new BlankShopItem(blankTestSprite));
+
+            _stockItems.AddRange(CreateShopItems());
         }
 
         private static List<IPlaceable> CollectQueuedPlaceables()
@@ -237,26 +260,6 @@ namespace _project.Scripts.Core
             queued.AddRange(inventory.Items.Where(item => item != null));
 
             return queued;
-        }
-
-        // Replaces a freshly generated placeable with the matching queued instance if one
-        // exists. Each queued instance is claimed once so a category's stock count maps to at
-        // most that many slots (queued + buyable).
-        private static IShopItem ReuseQueuedInstance(IShopItem item, List<IPlaceable> queued)
-        {
-            if (item is not IPlaceable placeable) return item;
-
-            for (var i = 0; i < queued.Count; i++)
-            {
-                var candidate = queued[i];
-                if (candidate.PlaceableType != placeable.PlaceableType) continue;
-                if (candidate.DisplayName != placeable.DisplayName) continue;
-
-                queued.RemoveAt(i);
-                return candidate;
-            }
-
-            return item;
         }
 
         private IEnumerable<IShopItem> CreateShopItems()
