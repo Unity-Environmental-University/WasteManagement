@@ -24,6 +24,7 @@ namespace _project.Scripts.Core
         public PipelineComponentManager pipCompMan;
         public ShopManager shopManager;
         public PathBuildBoard pathBuildBoard;
+        public SpecialTileSpawner tileSpawner;
 
         [Header("Debug")] public bool debugging;
 

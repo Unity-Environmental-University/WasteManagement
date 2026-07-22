@@ -88,6 +88,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Card;
             OnCardPhaseEntered?.Invoke();
             SwitchCamera();
+            ShowUtilityPhaseObjects();
             _gm.placementInventory?.SelectFirstAvailable();
             _gm.deckManager?.DrawNewHand();
             // TODO: re-enable hand UI when card system is back in use
@@ -213,6 +214,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Tower;
             OnTowerPhaseEntered?.Invoke();
             SwitchCamera();
+            HideUtilityPhaseObjects();
             _gm.placementInventory?.ClearSelection();
             if (_gm.pathBuildBoard) _gm.pathBuildBoard.ClearActivePiece();
             _gm.interfaceManager?.ClearHand();
@@ -228,6 +230,39 @@ namespace _project.Scripts.Core
             _waveCoroutine = StartCoroutine(WaveTimer(scaledWaveDuration));
 
             Debug.Log($"Beginning Wave! Duration: {scaledWaveDuration:F1}s, spawn rate: x{spawnRateMultiplier:F2}");
+        }
+
+        private void HideUtilityPhaseObjects()
+        {
+            var utilities = _gm.tileSpawner.SpawnedUtilityTiles;
+            var buffs = _gm.tileSpawner.SpawnedBuffTiles;
+            
+            foreach (var u in utilities)
+            {
+                u.GetComponent<Renderer>().enabled = false;
+            }
+
+            foreach (var b in buffs)
+            {
+                b.GetComponent<Renderer>().enabled = false;
+            }
+
+        }
+
+        private void ShowUtilityPhaseObjects()
+        {
+            var utilities = _gm.tileSpawner.SpawnedUtilityTiles;
+            var buffs = _gm.tileSpawner.SpawnedBuffTiles;
+            
+            foreach (var u in utilities)
+            {
+                u.GetComponent<Renderer>().enabled = true;
+            }
+            foreach (var b in buffs)
+            {
+                b.GetComponent<Renderer>().enabled = true;
+            }
+
         }
 
         private bool CanBeginWave()
