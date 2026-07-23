@@ -74,6 +74,16 @@ namespace _project.Scripts.Core
             SelectionChanged?.Invoke(null);
         }
 
+        public void Clear()
+        {
+            if (_items.Count == 0 && _selectedIndex < 0) return;
+
+            _items.Clear();
+            _selectedIndex = -1;
+            InventoryChanged?.Invoke();
+            SelectionChanged?.Invoke(null);
+        }
+
 
         public IPlaceable ConsumeSelected()
         {

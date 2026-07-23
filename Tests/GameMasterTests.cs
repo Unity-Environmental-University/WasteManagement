@@ -113,6 +113,19 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PlacementInventory_Clear_DiscardsQueuedItemsAndSelection()
+        {
+            var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
+            inventory.Add(new TestPlaceable());
+
+            inventory.Clear();
+
+            Assert.IsEmpty(inventory.Items);
+            Assert.IsNull(inventory.SelectedItem);
+            Assert.AreEqual(-1, inventory.SelectedIndex);
+        }
+
+        [Test]
         public void CesspitCap_PurchaseThenClickSealsOnlySelectedCesspit()
         {
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();

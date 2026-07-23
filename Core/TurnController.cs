@@ -200,6 +200,8 @@ namespace _project.Scripts.Core
 
             _waitingForPostRoundContinue = false;
             RecoverLakeForTurn();
+            _gm.placementInventory?.Clear();
+            _gm.shopManager?.ResetStockForNewRound();
             EnterCardSequence();
         }
 

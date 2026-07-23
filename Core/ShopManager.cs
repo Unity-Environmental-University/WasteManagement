@@ -111,10 +111,11 @@ namespace _project.Scripts.Core
         public static ShopManager Instance { get; private set; }
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
         
-        // Stock is created once per game run. Rebuilding the shop panel must not create a
-        // fresh set of items, otherwise every sold item returns when the panel is reopened.
+        // Stock is retained while the player opens and closes the shop during one round.
+        // It is rebuilt at the start of the next round so every round gets a fresh shop.
         private readonly List<IShopItem> _stockItems = new();
         private readonly HashSet<IShopItem> _purchasedItems = new();
+        private bool _stockCreated;
 
         private static int CurrentLevel =>
             GameMaster.Instance && GameMaster.Instance.turnController ? GameMaster.Instance.turnController.currentLevel : 1;
@@ -143,6 +144,17 @@ namespace _project.Scripts.Core
             if (Debugging) Debug.Log("[ShopManager] Shop opened.");
         }
 
+        /// <summary>
+        ///     Discards the current round's shop stock. Call this only at a round boundary;
+        ///     closing and reopening the shop within the same round must preserve purchases.
+        /// </summary>
+        public void ResetStockForNewRound()
+        {
+            _stockItems.Clear();
+            _purchasedItems.Clear();
+            _stockCreated = false;
+        }
+
         public void CloseShop()
         {
             if (shopPanel) shopPanel.SetActive(false);
@@ -155,7 +167,7 @@ namespace _project.Scripts.Core
             if (shopItemGo) Destroy(shopItemGo);
         }
 
-        /// <summary>Marks a finite-stock item as sold for the remainder of this game run.</summary>
+        /// <summary>Marks a finite-stock item as sold for the remainder of the current round.</summary>
         public void MarkPurchased(IShopItem item)
         {
             if (item != null && item.RemoveAfterPurchase)
@@ -243,12 +255,13 @@ namespace _project.Scripts.Core
 
         private void EnsureStockCreated()
         {
-            if (_stockItems.Count > 0) return;
+            if (_stockCreated) return;
 
             if (includeBlankTestItem && blankTestSprite)
                 _stockItems.Add(new BlankShopItem(blankTestSprite));
 
             _stockItems.AddRange(CreateShopItems());
+            _stockCreated = true;
         }
 
         private static List<IPlaceable> CollectQueuedPlaceables()
