@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using _project.Scripts.Object_Scripts;
 using UnityEngine;
@@ -236,35 +237,30 @@ namespace _project.Scripts.Core
 
         private void HideUtilityPhaseObjects()
         {
-            var utilities = _gm.tileSpawner.SpawnedUtilityTiles;
-            var buffs = _gm.tileSpawner.SpawnedBuffTiles;
-            
-            foreach (var u in utilities)
-            {
-                u.GetComponent<Renderer>().enabled = false;
-            }
-
-            foreach (var b in buffs)
-            {
-                b.GetComponent<Renderer>().enabled = false;
-            }
-
+            SetUtilityPhaseObjectsVisible(false);
         }
 
         private void ShowUtilityPhaseObjects()
         {
-            var utilities = _gm.tileSpawner.SpawnedUtilityTiles;
-            var buffs = _gm.tileSpawner.SpawnedBuffTiles;
-            
-            foreach (var u in utilities)
-            {
-                u.GetComponent<Renderer>().enabled = true;
-            }
-            foreach (var b in buffs)
-            {
-                b.GetComponent<Renderer>().enabled = true;
-            }
+            SetUtilityPhaseObjectsVisible(true);
+        }
 
+        private void SetUtilityPhaseObjectsVisible(bool visible)
+        {
+            if (!_gm || !_gm.tileSpawner) return;
+
+            SetRenderersEnabled(_gm.tileSpawner.SpawnedUtilityTiles, visible);
+            SetRenderersEnabled(_gm.tileSpawner.SpawnedBuffTiles, visible);
+        }
+
+        // Entries can be null: SpecialTileSpawner adds whatever GetComponent returns when it spawns.
+        private static void SetRenderersEnabled<T>(IEnumerable<T> tiles, bool enabled) where T : Component
+        {
+            if (tiles == null) return;
+
+            foreach (var tile in tiles)
+                if (tile && tile.TryGetComponent<Renderer>(out var tileRenderer))
+                    tileRenderer.enabled = enabled;
         }
 
         private bool CanBeginWave()

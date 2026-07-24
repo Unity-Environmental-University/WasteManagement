@@ -41,12 +41,26 @@ namespace _project.Scripts.Object_Scripts
         private Coroutine _runawayCoroutine;
         private SpecialInteractController _slot;
         private int _infraValue;
-        private bool _isSealed;
         private Material _fillMaterial;
+        private float _stinkReduction;
 
-        public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus);
-        public bool IsSealed => _isSealed;
-        
+        public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus - _stinkReduction);
+
+        /// <summary>
+        ///     Suppresses this pit's stink by <paramref name="amount" /> for as long as the source
+        ///     stays applied — a <see cref="LimeSprinkler" /> placed on a neighboring cell, say.
+        ///     Reductions accumulate; pass a negative amount to lift one. Stink is derived from
+        ///     <see cref="FullnessRatio" /> every read, so this has to be stored separately rather
+        ///     than written into <see cref="CurrentStink" />.
+        /// </summary>
+        public void ApplyStinkReduction(float amount)
+        {
+            _stinkReduction = Mathf.Max(0f, _stinkReduction + amount);
+            GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
+        }
+
+        public bool IsSealed { get; private set; }
+
         private void OnEnable()
         {
             StinkSourceRegistry.Register(this);
@@ -66,7 +80,7 @@ namespace _project.Scripts.Object_Scripts
             ResolveRunawayReferences();
 
             if (fullnessBar) fullnessBar.gameObject.SetActive(true);
-            if (sealedVisual) sealedVisual.SetActive(_isSealed);
+            if (sealedVisual) sealedVisual.SetActive(IsSealed);
             UpdateFullnessBar();
             UpdateFillVisual();
 
@@ -92,7 +106,7 @@ namespace _project.Scripts.Object_Scripts
 
             switch (gm.PendingPlacement)
             {
-                case CesspitCapShopItem when !_isSealed:
+                case CesspitCapShopItem when !IsSealed:
                     Seal();
                     gm.CompletePlacement();
                     break;
@@ -107,7 +121,7 @@ namespace _project.Scripts.Object_Scripts
         {
             PauseRunaways();
             _spawningRunaways = false;
-            _isSealed = true;
+            IsSealed = true;
             if (sealedVisual) sealedVisual.SetActive(true);
         }
 
@@ -135,6 +149,11 @@ namespace _project.Scripts.Object_Scripts
         {
             _slot = slot;
             _infraValue = infraValue;
+
+            // Pick up sprinklers already covering this cell. Sprinklers placed later apply
+            // themselves on their own placement, so each pit/sprinkler pairing lands exactly once.
+            foreach (var sprinkler in FindObjectsByType<LimeSprinkler>())
+                sprinkler.TryApplyTo(this);
         }
 
         private void OnTriggerEnter(Collider other)
@@ -185,7 +204,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void StartRunaways()
         {
-            if (_isSealed || _spawningRunaways)
+            if (IsSealed || _spawningRunaways)
                 return;
 
             _spawningRunaways = true;
@@ -208,7 +227,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void ResumeRunaways()
         {
-            if (_isSealed || !_spawningRunaways) return;
+            if (IsSealed || !_spawningRunaways) return;
             if (_runawayCoroutine != null) return;
 
             _runawayCoroutine = StartCoroutine(SpawnRunaway());

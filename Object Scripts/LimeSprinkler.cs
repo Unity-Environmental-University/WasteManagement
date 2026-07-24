@@ -1,121 +1,114 @@
+using System.Collections.Generic;
+using _project.Scripts.Core;
 using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    ///     Placement-slot utility that sprinkles lime over the pipeline. This is a scaffold: the
-    ///     prefab, model, and sprinkle animation are wired up, but the gameplay effect is not
-    ///     implemented yet. The hooks below mark where future behavior (e.g., deodorizing/neutralizing
-    ///     passing issues) should live, following the same shape as <see cref="WasteSifter" /> and
+    ///     Placement-slot utility that sprinkles lime over the pipeline. The wheel motion and the
+    ///     sprinkle blend shape are both driven by the limeSpreader animator controller (Base Layer
+    ///     and Sprinkle layer), so nothing here touches the animation. What remains is placement
+    ///     wiring plus the stink effect, following the same shape as <see cref="WasteSifter" /> and
     ///     <see cref="TreatmentTank" />.
     /// </summary>
     public class LimeSprinkler : MonoBehaviour
     {
-        [Header("Animation")]
-        [SerializeField] private Animator animator;
-        [SerializeField] private string baseAnimationState = "Take 001";
-        [SerializeField] private SkinnedMeshRenderer blendShapeRenderer;
-        [SerializeField] private string blendShapeName = "limeSpreader_BS.pCube10";
-        [SerializeField, Min(0.1f)] private float sprinkleDuration = 1f;
-        [SerializeField, Range(0f, 100f)] private float sprinkleWeight = 100f;
-        [SerializeField, Min(0.1f)] private float sprinkleInterval = 5f;
-        [SerializeField, Min(0f)] private float sprinkleJitter = 0.5f;
+        [Header("Stink")]
+        [SerializeField] private float limeStinkReduction = 0.5f;
 
-        private int _infraValue;
+        [Header("Grid")]
+        [Tooltip("Board used to resolve nearby cells. Falls back to GameMaster.Instance.pathBuildBoard.")]
+        [SerializeField] private PathBuildBoard board;
+
         private SpecialInteractController _slot;
-        private int _blendShapeIndex = -1;
-        private float _timeUntilSprinkle;
-        private float _sprinkleElapsed = -1f;
-        private int _baseAnimationStateHash;
+        private int _infraValue;
 
-        private void Awake()
-        {
-            if (!animator) animator = GetComponentInChildren<Animator>();
-            _baseAnimationStateHash = Animator.StringToHash(baseAnimationState);
-            FindBlendShape();
-        }
+        // Reused between calls so per-sprinkle lookups don't allocate.
+        private readonly List<Vector2Int> _surroundingCells = new(9);
 
-        private void OnEnable()
-        {
-            _timeUntilSprinkle = NextSprinkleDelay();
-            _sprinkleElapsed = -1f;
-        }
-
-        private void LateUpdate()
-        {
-            KeepBaseAnimationLooping();
-            if (!blendShapeRenderer || _blendShapeIndex < 0) return;
-
-            _timeUntilSprinkle -= Time.deltaTime;
-            if (_timeUntilSprinkle <= 0f)
-            {
-                _sprinkleElapsed = 0f;
-                _timeUntilSprinkle = NextSprinkleDelay();
-            }
-
-            var weight = 0f;
-            if (_sprinkleElapsed >= 0f)
-            {
-                _sprinkleElapsed += Time.deltaTime;
-                var progress = Mathf.Clamp01(_sprinkleElapsed / sprinkleDuration);
-                weight = Mathf.Sin(progress * Mathf.PI) * sprinkleWeight;
-                if (progress >= 1f) _sprinkleElapsed = -1f;
-            }
-
-            // Override the imported clip's curve for this specific shape before rendering.
-            blendShapeRenderer.SetBlendShapeWeight(_blendShapeIndex, weight);
-        }
-
-        private void KeepBaseAnimationLooping()
-        {
-            if (!animator || !animator.enabled || _baseAnimationStateHash == 0) return;
-
-            var state = animator.GetCurrentAnimatorStateInfo(0);
-            if (state.shortNameHash == _baseAnimationStateHash && state.normalizedTime >= 1f)
-                animator.Play(_baseAnimationStateHash, 0, 0f);
-        }
-
-        private void FindBlendShape()
-        {
-            if (blendShapeRenderer && TryFindBlendShape(blendShapeRenderer)) return;
-
-            foreach (var renderer in GetComponentsInChildren<SkinnedMeshRenderer>(true))
-                if (TryFindBlendShape(renderer)) return;
-        }
-
-        private bool TryFindBlendShape(SkinnedMeshRenderer renderer)
-        {
-            if (!renderer.sharedMesh) return false;
-
-            for (var i = 0; i < renderer.sharedMesh.blendShapeCount; i++)
-            {
-                if (renderer.sharedMesh.GetBlendShapeName(i) != blendShapeName) continue;
-
-                blendShapeRenderer = renderer;
-                _blendShapeIndex = i;
-                return true;
-            }
-
-            return false;
-        }
-
-        private float NextSprinkleDelay()
-        {
-            return Mathf.Max(0.1f, sprinkleInterval + Random.Range(-sprinkleJitter, sprinkleJitter));
-        }
+        #region Placement
 
         /// <summary>Called by <see cref="SpecialInteractController" /> when this utility is placed.</summary>
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {
             _slot = slot;
             _infraValue = infraValue;
+            ApplyToNearbyCesspits();
         }
 
-        // EFFECT HOOK: no gameplay effect yet. A future implementation would mutate the issue
-        // here (e.g., reduce stink contribution, neutralize chemical process cost) and play the
-        // sprinkle animation. Kept intentionally empty so the placeable can ship ahead of design.
-        private void ApplyEffect(IssueObject issue)
+        #endregion
+
+        #region Grid
+
+        /// <summary>
+        ///     The 3x3 block of board cells centred on this sprinkler's own cell, in column-major
+        ///     order. Cells that fall off the board edge are skipped, so the result holds 9 entries
+        ///     mid-board and fewer along an edge or corner; it is empty when the sprinkler itself
+        ///     sits off-board or no <see cref="PathBuildBoard" /> can be resolved.
+        ///     The returned list is reused between calls — copy it if you need to hold onto it.
+        /// </summary>
+        /// <param name="includeCenter">False to skip the sprinkler's own cell and return only the 8 neighbours.</param>
+        private List<Vector2Int> GetSurroundingCells(bool includeCenter = true)
         {
+            _surroundingCells.Clear();
+
+            if (!ResolveBoard() || !board.TryWorldToCell(transform.position, out var center))
+                return _surroundingCells;
+
+            for (var columnOffset = -1; columnOffset <= 1; columnOffset++)
+            for (var rowOffset = -1; rowOffset <= 1; rowOffset++)
+            {
+                if (!includeCenter && columnOffset == 0 && rowOffset == 0) continue;
+
+                var cell = new Vector2Int(center.x + columnOffset, center.y + rowOffset);
+                if (board.IsCellInBounds(cell)) _surroundingCells.Add(cell);
+            }
+
+            return _surroundingCells;
         }
+
+        private bool ResolveBoard()
+        {
+            if (!board) board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            return board;
+        }
+
+        #endregion
+
+        #region Effect
+
+        /// <summary>
+        ///     Reduces the stink of every cesspit already standing in this sprinkler's 3x3 block.
+        ///     Runs once, on placement — cesspits built later pick the reduction up themselves,
+        ///     via <see cref="TryApplyTo" /> from <see cref="Cesspit.SetSlot" />.
+        /// </summary>
+        private void ApplyToNearbyCesspits()
+        {
+            foreach (var pit in FindObjectsByType<Cesspit>())
+                TryApplyTo(pit);
+        }
+
+        /// <summary>
+        ///     Applies this sprinkler's reduction to <paramref name="pit" />, if the pit stands in
+        ///     the 3x3 block. Returns false — changing nothing — when it doesn't, when the pit is
+        ///     gone, or when no board can be resolved.
+        /// </summary>
+        public bool TryApplyTo(Cesspit pit)
+        {
+            if (!pit) return false;
+
+            // Empty when the board is unresolved or this sprinkler sits off-board; returning here
+            // also keeps the board dereference below safe.
+            var cells = GetSurroundingCells();
+            if (cells.Count == 0) return false;
+
+            if (!board.TryWorldToCell(pit.transform.position, out var pitCell) ||
+                !cells.Contains(pitCell)) return false;
+
+            pit.ApplyStinkReduction(limeStinkReduction);
+            return true;
+        }
+
+        #endregion
     }
 }
