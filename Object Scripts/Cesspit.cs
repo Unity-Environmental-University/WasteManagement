@@ -133,11 +133,11 @@ namespace _project.Scripts.Object_Scripts
 
             if (_slot) _slot.ClearOccupied(_infraValue);
 
-            var tileSpawner = FindAnyObjectByType<BuffDebuffTileSpawner>();
+            var tileSpawner = FindAnyObjectByType<SpecialTileSpawner>();
             if (tileSpawner)
-                tileSpawner.SpawnDebuffTileAt(transform.position);
+                tileSpawner.SpawnBuffTile(true,transform.position);
             else
-                Debug.LogWarning("[Cesspit] No BuffDebuffTileSpawner in scene; buried cesspit left no debuff tile.");
+                Debug.LogWarning("[Cesspit] No SpecialTileSpawner in scene; buried cesspit left no debuff tile.");
 
             // Destroy() defers OnDisable to end of frame; unregister now so the refresh excludes this pit's stink
             StinkSourceRegistry.Unregister(this);

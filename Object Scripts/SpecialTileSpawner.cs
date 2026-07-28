@@ -152,5 +152,32 @@ namespace _project.Scripts.Object_Scripts
         }
 
         #endregion
+
+        public void SpawnBuffTile(bool isDebuff, Vector3 position)
+        {
+            if (!board) board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+
+            if (!board)
+            {
+                Debug.LogWarning("[BuffDebuffTileSpawner] Missing board; skipping.");
+                return;
+            }
+
+            var cell = board.WorldToCell(position);
+            var existing = FindTileAt(cell);
+            if (existing)
+            {
+                existing.SetKind(isDebuff ? BuffDebuffKind.Debuff : BuffDebuffKind.Buff);
+                existing.SetEffect(PickRandomEffect());
+                return;
+            }
+
+            var controller = CreateTile(position);
+            controller.gameObject.name = $"BuffDebuffTile ({cell.x},{cell.y})";
+            controller.SetKind(isDebuff ? BuffDebuffKind.Debuff : BuffDebuffKind.Buff);
+            controller.SetEffect(PickRandomEffect());
+
+            SpawnedBuffTiles.Add(controller);
+        }
     }
 }
