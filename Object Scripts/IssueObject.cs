@@ -120,7 +120,10 @@ namespace _project.Scripts.Object_Scripts
             // BLOCKED: the issue is too large for the pipe — it sits in place, plugging the
             // path, until it either shrinks (sifting) or grows past maxMergeSize and breaks the pipe.
             if (IsBlockingPipe)
+            {
+                GameMaster.Instance?.cameraController?.Shake(1f);
                 return;
+            }
 
             if (IsDirectDestination)
             {
@@ -403,7 +406,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Repaints the issue with a deliberate signal colour (cesspit runaways). Size itself is
+        ///     Repaints the issue with a deliberate signal color (cesspit runaways). Size itself is
         ///     conveyed by the small/medium/big models, so an issue with no override simply keeps the
         ///     material its model was authored with. The override survives model swaps.
         /// </summary>
