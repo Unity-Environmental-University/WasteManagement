@@ -21,6 +21,9 @@ namespace _project.Scripts.UI
         [SerializeField] private Button breakPipeButton;
         [SerializeField] private Button clearToolButton;
 
+        [Tooltip("Hint label telling the player R rotates the armed pipe. Dimmed when no pipe is armed.")]
+        [SerializeField] private TMP_Text rotateHintLabel;
+
         [Header("Palette")]
         [SerializeField] private Color flowColor = new(0.169f, 0.769f, 0.839f, 1f);    // armed: lay pipe
         [SerializeField] private Color cautionColor = new(0.914f, 0.635f, 0.235f, 1f); // armed/idle: remove
@@ -157,6 +160,14 @@ namespace _project.Scripts.UI
             ApplyButton(clearToolButton,
                 activeTool == PathBuildTool.None,
                 true);
+
+            // R only rotates while a pipe piece is armed, so dim the hint otherwise.
+            if (rotateHintLabel)
+            {
+                var hintColor = rotateHintLabel.color;
+                hintColor.a = activeTool == PathBuildTool.Place && activePiece != null ? 1f : 0.35f;
+                rotateHintLabel.color = hintColor;
+            }
         }
 
         /// <summary>Drives a switch's lit/idle face and its label colour + dimming.</summary>
