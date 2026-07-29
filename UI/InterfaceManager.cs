@@ -12,6 +12,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Button quitButton;
         [SerializeField] private Button nextButton;
         [SerializeField] private Button openShopButton;
+        [SerializeField] private GameObject shopPanel;
         [SerializeField] private Button closeShopButton;
         [SerializeField] private Image mTowerUpgrades;
         [SerializeField] private Image rTowerUpgrades;
@@ -32,6 +33,10 @@ namespace _project.Scripts.UI
 
         private void Start()
         {
+#if UNITY_WEBGL
+            if (quitButton) Destroy(quitButton);
+#endif
+
             if (quitButton) quitButton.onClick.AddListener(Application.Quit);
             EnsurePathToolBar();
         }
@@ -57,16 +62,16 @@ namespace _project.Scripts.UI
             SetActive(lTowerUpgrades, false);
             SetActive(mTowerUpgrades, false);
             SetActive(rTowerUpgrades, false);
-            SetActive(nextButton, false);
             SetActive(openShopButton, false);
             SetActive(closeShopButton, false);
+            SetActive(shopPanel, false);
             EnsurePathToolBar();
             if (pathToolBar) pathToolBar.SetVisible(false);
         }
 
         public void ShowPrepUI()
         {
-            SetActive(nextButton, true);
+            //SetActive(nextButton, true);
             SetActive(openShopButton, true);
             SetActive(closeShopButton, true);
             EnsurePathToolBar();
@@ -151,20 +156,16 @@ namespace _project.Scripts.UI
 
         public void HideUIForShop()
         {
-            SetActive(quitButton, false);
-            SetActive(nextButton, false);
+            if (quitButton) SetActive(quitButton, false);
             SetActive(openShopButton, false);
             SetActive(closeShopButton, true);
-            // The pipe toolbar stays available while the shop is open; its
-            // visibility is governed by the card/tower phase, not the shop.
             EnsurePathToolBar();
             if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
         public void RecoverUIForShop()
         {
-            SetActive(quitButton, true);
-            SetActive(nextButton, true);
+            if (quitButton) SetActive(quitButton, true);
             SetActive(openShopButton, true);
             SetActive(closeShopButton, false);
             EnsurePathToolBar();
@@ -191,6 +192,11 @@ namespace _project.Scripts.UI
         private static void SetActive(Component component, bool active)
         {
             if (component) component.gameObject.SetActive(active);
+        }
+
+        private static void SetActive(GameObject target, bool active)
+        {
+            if (target) target.SetActive(active);
         }
     }
 }

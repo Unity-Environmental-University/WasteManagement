@@ -92,8 +92,6 @@ namespace _project.Scripts.Core
             ShowUtilityPhaseObjects();
             _gm.placementInventory?.SelectFirstAvailable();
             _gm.deckManager?.DrawNewHand();
-            // TODO: re-enable hand UI when card system is back in use
-            // _gm.interfaceManager.PopulateHand(_gm.deckManager.Hand);
             _gm.interfaceManager?.ShowPrepUI();
             RefreshInfoBar();
 
@@ -104,18 +102,14 @@ namespace _project.Scripts.Core
 
         private void SwitchCamera()
         {
-            var top = _gm.topDownCamera;
-            var main = _gm.mainCamera;
-
-            if (!top || !main)
+            if (!_gm.cameraController)
             {
-                Debug.LogWarning("[TurnController] Missing camera reference; cannot switch cameras.");
+                Debug.LogWarning("[TurnController] Missing camera controller; cannot switch cameras.");
                 return;
             }
 
             var isCardPhase = currentPhase == GamePhase.Card;
-            main.gameObject.SetActive(!isCardPhase);
-            top.gameObject.SetActive(isCardPhase);
+            _gm.cameraController.SwitchTo(isCardPhase ? CameraView.Secondary : CameraView.Main);
         }
 
         public void EndPhase()
@@ -249,6 +243,7 @@ namespace _project.Scripts.Core
         {
             if (!_gm || !_gm.tileSpawner) return;
 
+            _gm.interfaceManager.HidePrepUI();
             SetRenderersEnabled(_gm.tileSpawner.SpawnedUtilityTiles, visible);
             SetRenderersEnabled(_gm.tileSpawner.SpawnedBuffTiles, visible);
         }

@@ -13,8 +13,7 @@ namespace _project.Scripts.Core
     public class GameMaster : MonoBehaviour
     {
         [Header("Major Game Components")] 
-        public Camera mainCamera;
-        public Camera topDownCamera;
+        public CameraController cameraController;
         public TurnController turnController;
         public PopulationManager popManager;
         public TowerManager towerManager;
@@ -52,6 +51,7 @@ namespace _project.Scripts.Core
 
             Instance = this;
 
+            if (!cameraController) cameraController = GetComponent<CameraController>();
             if (!turnController) turnController = GetComponent<TurnController>();
             if (!popManager) popManager = GetComponent<PopulationManager>();
             if (!towerManager) towerManager = GetComponent<TowerManager>();
@@ -63,6 +63,7 @@ namespace _project.Scripts.Core
             if (!pathBuildBoard) pathBuildBoard = GetComponentInChildren<PathBuildBoard>();
 
             var missing = new List<string>();
+            if (!cameraController) missing.Add(nameof(cameraController));
             if (!turnController) missing.Add(nameof(turnController));
             if (!popManager) missing.Add(nameof(popManager));
             if (!towerManager) missing.Add(nameof(towerManager));

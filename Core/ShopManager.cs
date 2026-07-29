@@ -138,9 +138,25 @@ namespace _project.Scripts.Core
 
         public void OpenShop()
         {
+            // ShopManager currently lives on the ShopUI root in the main scene. If that root
+            // was saved inactive, the GameMaster can still call this serialized reference,
+            // but activating only the child panel leaves the entire shop invisible.
+            if (!gameObject.activeSelf)
+                gameObject.SetActive(true);
+
             GenerateShopInventory();
-            GameMaster.Instance.interfaceManager.HideUIForShop();
             if (shopPanel) shopPanel.SetActive(true);
+
+            // Never hide the normal controls unless the replacement UI can actually be seen.
+            // This avoids leaving the player with a blank UI when a parent canvas/container
+            // is inactive or the panel reference is missing.
+            if (!shopPanel || !shopPanel.activeInHierarchy)
+            {
+                Debug.LogWarning("[ShopManager] Shop panel is not visible; keeping the regular UI active.", this);
+                return;
+            }
+
+            GameMaster.Instance?.interfaceManager?.HideUIForShop();
             if (Debugging) Debug.Log("[ShopManager] Shop opened.");
         }
 
@@ -158,7 +174,7 @@ namespace _project.Scripts.Core
         public void CloseShop()
         {
             if (shopPanel) shopPanel.SetActive(false);
-            GameMaster.Instance.interfaceManager.RecoverUIForShop();
+            GameMaster.Instance?.interfaceManager?.RecoverUIForShop();
             if (Debugging) Debug.Log("[ShopManager] Shop closed.");
         }
 

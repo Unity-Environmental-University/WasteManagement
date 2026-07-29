@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -126,6 +127,48 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void ShopManager_OpenShop_ReactivatesInactiveUiRootAndShowsPanel()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var shopRoot = CreateGameObject("Shop UI");
+            var shopPanel = CreateGameObject("Shop Panel");
+            shopPanel.transform.SetParent(shopRoot.transform);
+            shopRoot.SetActive(false);
+
+            var shopManager = shopRoot.AddComponent<ShopManager>();
+            SetPrivateField(shopManager, "shopPanel", shopPanel);
+            gameMaster.shopManager = shopManager;
+
+            shopManager.OpenShop();
+
+            Assert.IsTrue(shopRoot.activeSelf);
+            Assert.IsTrue(shopPanel.activeInHierarchy);
+        }
+
+        [Test]
+        public void CameraController_RepeatedRequestsDoNotReplaceActiveShake_AndCanShakeAgainAfterStopping()
+        {
+            var controller = CreateGameObject("Camera Controller").AddComponent<CameraController>();
+            var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
+            var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
+            SetPrivateField(controller, "mainCamera", mainCamera);
+            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
+
+            controller.Shake(1f);
+            var firstShake = GetPrivateField<object>(controller, "_shakeTween");
+
+            controller.Shake(1f);
+            Assert.AreSame(firstShake, GetPrivateField<object>(controller, "_shakeTween"));
+
+            controller.StopShake();
+            Assert.IsFalse(controller.IsShaking);
+
+            controller.Shake(1f);
+            Assert.IsTrue(controller.IsShaking);
+            Assert.AreNotSame(firstShake, GetPrivateField<object>(controller, "_shakeTween"));
+        }
+
+        [Test]
         public void CesspitCap_PurchaseThenClickSealsOnlySelectedCesspit()
         {
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
@@ -172,6 +215,20 @@ namespace _project.Scripts.Tests
             var go = new GameObject(name);
             _created.Add(go);
             return go;
+        }
+
+        private static void SetPrivateField<T>(T target, string fieldName, object value)
+        {
+            var field = typeof(T).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, $"Expected private field '{fieldName}' on {typeof(T).Name}.");
+            field.SetValue(target, value);
+        }
+
+        private static TValue GetPrivateField<TValue>(object target, string fieldName)
+        {
+            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(field, $"Expected private field '{fieldName}' on {target.GetType().Name}.");
+            return (TValue)field.GetValue(target);
         }
 
         private sealed class TestPlaceable : IPlaceable
