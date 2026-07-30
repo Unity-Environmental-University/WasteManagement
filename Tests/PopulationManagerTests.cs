@@ -20,26 +20,27 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_CleanWave_GrowsByBaseRate()
+        public void ApplyPostWaveGrowth_CleanFirstWave_ReachesLevelTwo()
         {
             var populationManager = CreatePopulationManager();
 
-            populationManager.ApplyPostWaveGrowth(0);
+            var result = populationManager.ApplyPostWaveGrowth(0);
 
-            // Starting pop 4 + base growth 3.
-            Assert.AreEqual(7, populationManager.GetPopulationSize());
+            // Starting pop 4 + base growth 3 + level-one onboarding bonus 4.
+            Assert.AreEqual(11, populationManager.GetPopulationSize());
+            Assert.AreEqual(2, populationManager.GetLevelByPopulationSize());
+            Assert.IsTrue(result.LeveledUp);
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_CleanWaves_GrowConsistently()
+        public void ApplyPostWaveGrowth_LevelTwo_ReturnsToNormalGrowth()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.ApplyPostWaveGrowth(0);
             populationManager.ApplyPostWaveGrowth(0);
-            populationManager.ApplyPostWaveGrowth(0);
 
-            Assert.AreEqual(13, populationManager.GetPopulationSize());
+            Assert.AreEqual(14, populationManager.GetPopulationSize());
             Assert.AreEqual(2, populationManager.GetLevelByPopulationSize());
         }
 
@@ -50,31 +51,31 @@ namespace _project.Scripts.Tests
 
             populationManager.ApplyPostWaveGrowth(20);
 
-            // Base 3 + 20 infra * 0.1 bonus = 5.
-            Assert.AreEqual(9, populationManager.GetPopulationSize());
+            // Base 3 + level-one bonus 4 + 20 infra * 0.1 bonus = 9.
+            Assert.AreEqual(13, populationManager.GetPopulationSize());
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_LakePollution_GreatlyReducesGrowth()
+        public void ApplyPostWaveGrowth_LevelOneLakePollution_HasGentlePenalty()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.RecordLakePollution(2f);
             populationManager.ApplyPostWaveGrowth(0);
 
-            // Base 3 - 2 pollution = 1.
-            Assert.AreEqual(5, populationManager.GetPopulationSize());
+            // Level-one penalties are quarter strength: 3 base + 4 bonus - 0.5 pollution = 6.5.
+            Assert.AreEqual(10, populationManager.GetPopulationSize());
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_HeavyPollution_HaltsGrowthButNeverShrinks()
+        public void ApplyPostWaveGrowth_HeavyPollution_StillMakesMinimumLevelOneProgress()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.RecordLakePollution(50f);
             populationManager.ApplyPostWaveGrowth(0);
 
-            Assert.AreEqual(4, populationManager.GetPopulationSize());
+            Assert.AreEqual(6, populationManager.GetPopulationSize());
         }
 
         [Test]
@@ -86,20 +87,20 @@ namespace _project.Scripts.Tests
             populationManager.ApplyPostWaveGrowth(0);
             populationManager.ApplyPostWaveGrowth(0);
 
-            // The polluted wave halts growth; the following clean wave grows normally.
-            Assert.AreEqual(7, populationManager.GetPopulationSize());
+            // The polluted wave still adds 2; the following clean wave reaches level 2.
+            Assert.AreEqual(13, populationManager.GetPopulationSize());
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_Stink_ReducesGrowth()
+        public void ApplyPostWaveGrowth_LevelOneStink_HasGentlePenalty()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.StinkValue = 4f;
             populationManager.ApplyPostWaveGrowth(0);
 
-            // Base 3 - 4 stink * 0.5 penalty = 1.
-            Assert.AreEqual(5, populationManager.GetPopulationSize());
+            // Level-one penalties are quarter strength: 3 base + 4 bonus - 0.5 stink = 6.5.
+            Assert.AreEqual(10, populationManager.GetPopulationSize());
         }
 
         [Test]
@@ -131,8 +132,8 @@ namespace _project.Scripts.Tests
 
             var result = populationManager.ApplyPostWaveGrowth(0);
 
-            // Base 3 - 4 stink * 0.5 penalty = 1.
-            Assert.AreEqual(5, populationManager.GetPopulationSize());
+            // Level-one penalties are quarter strength: 3 base + 4 bonus - 0.5 stink = 6.5.
+            Assert.AreEqual(10, populationManager.GetPopulationSize());
             Assert.AreEqual(4f, result.Stink, 0.0001f);
         }
 
@@ -141,7 +142,7 @@ namespace _project.Scripts.Tests
         {
             var populationManager = CreatePopulationManager();
 
-            Assert.AreEqual(0.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
+            Assert.AreEqual(0.35f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
         }
 
         [Test]
@@ -156,13 +157,13 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void GetIssueSpawnRateMultiplier_PopulationBelowStarting_DoesNotDropBelowStartingRate()
+        public void GetIssueSpawnRateMultiplier_PopulationBelowStarting_UsesLevelOneAssistance()
         {
             var populationManager = CreatePopulationManager();
 
             populationManager.ChangePopulationSize(-10);
 
-            Assert.AreEqual(0.7f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
+            Assert.AreEqual(0.35f, populationManager.GetIssueSpawnRateMultiplier(), 0.0001f);
         }
 
         [Test]
@@ -170,7 +171,7 @@ namespace _project.Scripts.Tests
         {
             var populationManager = CreatePopulationManager();
 
-            Assert.AreEqual(18f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
+            Assert.AreEqual(9f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
         }
 
         [Test]

@@ -36,6 +36,13 @@ namespace _project.Scripts.Core
 
     public class PopulationManager : MonoBehaviour
     {
+        // Level 1 is an onboarding ramp. It should be difficult to lose all momentum
+        // before the player has unlocked the level 2 tools.
+        private const float LevelOneWavePressureMultiplier = 0.5f;
+        private const int LevelOneGrowthBonus = 4;
+        private const float LevelOnePenaltyMultiplier = 0.25f;
+        private const int LevelOneMinimumGrowth = 2;
+
         [SerializeField] private int startingPopSize = 4;
 
         [Header("Wave Pressure")]
@@ -100,9 +107,10 @@ namespace _project.Scripts.Core
 
         /// <summary>
         ///     Grows the population after a wave: a steady base rate plus a small
-        ///     infrastructure bonus, greatly reduced by pollution that reached the lake
-        ///     this wave and reduced by town stink. Growth is halted (never negative)
-        ///     when penalties outweigh the gains.
+        ///     infrastructure bonus, reduced by pollution that reached the lake this wave
+        ///     and by town stink. Level 1 adds an onboarding bonus, softens those penalties,
+        ///     and guarantees some progress; later levels can halt growth when penalties
+        ///     outweigh the gains.
         /// </summary>
         public PostWaveGrowthResult ApplyPostWaveGrowth(int infrastructureValue)
         {
@@ -112,13 +120,17 @@ namespace _project.Scripts.Core
             var pollution = _wavePollution;
             var stink = GetCurrentStink();
 
+            var isLevelOne = levelBefore == 1;
+            var penaltyMultiplier = isLevelOne ? LevelOnePenaltyMultiplier : 1f;
             var growth = baseGrowthPerWave
+                         + (isLevelOne ? LevelOneGrowthBonus : 0)
                          + infrastructureValue * infrastructureGrowthBonus
-                         - pollution * pollutionGrowthPenalty
-                         - stink * stinkGrowthPenalty;
+                         - pollution * pollutionGrowthPenalty * penaltyMultiplier
+                         - stink * stinkGrowthPenalty * penaltyMultiplier;
 
             _wavePollution = 0f;
-            var appliedGrowth = Mathf.Max(0, Mathf.FloorToInt(growth));
+            var minimumGrowth = isLevelOne ? LevelOneMinimumGrowth : 0;
+            var appliedGrowth = Mathf.Max(minimumGrowth, Mathf.FloorToInt(growth));
             SetPopulationSize(_populationSize + appliedGrowth);
 
             return new PostWaveGrowthResult(
@@ -138,13 +150,19 @@ namespace _project.Scripts.Core
         /// </summary>
         public float GetIssueSpawnRateMultiplier()
         {
-            return GetPopulationScaledValue(startingSpawnRateMultiplier, spawnRateGrowthPerPop, 0.01f);
+            var multiplier = GetPopulationScaledValue(startingSpawnRateMultiplier, spawnRateGrowthPerPop, 0.01f);
+            return GetLevelByPopulationSize() == 1
+                ? multiplier * LevelOneWavePressureMultiplier
+                : multiplier;
         }
 
         public float GetScaledWaveDuration(float baseDuration)
         {
-            return Mathf.Max(0f, baseDuration) *
-                   GetPopulationScaledValue(startingWaveDurationMultiplier, waveDurationGrowthPerPop, 0f);
+            var duration = Mathf.Max(0f, baseDuration) *
+                           GetPopulationScaledValue(startingWaveDurationMultiplier, waveDurationGrowthPerPop, 0f);
+            return GetLevelByPopulationSize() == 1
+                ? duration * LevelOneWavePressureMultiplier
+                : duration;
         }
 
         private float GetPopulationScaledValue(float startingValue, float growthPerPop, float minimum)
