@@ -111,6 +111,88 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Rebuild_CachesOneAlternateRoute_WhenPathHasTwoCompleteOptions()
+        {
+            var fixture = CreateSplitPathFixture();
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.HasAlternateRoute);
+            Assert.AreEqual(12, fixture.Path.GetWaypointCount(0));
+            Assert.Greater(fixture.Path.GetWaypointCount(1), fixture.Path.GetWaypointCount(0));
+        }
+
+        [Test]
+        public void RoutesCanMerge_AfterBranchesRejoin_ButNotWhileTheyAreSeparated()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            // Both routes share waypoint 3 at the fork but target different cells afterward.
+            Assert.IsFalse(fixture.Path.CanRoutesMergeAtProgress(0, 4, 1, 4));
+
+            // The last three targets are the shared rejoin cell, final board cell, and endpoint.
+            Assert.IsTrue(fixture.Path.CanRoutesMergeAtProgress(
+                0, fixture.Path.GetWaypointCount(0) - 3,
+                1, fixture.Path.GetWaypointCount(1) - 3));
+        }
+
+        [Test]
+        public void PathSplitterShopItem_OnlyPlacesOnTheDiscoveredSplitCell()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gameMaster.pathBuildBoard = fixture.Board;
+            var prefab = CreateGameObject("Path Splitter Prefab");
+            prefab.AddComponent<PathSplitter>();
+            var item = new PathSplitterShopItem("Path Splitter", string.Empty, 1, prefab, null, 1);
+
+            Assert.IsNull(item.Place(GetCell(fixture.Board, 1, 1).transform));
+
+            var placed = item.Place(GetCell(fixture.Board, 1, 2).transform);
+            Assert.IsNotNull(placed);
+            _created.Add(placed);
+        }
+
+        [Test]
+        public void PathSplitter_AlternatesIssuesExactlyFiftyFifty()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            splitter.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 2));
+            var issues = new IssueObject[4];
+            for (var i = 0; i < issues.Length; i++)
+            {
+                issues[i] = CreatePrimitive($"Issue {i}").AddComponent<IssueObject>();
+                issues[i].SetPath(fixture.Path);
+                Assert.IsTrue(splitter.RouteIssue(issues[i]));
+            }
+
+            Assert.AreEqual(0, issues[0].GetRouteIndex());
+            Assert.AreEqual(1, issues[1].GetRouteIndex());
+            Assert.AreEqual(0, issues[2].GetRouteIndex());
+            Assert.AreEqual(1, issues[3].GetRouteIndex());
+        }
+
+        [Test]
+        public void PathSplitter_DoesNothing_WhenThereIsOnlyOneCompleteRoute()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
+            issue.SetPath(fixture.Path);
+
+            Assert.IsFalse(splitter.RouteIssue(issue));
+            Assert.AreEqual(0, issue.GetRouteIndex());
+        }
+
+        [Test]
         public void Rebuild_LeavesCountZero_WhenValidationFails()
         {
             var fixture = CreatePathFixture(0);
@@ -579,6 +661,23 @@ namespace _project.Scripts.Tests
             SetField(path, "endPoint", upper);
 
             return new PathFixture(board, path, lower, upper);
+        }
+
+        private PathFixture CreateSplitPathFixture()
+        {
+            var fixture = CreatePathFixture();
+
+            // Shared start, short center route, shared end.
+            PlaceVertical(fixture.Board, 1, 0, 3);
+            PlaceVertical(fixture.Board, 1, 3, 5);
+            PlaceVertical(fixture.Board, 1, 8, 2);
+
+            // Longer right-hand option from the fork at (1,2), rejoining at (1,8).
+            PlaceHorizontal(fixture.Board, 2, 2, 2);
+            PlaceVertical(fixture.Board, 3, 3, 5);
+            PlaceHorizontal(fixture.Board, 2, 8, 2);
+
+            return fixture;
         }
 
         private TurnFixture CreateTurnFixture(bool validPath)

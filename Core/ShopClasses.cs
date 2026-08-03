@@ -235,6 +235,47 @@ namespace _project.Scripts.Core
         }
     }
 
+    public class PathSplitterShopItem : IPlaceable
+    {
+        private readonly GameObject _prefab;
+
+        public PathSplitterShopItem(string displayName, string description, int requiredLevel, GameObject prefab,
+            Sprite displaySprite, int infraValue)
+        {
+            DisplayName = displayName;
+            Description = description;
+            RequiredLevel = Mathf.Max(1, requiredLevel);
+            _prefab = prefab;
+            DisplaySprite = displaySprite;
+            InfraValue = infraValue;
+        }
+
+        public string DisplayName { get; }
+        public string Description { get; }
+        public int RequiredLevel { get; }
+        public int InfraValue { get; }
+        public Sprite DisplaySprite { get; }
+        public bool RemoveAfterPurchase => true;
+        public PlaceableType PlaceableType => PlaceableType.Utility;
+
+        public void Purchase()
+        {
+            GameMaster.Instance.placementInventory.Add(this);
+        }
+
+        public GameObject Place(Transform location)
+        {
+            if (!PlacementRules.TryGetPipeBoard(location, out var board)) return null;
+            if (!board.IsPathSplitPoint(location.position)) return null;
+
+            var rotation = location.rotation;
+            if (board.TryGetPathFacingRotation(location.position, out var pathRotation))
+                rotation = pathRotation;
+
+            return Object.Instantiate(_prefab, location.position, rotation);
+        }
+    }
+
     public class CesspitShopItem : IPlaceable
     {
         private readonly GameObject _prefab;

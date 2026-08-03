@@ -56,6 +56,7 @@ namespace _project.Scripts.Object_Scripts
         private const float MinMoveSpeed = 0.1f;
         private Transform _startPoint;
         private int _waypointIndex;
+        private int _routeIndex;
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
         private Color? _visualOverrideColor;
@@ -138,14 +139,14 @@ namespace _project.Scripts.Object_Scripts
             }
 
             // GUARD: If no path is assigned OR we've consumed all waypoints, we've reached the end
-            if (!path || _waypointIndex >= path.Count)
+            if (!path || _waypointIndex >= path.GetWaypointCount(_routeIndex))
             {
                 ReachEnd();
                 return;
             }
 
             // Fetch the world-space position of the current target waypoint
-            var target = path.GetPosition(_waypointIndex);
+            var target = path.GetPosition(_routeIndex, _waypointIndex);
 
             // Lift the target up so the issue rides ON TOP of the pipe instead of inside it
             // (scaled by this issue's size so bigger issues sit higher)
@@ -347,10 +348,33 @@ namespace _project.Scripts.Object_Scripts
             return _waypointIndex;
         }
 
+        public int GetRouteIndex()
+        {
+            return _routeIndex;
+        }
+
         public void SetPath(WaypointPath p)
         {
             path = p;
+            _routeIndex = 0;
+            _waypointIndex = 0;
             IsDirectDestination = false;
+        }
+
+        /// <summary>
+        ///     Moves this issue onto one of the path's two routes while preserving its progress.
+        ///     Used by PathSplitter; route 0 is the normal shortest route and route 1 is the
+        ///     alternate branch discovered during WaypointPath.Rebuild().
+        /// </summary>
+        public bool TrySetRoute(int routeIndex)
+        {
+            if (!path || IsDirectDestination) return false;
+            if (routeIndex is < 0 or > 1) return false;
+            if (routeIndex == 1 && !path.HasAlternateRoute) return false;
+
+            _routeIndex = routeIndex;
+            _waypointIndex = path.FindClosestWaypointIndex(routeIndex, transform.position, _waypointIndex);
+            return true;
         }
 
         private void OnTriggerEnter(Collider other)
@@ -365,6 +389,7 @@ namespace _project.Scripts.Object_Scripts
             _directDestination = destination;
             IsDirectDestination = true;
             path = null;
+            _routeIndex = 0;
             // Off-pipe travel can't block the pipe — clear any jam state.
             UpdatePipeBlockState();
         }
@@ -454,6 +479,9 @@ namespace _project.Scripts.Object_Scripts
             if (!isActiveAndEnabled || !other.isActiveAndEnabled) return false;
             if (IsDirectDestination || other.IsDirectDestination) return false;
             if (!path || path != other.path) return false;
+            if (!path.CanRoutesMergeAtProgress(_routeIndex, _waypointIndex,
+                    other._routeIndex, other._waypointIndex))
+                return false;
 
             return true;
         }
@@ -527,10 +555,10 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void AlignBlockingIssueHeight()
         {
-            if (!IsBlockingPipe || !path || _waypointIndex >= path.Count) return;
+            if (!IsBlockingPipe || !path || _waypointIndex >= path.GetWaypointCount(_routeIndex)) return;
 
             var position = transform.position;
-            position.y = path.GetPosition(_waypointIndex).y + transform.localScale.y * PathHeight;
+            position.y = path.GetPosition(_routeIndex, _waypointIndex).y + transform.localScale.y * PathHeight;
             transform.position = position;
         }
 

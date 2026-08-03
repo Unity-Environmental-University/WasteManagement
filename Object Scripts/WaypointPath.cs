@@ -54,12 +54,23 @@ namespace _project.Scripts.Object_Scripts
         // The final ordered list of world-space positions enemies traverse.
         // Built by Rebuild() — do not modify directly.
         private readonly List<Vector3> _waypoints = new();
+        private readonly List<Vector3> _alternateWaypoints = new();
+        private Vector2Int? _splitCell;
+
+        private static readonly Vector2Int[] Directions =
+        {
+            Vector2Int.right,
+            Vector2Int.left,
+            Vector2Int.up,
+            Vector2Int.down
+        };
 
         /// <summary>
         ///     The total number of waypoints in the current path. Used by IssueObject
         ///     to detect when it has reached the end of the route.
         /// </summary>
         public int Count => _waypoints.Count;
+        public bool HasAlternateRoute => _alternateWaypoints.Count > 0;
         public Transform Destination => endPoint;
 
         public bool IsValid { get; private set; }
@@ -81,6 +92,9 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_subscribedBoard)
                 _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
+            if (pathBuildBoard)
+                pathBuildBoard.ClearPriorityVisualPath();
+            _splitCell = null;
             _subscribedBoard = null;
         }
 
@@ -137,6 +151,86 @@ namespace _project.Scripts.Object_Scripts
             return _waypoints[index];
         }
 
+        public int GetWaypointCount(int routeIndex)
+        {
+            return routeIndex == 1 && HasAlternateRoute ? _alternateWaypoints.Count : _waypoints.Count;
+        }
+
+        public Vector3 GetPosition(int routeIndex, int waypointIndex)
+        {
+            return routeIndex == 1 && HasAlternateRoute
+                ? _alternateWaypoints[waypointIndex]
+                : _waypoints[waypointIndex];
+        }
+
+        /// <summary>
+        ///     Returns whether two issues may merge at their current route progress. Issues on
+        ///     different branches stay isolated until both are targeting the shared route suffix
+        ///     where the branches have rejoined.
+        /// </summary>
+        public bool CanRoutesMergeAtProgress(int firstRouteIndex, int firstWaypointIndex,
+            int secondRouteIndex, int secondWaypointIndex)
+        {
+            if (firstRouteIndex is < 0 or > 1 || secondRouteIndex is < 0 or > 1)
+                return false;
+            if (firstRouteIndex == secondRouteIndex) return true;
+            if (!HasAlternateRoute) return false;
+
+            var defaultWaypointIndex = firstRouteIndex == 0 ? firstWaypointIndex : secondWaypointIndex;
+            var alternateWaypointIndex = firstRouteIndex == 1 ? firstWaypointIndex : secondWaypointIndex;
+            var sharedWaypointCount = GetSharedSuffixWaypointCount();
+            if (sharedWaypointCount == 0) return false;
+
+            return defaultWaypointIndex >= _waypoints.Count - sharedWaypointCount &&
+                   alternateWaypointIndex >= _alternateWaypoints.Count - sharedWaypointCount;
+        }
+
+        private int GetSharedSuffixWaypointCount()
+        {
+            var sharedCount = 0;
+            var defaultIndex = _waypoints.Count - 1;
+            var alternateIndex = _alternateWaypoints.Count - 1;
+            while (defaultIndex >= 0 && alternateIndex >= 0 &&
+                   Vector3.SqrMagnitude(_waypoints[defaultIndex] - _alternateWaypoints[alternateIndex]) < 0.0001f)
+            {
+                sharedCount++;
+                defaultIndex--;
+                alternateIndex--;
+            }
+
+            return sharedCount;
+        }
+
+        public int FindClosestWaypointIndex(int routeIndex, Vector3 position, int minimumIndex = 0)
+        {
+            var route = routeIndex == 1 && HasAlternateRoute ? _alternateWaypoints : _waypoints;
+            if (route.Count == 0) return 0;
+
+            var closestIndex = Mathf.Clamp(minimumIndex, 0, route.Count - 1);
+            var closestDistance = float.PositiveInfinity;
+            for (var i = closestIndex; i < route.Count; i++)
+            {
+                var distance = Vector3.SqrMagnitude(position - route[i]);
+                if (distance >= closestDistance) continue;
+
+                closestDistance = distance;
+                closestIndex = i;
+            }
+
+            return closestIndex;
+        }
+
+        public bool IsSplitPoint(Vector3 worldPosition)
+        {
+            return _splitCell.HasValue && pathBuildBoard &&
+                   pathBuildBoard.TryWorldToCell(worldPosition, out var cell) && cell == _splitCell.Value;
+        }
+
+        public bool UsesBoard(PathBuildBoard board)
+        {
+            return pathBuildBoard == board;
+        }
+
         /// <summary>
         ///     Rebuilds the waypoint list using BFS through occupied grid cells.
         ///     Algorithm:
@@ -155,6 +249,8 @@ namespace _project.Scripts.Object_Scripts
         public bool Rebuild()
         {
             _waypoints.Clear();
+            _alternateWaypoints.Clear();
+            _splitCell = null;
             _pathCells.Clear();
             _unusedCells.Clear();
             IsValid = false;
@@ -213,6 +309,16 @@ namespace _project.Scripts.Object_Scripts
 
             // Bookend with endPoint
             _waypoints.Add(endPoint.position);
+
+            var alternateCellPath = FindAlternateRoute(cellPath, goals, out _splitCell);
+            if (alternateCellPath != null)
+            {
+                _alternateWaypoints.Add(startPoint.position);
+                foreach (var cell in alternateCellPath)
+                    _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+                _alternateWaypoints.Add(endPoint.position);
+            }
+
             IsValid = true;
             InvalidReason = null;
             RefreshLivePreview();
@@ -226,19 +332,47 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public void RefreshLivePreview()
         {
-            var renderer = GetLivePreviewRenderer();
-            if (!renderer) return;
+            // Never let placement validation retain a fork from a previous board layout.
+            _splitCell = null;
 
-            renderer.enabled = false;
-            renderer.positionCount = 0;
-            if (!showLivePreview || !pathBuildBoard || !startPoint || !endPoint) return;
+            var renderer = GetLivePreviewRenderer();
+            if (renderer)
+            {
+                renderer.enabled = false;
+                renderer.positionCount = 0;
+            }
+
+            if (!pathBuildBoard || !startPoint || !endPoint)
+            {
+                if (pathBuildBoard) pathBuildBoard.ClearPriorityVisualPath();
+                return;
+            }
 
             var starts = GetOccupiedEndpointNeighbors(startPoint);
-            if (starts.Count == 0) return;
+            if (starts.Count == 0)
+            {
+                pathBuildBoard.ClearPriorityVisualPath();
+                return;
+            }
 
             var goals = GetOccupiedEndpointNeighbors(endPoint);
             var previewCells = FindPreviewPath(starts, goals, out var complete);
-            if (previewCells == null || previewCells.Count == 0) return;
+            if (previewCells == null || previewCells.Count == 0)
+            {
+                pathBuildBoard.ClearPriorityVisualPath();
+                return;
+            }
+
+            var alternatePreviewCells = complete
+                ? FindAlternateRoute(previewCells, goals, out _splitCell)
+                : null;
+            if (!complete)
+                _splitCell = null;
+
+            pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
+                complete ? endPoint.position : null, alternatePreviewCells);
+
+            if (!showLivePreview || !renderer) return;
 
             var pointCount = previewCells.Count + 1 + (complete ? 1 : 0);
             renderer.positionCount = pointCount;
@@ -314,12 +448,6 @@ namespace _project.Scripts.Object_Scripts
                 cameFrom[start] = start;
             }
 
-            var directions = new[]
-            {
-                new Vector2Int(1, 0), new Vector2Int(-1, 0),
-                new Vector2Int(0, 1), new Vector2Int(0, -1)
-            };
-
             while (frontier.Count > 0)
             {
                 var current = frontier.Dequeue();
@@ -337,7 +465,7 @@ namespace _project.Scripts.Object_Scripts
                     break;
                 }
 
-                foreach (var direction in directions)
+                foreach (var direction in Directions)
                 {
                     var next = current + direction;
                     if (cameFrom.ContainsKey(next) || !pathBuildBoard.IsOccupied(next)) continue;
@@ -374,7 +502,8 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private List<Vector2Int> BreadthFirstSearch(
             IReadOnlyList<Vector2Int> starts,
-            IReadOnlyCollection<Vector2Int> goals
+            IReadOnlyCollection<Vector2Int> goals,
+            ISet<Vector2Int> blocked = null
         )
         {
             if (starts == null || starts.Count == 0 || goals == null || goals.Count == 0)
@@ -391,19 +520,11 @@ namespace _project.Scripts.Object_Scripts
 
             foreach (var start in starts)
             {
+                if (blocked != null && blocked.Contains(start)) continue;
                 if (!pathBuildBoard.IsOccupied(start) || cameFrom.ContainsKey(start)) continue;
                 frontier.Enqueue(start);
                 cameFrom[start] = start;
             }
-
-            // 4-way neighbor offsets (no diagonals): right, left, up, down
-            var directions = new[]
-            {
-                new Vector2Int(01, 00),
-                new Vector2Int(-1, 00),
-                new Vector2Int(00, 01),
-                new Vector2Int(00, -1)
-            };
 
             Vector2Int? foundGoal = null;
 
@@ -420,11 +541,12 @@ namespace _project.Scripts.Object_Scripts
                 }
 
                 // Check all 4 neighbors
-                foreach (var dir in directions)
+                foreach (var dir in Directions)
                 {
                     var next = current + dir;
 
                     // Skip if: already visited, out of bounds, or not occupied
+                    if (blocked != null && blocked.Contains(next)) continue;
                     if (cameFrom.ContainsKey(next)) continue;
                     if (!pathBuildBoard.IsOccupied(next)) continue;
 
@@ -451,6 +573,50 @@ namespace _project.Scripts.Object_Scripts
             return path;
         }
 
+        /// <summary>
+        ///     Finds one genuine second branch without enumerating every possible route. At the
+        ///     first fork on the normal shortest path, try each unused exit and keep the first one
+        ///     that can still reach the goal. The shared prefix is retained and the fork cell is
+        ///     blocked during the second BFS so the alternate cannot immediately turn around.
+        /// </summary>
+        private List<Vector2Int> FindAlternateRoute(
+            IReadOnlyList<Vector2Int> defaultRoute,
+            IReadOnlyCollection<Vector2Int> goals,
+            out Vector2Int? splitCell)
+        {
+            splitCell = null;
+            for (var forkIndex = 0; forkIndex < defaultRoute.Count - 1; forkIndex++)
+            {
+                var fork = defaultRoute[forkIndex];
+                var defaultExit = defaultRoute[forkIndex + 1];
+                var previous = forkIndex > 0 ? defaultRoute[forkIndex - 1] : (Vector2Int?)null;
+
+                foreach (var direction in Directions)
+                {
+                    var alternateExit = fork + direction;
+                    if (alternateExit == defaultExit || previous.HasValue && alternateExit == previous.Value)
+                        continue;
+                    if (!pathBuildBoard.IsOccupied(alternateExit)) continue;
+
+                    var blocked = new HashSet<Vector2Int>();
+                    for (var i = 0; i <= forkIndex; i++)
+                        blocked.Add(defaultRoute[i]);
+
+                    var continuation = BreadthFirstSearch(new[] { alternateExit }, goals, blocked);
+                    if (continuation == null) continue;
+
+                    var alternate = new List<Vector2Int>(forkIndex + 1 + continuation.Count);
+                    for (var i = 0; i <= forkIndex; i++)
+                        alternate.Add(defaultRoute[i]);
+                    alternate.AddRange(continuation);
+                    splitCell = fork;
+                    return alternate;
+                }
+            }
+
+            return null;
+        }
+
         // ============================================================
         // ANCHOR RESOLUTION
         // ============================================================
@@ -466,15 +632,7 @@ namespace _project.Scripts.Object_Scripts
             if (!anchor || !pathBuildBoard) return candidates;
 
             var anchorCell = pathBuildBoard.ClampToOutsideRing(pathBuildBoard.WorldToCellUnclamped(anchor.position));
-            var directions = new[]
-            {
-                new Vector2Int(01, 00),
-                new Vector2Int(-1, 00),
-                new Vector2Int(00, 01),
-                new Vector2Int(00, -1)
-            };
-
-            foreach (var direction in directions)
+            foreach (var direction in Directions)
             {
                 var candidate = anchorCell + direction;
                 if (!pathBuildBoard.IsCellInBounds(candidate)) continue;

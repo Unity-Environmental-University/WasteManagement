@@ -75,18 +75,19 @@ namespace _project.Scripts.Object_Scripts
             var spawnPos = issue.transform.position;
             var srcPath = issue.GetPath();
             var srcIndex = issue.GetWaypointIndex();
+            var srcRoute = issue.GetRouteIndex();
 
             SetFullness(fullness + sludgePerIssue);
-            SpawnEffluent(spawnPos, srcPath, srcIndex);
+            SpawnEffluent(spawnPos, srcPath, srcIndex, srcRoute);
             Destroy(issue.gameObject);
         }
 
-        private void SpawnEffluent(Vector3 pos, WaypointPath p, int waypointIndex)
+        private void SpawnEffluent(Vector3 pos, WaypointPath p, int waypointIndex, int routeIndex)
         {
             if (!effluentPrefab) return;
             var go = Instantiate(effluentPrefab, pos, Quaternion.identity);
             if (go.TryGetComponent<EffluentObject>(out var eff))
-                eff.SetPath(p, waypointIndex);
+                eff.SetPath(p, waypointIndex, routeIndex);
         }
 
         private void SetFullness(float v)

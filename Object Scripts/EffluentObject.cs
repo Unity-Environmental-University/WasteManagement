@@ -10,6 +10,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Material cleanWaterMaterial;
 
         private int _waypointIndex;
+        private int _routeIndex;
 
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
@@ -24,13 +25,13 @@ namespace _project.Scripts.Object_Scripts
 
         private void Update()
         {
-            if (!path || _waypointIndex >= path.Count)
+            if (!path || _waypointIndex >= path.GetWaypointCount(_routeIndex))
             {
                 ReachEnd();
                 return;
             }
 
-            var target = path.GetPosition(_waypointIndex);
+            var target = path.GetPosition(_routeIndex, _waypointIndex);
             target.y += transform.localScale.y * PathHeight;
 
             transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
@@ -39,10 +40,11 @@ namespace _project.Scripts.Object_Scripts
                 _waypointIndex++;
         }
 
-        public void SetPath(WaypointPath p, int startIndex)
+        public void SetPath(WaypointPath p, int startIndex, int routeIndex = 0)
         {
             path = p;
             _waypointIndex = Mathf.Max(0, startIndex);
+            _routeIndex = routeIndex == 1 && p && p.HasAlternateRoute ? 1 : 0;
         }
 
         public void SetMoveSpeed(float speed) => moveSpeed = Mathf.Max(0f, speed);
