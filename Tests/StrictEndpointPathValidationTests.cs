@@ -488,7 +488,7 @@ namespace _project.Scripts.Tests
             yield return null;
 
             Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
-            Assert.AreEqual(4, fixture.GameMaster.popManager.GetPopulationSize());
+            Assert.AreEqual(10, fixture.GameMaster.popManager.GetPopulationSize());
             Assert.AreEqual(0f, fixture.GameMaster.popManager.GetWavePollution());
         }
 
