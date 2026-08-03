@@ -706,8 +706,9 @@ namespace _project.Scripts.Tests
             gm.placementInventory = placementInventory;
             gm.popManager = popManager;
             gm.interfaceManager = interfaceManager;
-            gm.mainCamera = mainCamera;
-            gm.topDownCamera = topDownCamera;
+            gm.cameraController = gm.gameObject.AddComponent<CameraController>();
+            SetField(gm.cameraController, "mainCamera", mainCamera);
+            SetField(gm.cameraController, "secondaryCamera", topDownCamera);
             gm.pathBuildBoard = pathFixture.Board;
             gm.entitySpawners = new List<EntitySpawner> { spawner };
 
