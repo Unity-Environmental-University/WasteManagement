@@ -54,11 +54,28 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color invalidPreviewColor = new(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color placedPipeColor = new(0.8f, 0.8f, 0.8f, 1f);
         [SerializeField] private Color breakPreviewColor = new(1f, 0.55f, 0.2f, 1f);
-        [SerializeField] private float pipeVisualHeight = 0.2f;
+        [Tooltip("Height used only for the untextured fallback box drawn when no pipe model is available.")]
+        [SerializeField]
+        private float pipeVisualHeight = 0.1f;
+
+        [Tooltip("Extra span added on top of the cell pitch so neighbouring tiles overlap slightly instead of leaving a hairline seam.")]
+        [SerializeField, Min(0f)]
+        private float pipeSeamOverlap = 0.01f;
+
+        [Tooltip("Vertical squash for pipe tiles. 1 keeps the model's authored proportions; lower flattens the pipe for the top-down camera. Applied equally to every piece, so joins stay aligned.")]
+        [SerializeField, Range(0.1f, 1f)]
+        private float pipeHeightScale = 0.5f;
+
+        [Tooltip("Where issues ride inside the pipe channel, as a fraction of the pipe's height. 0 is the channel floor, 1 the top of its walls.")]
+        [SerializeField, Range(0f, 1f)]
+        private float entityRideHeightFraction = 0.45f;
+
+        [SerializeField] private PipeVisualLibrary pipeVisualLibrary;
 
         public float entityOnBoardHeight;
         private readonly List<PlacedPathPiece> _placedPieces = new();
         private readonly Dictionary<int, GameObject> _placedVisuals = new();
+        private readonly Dictionary<Vector2Int, PipeConnections> _priorityVisualConnections = new();
 
         private PathBuildCell[,] _cells;
         private PathBuildCell _hoveredCell;
@@ -68,7 +85,22 @@ namespace _project.Scripts.Object_Scripts
         private int _highlightedPieceId; // Placed piece currently tinted for break preview (0 = none)
         private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
         private GameObject _previewVisual;
+        private PipeVisualLibrary _runtimePipeVisualLibrary;
         private Transform _visualRoot;
+        private MaterialPropertyBlock _colorPropertyBlock;
+
+        // World height of a scaled pipe tile, measured as tiles are built. Zero until the first
+        // model-backed tile exists, in which case the fallback box height stands in.
+        private float _measuredPipeTileHeight;
+
+        // Footprint of the straight module, measured once and reused for every piece type so all
+        // tiles share one scale. Cached against the library it was measured from.
+        private float _sharedPipeFootprint;
+        private PipeVisualLibrary _footprintSource;
+
+        // The authored pipe FBXs run front-to-back along local Z. Board rotation calculations
+        // use zero degrees for an east/west (local X) connection, so compensate at the source.
+        private const float PipeSourceAxisCorrection = 90f;
 
         /// <summary>
         ///     Read-only collection of all path pieces that have been successfully placed on the board.
@@ -90,6 +122,19 @@ namespace _project.Scripts.Object_Scripts
         ///     Accounts for the board's own scale, so callers don't hardcode cell dimensions.
         /// </summary>
         public Vector3 CellWorldSize => Vector3.Scale(transform.lossyScale, new Vector3(cellSize, cellHeight, cellSize));
+
+        /// <summary>
+        ///     Footprint every pipe tile is scaled to. Matching the cell pitch means adjacent tiles
+        ///     share an edge rather than leaving the cell gap open; the seam overlap then pushes the
+        ///     open sides just past that edge to hide the join.
+        /// </summary>
+        private float PipeCellPitch => cellSize + cellGap;
+
+        /// <summary>
+        ///     Height of a placed pipe above the cell surface. Derived from the scaled model so
+        ///     waypoints keep tracking the channel as the cell size or art changes.
+        /// </summary>
+        public float PipeSurfaceHeight => _measuredPipeTileHeight > 0f ? _measuredPipeTileHeight : pipeVisualHeight;
 
         /// <summary>
         ///     Initializes the grid by attempting to bind existing cells or building new ones.
@@ -207,6 +252,7 @@ namespace _project.Scripts.Object_Scripts
             _hoveredCell = null;
             _placedPieces.Clear();
             _placedVisuals.Clear();
+            _priorityVisualConnections.Clear();
             _nextPieceId = 1;
             _highlightedPieceId = 0;
             BuildGridIfNeeded();
@@ -319,9 +365,9 @@ namespace _project.Scripts.Object_Scripts
             }
 
             _placedPieces.Add(placedPiece);
-            var placedVisual = CreatePipeVisual($"Placed Pipe {placedPiece.id}", placedPipeColor);
+            var placedVisual = CreatePipeVisual($"Placed Pipe {placedPiece.id}");
             _placedVisuals[placedPiece.id] = placedVisual;
-            UpdatePipeVisual(placedVisual, footprint, piece.Orientation, placedPipeColor);
+            RefreshAllPlacedPipeGeometry();
             HidePreviewVisual();
             RefreshVisuals();
             NotifyPathLayoutChanged();
@@ -364,6 +410,7 @@ namespace _project.Scripts.Object_Scripts
 
             _placedVisuals.Remove(piece.id);
             _placedPieces.RemoveAt(pieceIndex);
+            RefreshAllPlacedPipeGeometry();
             RefreshVisuals();
             NotifyPathLayoutChanged();
             return true;
@@ -470,7 +517,7 @@ namespace _project.Scripts.Object_Scripts
                 cellObject.transform.localScale = new Vector3(cellSize, cellHeight, cellSize);
 
                 var rend = cellObject.GetComponent<Renderer>();
-                rend.material = cellMaterial ? new Material(cellMaterial) : new Material(rend.sharedMaterial);
+                if (cellMaterial) rend.sharedMaterial = cellMaterial;
 
                 var collisionComp = cellObject.GetComponent<Collider>();
                 if (collisionComp) collisionComp.isTrigger = true;
@@ -531,7 +578,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Gets or creates the "PipeVisuals" child GameObject that holds all pipe visual cubes.
+        ///     Gets or creates the "PipeVisuals" child GameObject that holds all pipe visuals.
         /// </summary>
         /// <returns>The Transform of the visual root.</returns>
         private Transform GetOrCreateVisualRoot()
@@ -552,7 +599,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_previewVisual) return _previewVisual;
 
-            _previewVisual = CreatePipeVisual("Pipe Preview", validPreviewColor);
+            _previewVisual = CreatePipeVisual("Pipe Preview");
             return _previewVisual;
         }
 
@@ -565,38 +612,31 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Creates a new cube GameObject for visualizing pipes (preview or placed).
-        ///     Collider is disabled so it doesn't interfere with mouse input on cells.
+        ///     Creates an empty visual root. Modular pipe tiles are added beneath this root by
+        ///     <see cref="UpdatePipeVisual" />.
         /// </summary>
         /// <param name="visualName">The name of the GameObject.</param>
-        /// <param name="color">The initial color of the visual.</param>
         /// <returns>The created visual GameObject (initially inactive).</returns>
-        private GameObject CreatePipeVisual(string visualName, Color color)
+        private GameObject CreatePipeVisual(string visualName)
         {
-            if (_visualRoot == null)
+            if (!_visualRoot)
                 _visualRoot = GetOrCreateVisualRoot();
 
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            visual.name = visualName;
-            visual.layer = gameObject.layer;
-            visual.transform.SetParent(_visualRoot, false);
-
-            var collisionComp = visual.GetComponent<Collider>();
-            if (collisionComp) collisionComp.enabled = false;
-
-            var rend = visual.GetComponent<Renderer>();
-            var sourceMaterial = pipeMaterial ? pipeMaterial : rend.sharedMaterial;
-            rend.material = new Material(sourceMaterial)
+            var visual = new GameObject(visualName)
             {
-                color = color
+                name = visualName,
+                layer = gameObject.layer
             };
+            visual.transform.SetParent(_visualRoot, false);
             visual.SetActive(false);
             return visual;
         }
 
         /// <summary>
-        ///     Updates a pipe visual's position, scale, and color based on the footprint and orientation.
-        ///     Calculates the center of the footprint and stretches the visual to span all cells.
+        ///     Rebuilds a pipe visual from one normalized modular model per occupied cell. Models
+        ///     are chosen from the cell's live neighbor connections, then rotated and scaled from
+        ///     their measured bounds. The horizontal size matches the cell pitch (including the
+        ///     gap), which makes consecutive cells meet as a single continuous structure.
         /// </summary>
         /// <param name="visual">The visual GameObject to update.</param>
         /// <param name="footprint">The list of grid cells the piece occupies.</param>
@@ -614,27 +654,473 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var firstCell = GetCell(footprint[0]);
-            var lastCell = GetCell(footprint[^1]);
-            if (!firstCell || !lastCell)
+            ClearVisualChildren(visual.transform);
+            visual.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
+            visual.transform.localScale = Vector3.one;
+
+            var additionalCells = new HashSet<Vector2Int>(footprint);
+            foreach (var cell in footprint)
             {
-                visual.SetActive(false);
-                return;
+                if (!GetCell(cell)) continue;
+
+                var connections = GetVisualConnections(cell, additionalCells, orientation);
+                var tile = CreatePipeTile(visual.transform, cell, connections, orientation);
+                if (!tile) continue;
+
+                tile.name = $"Pipe Tile {cell.x},{cell.y}";
             }
 
             SetVisualColor(visual, color);
-
-            var firstPosition = firstCell.transform.localPosition;
-            var lastPosition = lastCell.transform.localPosition;
-            var center = (firstPosition + lastPosition) * 0.5f;
-            var totalLength = cellSize * footprint.Count + cellGap * (footprint.Count - 1);
-            var pipeWidth = Mathf.Max(cellSize * 0.6f, cellSize - cellGap);
-
-            visual.transform.localPosition = new Vector3(center.x, (cellHeight + pipeVisualHeight) * 0.5f, center.z);
-            visual.transform.localScale = orientation == PathPieceOrientation.Horizontal
-                ? new Vector3(totalLength, pipeVisualHeight, pipeWidth)
-                : new Vector3(pipeWidth, pipeVisualHeight, totalLength);
             visual.SetActive(true);
+        }
+
+        private void RefreshAllPlacedPipeGeometry()
+        {
+            foreach (var piece in _placedPieces)
+                if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
+                    UpdatePipeVisual(visual, piece.cells, piece.orientation, placedPipeColor);
+        }
+
+        private GameObject CreatePipeTile(Transform parent, Vector2Int cell, PipeConnections connections,
+            PathPieceOrientation fallbackOrientation)
+        {
+            var library = GetPipeVisualLibrary();
+            var prefab = SelectPipePrefab(library, connections);
+
+            // The tile transform carries the board rotation and the one shared footprint scale;
+            // the model beneath it carries the per-axis seam adjustment. Splitting the two keeps
+            // every tile reporting the same uniform footprint whichever mesh it happens to use.
+            var tile = new GameObject("Pipe Tile");
+            tile.transform.SetParent(parent, false);
+            tile.transform.localPosition = Vector3.zero;
+            tile.transform.localRotation = Quaternion.Euler(0f,
+                GetPipeRotation(connections, fallbackOrientation) + PipeSourceAxisCorrection, 0f);
+            tile.transform.localScale = Vector3.one;
+
+            GameObject model;
+            if (prefab)
+            {
+                model = Instantiate(prefab, tile.transform);
+            }
+            else
+            {
+                model = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                model.transform.SetParent(tile.transform, false);
+                if (model.TryGetComponent<Renderer>(out var renderer) && pipeMaterial)
+                    renderer.sharedMaterial = pipeMaterial;
+            }
+
+            model.transform.localPosition = Vector3.zero;
+            model.transform.localRotation = Quaternion.identity;
+            model.transform.localScale = Vector3.one;
+            ConfigurePipeTileHierarchy(tile);
+
+            var renderers = tile.GetComponentsInChildren<Renderer>(true);
+            if (prefab) ApplyPipeSurfaceMaterial(renderers, library ? library.SurfaceMaterial : null);
+
+            // The straight module is the only mesh that stays closed on its side walls; every
+            // junction opens on both axes and so has to reach past the cell edge on both.
+            var opensOnBothAxes = !prefab || !library || prefab != library.StraightPipe;
+            NormalizePipeTile(tile, model.transform, cell, renderers, prefab, opensOnBothAxes);
+            return tile;
+        }
+
+        private PipeVisualLibrary GetPipeVisualLibrary()
+        {
+            if (pipeVisualLibrary) return pipeVisualLibrary;
+            if (!_runtimePipeVisualLibrary)
+                _runtimePipeVisualLibrary = PipeVisualLibrary.Load();
+            return _runtimePipeVisualLibrary;
+        }
+
+        private static GameObject SelectPipePrefab(PipeVisualLibrary library, PipeConnections connections)
+        {
+            if (!library) return null;
+
+            var connectionCount = CountConnections(connections);
+            // No dedicated cap is required: the straight model keeps isolated/off-route cells
+            // visually tidy and gives one-neighbor route cells an opening toward an endpoint.
+            if (connectionCount <= 1) return library.StraightPipe;
+
+            // A three-way cell must use the tee. Substituting the four-way mesh leaves its
+            // unused arm poking into a neighbour as a dead-end stub.
+            if (connectionCount == 3)
+                return library.TJunctionPipe ? library.TJunctionPipe : library.StraightPipe;
+
+            if (connectionCount >= 4)
+                return library.JunctionPipe ? library.JunctionPipe : library.StraightPipe;
+
+            return IsStraight(connections)
+                ? library.StraightPipe
+                : library.CornerPipe ? library.CornerPipe : library.StraightPipe;
+        }
+
+        private void NormalizePipeTile(GameObject tile, Transform model, Vector2Int cell,
+            IReadOnlyList<Renderer> renderers, GameObject prefab, bool opensOnBothAxes)
+        {
+            if (!TryCalculateLocalRendererBounds(tile.transform, renderers, out var bounds))
+            {
+                var fallbackPosition = GetLocalPosition(cell.x, cell.y);
+                tile.transform.localPosition =
+                    new Vector3(fallbackPosition.x, cellHeight * 0.5f + pipeVisualHeight * 0.5f, fallbackPosition.z);
+                tile.transform.localScale = new Vector3(PipeCellPitch, pipeVisualHeight, PipeCellPitch);
+                return;
+            }
+
+            // Every mesh in the kit is authored as a square single-cell module, so one footprint
+            // scale serves all of them, and it is measured once from the straight module rather
+            // than per mesh: a corner authored a fraction larger than its neighbours must not
+            // arrive at a join a step wider. X and Z stay equal so mortar courses line up on
+            // horizontal and vertical runs alike. Height is squashed separately for the top-down
+            // read; because the squash is the same for every piece, it costs only brick proportion
+            // on the walls, never joint alignment.
+            var footprint = GetSharedPipeFootprint(prefab, bounds);
+            var scale = footprint > Mathf.Epsilon ? PipeCellPitch / footprint : 1f;
+            var verticalScale = scale * pipeHeightScale;
+            tile.transform.localScale = new Vector3(scale, verticalScale, scale);
+
+            // The seam overlap is directional. A tile reaches past the cell edge only on the axes
+            // it actually opens on, closing those joins, and pulls in by the same amount on the
+            // sides it keeps walled — otherwise two parallel runs bleed into each other's cells.
+            // The authored modules run front-to-back along local Z, so that is the open axis.
+            var openFactor = 1f + pipeSeamOverlap / PipeCellPitch;
+            var closedFactor = 1f - pipeSeamOverlap / PipeCellPitch;
+            var modelScale = new Vector3(opensOnBothAxes ? openFactor : closedFactor, 1f, openFactor);
+            model.localScale = modelScale;
+
+            var totalScale = new Vector3(scale * modelScale.x, verticalScale, scale * modelScale.z);
+            var rotatedCenter = tile.transform.localRotation * Vector3.Scale(bounds.center, totalScale);
+            var cellPosition = GetLocalPosition(cell.x, cell.y);
+            tile.transform.localPosition = new Vector3(
+                cellPosition.x - rotatedCenter.x,
+                cellHeight * 0.5f - bounds.min.y * verticalScale,
+                cellPosition.z - rotatedCenter.z);
+
+            _measuredPipeTileHeight = bounds.size.y * verticalScale;
+        }
+
+        /// <summary>
+        ///     Footprint used to scale every pipe tile, taken from the straight module so that all
+        ///     piece types share one scale. Falls back to the tile's own bounds when no library
+        ///     model backs the tile (the untextured box).
+        /// </summary>
+        private float GetSharedPipeFootprint(GameObject prefab, Bounds tileBounds)
+        {
+            var tileFootprint = Mathf.Max(tileBounds.size.x, tileBounds.size.z);
+            var library = GetPipeVisualLibrary();
+            var reference = library ? library.StraightPipe : null;
+            if (!prefab || !reference) return tileFootprint;
+
+            if (_footprintSource != library || _sharedPipeFootprint <= Mathf.Epsilon)
+            {
+                _footprintSource = library;
+                _sharedPipeFootprint = MeasurePrefabFootprint(reference);
+            }
+
+            return _sharedPipeFootprint > Mathf.Epsilon ? _sharedPipeFootprint : tileFootprint;
+        }
+
+        private static float MeasurePrefabFootprint(GameObject prefab)
+        {
+            var bounds = default(Bounds);
+            var hasBounds = false;
+            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (!filter.sharedMesh) continue;
+                EncapsulateLocalBounds(prefab.transform, filter.transform, filter.sharedMesh.bounds,
+                    ref bounds, ref hasBounds);
+            }
+
+            return hasBounds ? Mathf.Max(bounds.size.x, bounds.size.z) : 0f;
+        }
+
+        private static bool TryCalculateLocalRendererBounds(Transform root, IReadOnlyList<Renderer> renderers,
+            out Bounds bounds)
+        {
+            bounds = default;
+            var hasBounds = false;
+            foreach (var renderer in renderers)
+                EncapsulateLocalBounds(root, renderer.transform, renderer.localBounds, ref bounds, ref hasBounds);
+
+            return hasBounds;
+        }
+
+        /// <summary>
+        ///     Expands <paramref name="bounds" /> (expressed in <paramref name="root" />'s local space)
+        ///     to cover the eight corners of <paramref name="localBounds" /> taken in
+        ///     <paramref name="source" />'s local space.
+        /// </summary>
+        private static void EncapsulateLocalBounds(Transform root, Transform source, Bounds localBounds,
+            ref Bounds bounds, ref bool hasBounds)
+        {
+            var min = localBounds.min;
+            var max = localBounds.max;
+
+            for (var x = 0; x < 2; x++)
+            for (var y = 0; y < 2; y++)
+            for (var z = 0; z < 2; z++)
+            {
+                var sourcePoint = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
+                    z == 0 ? min.z : max.z);
+                var rootPoint = root.InverseTransformPoint(source.TransformPoint(sourcePoint));
+                if (!hasBounds)
+                {
+                    bounds = new Bounds(rootPoint, Vector3.zero);
+                    hasBounds = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(rootPoint);
+                }
+            }
+        }
+
+        private static void ApplyPipeSurfaceMaterial(IReadOnlyList<Renderer> renderers, Material surfaceMaterial)
+        {
+            if (!surfaceMaterial) return;
+            foreach (var renderer in renderers)
+            {
+                var materials = renderer.sharedMaterials;
+                for (var i = 0; i < materials.Length; i++)
+                    materials[i] = surfaceMaterial;
+                renderer.sharedMaterials = materials;
+            }
+        }
+
+        private void ConfigurePipeTileHierarchy(GameObject tile)
+        {
+            foreach (var child in tile.GetComponentsInChildren<Transform>(true))
+                child.gameObject.layer = gameObject.layer;
+
+            foreach (var collisionComp in tile.GetComponentsInChildren<Collider>(true))
+                collisionComp.enabled = false;
+        }
+
+        private static void ClearVisualChildren(Transform visual)
+        {
+            for (var i = visual.childCount - 1; i >= 0; i--)
+            {
+                var child = visual.GetChild(i).gameObject;
+                // Destroy is deferred in Play Mode. Detach first so hierarchy lookups cannot
+                // resolve a stale tile while its replacement is created in the same frame.
+                child.transform.SetParent(null, false);
+                child.SetActive(false);
+                if (Application.isPlaying)
+                    Destroy(child);
+                else
+                    DestroyImmediate(child);
+            }
+        }
+
+        private PipeConnections GetVisualConnections(Vector2Int cell, HashSet<Vector2Int> additionalCells,
+            PathPieceOrientation orientation)
+        {
+            // The ordered route produced by WaypointPath is authoritative. Using its exact
+            // previous/next edges prevents nearby branches from changing a route tile into the
+            // wrong corner or junction model.
+            if (_priorityVisualConnections.TryGetValue(cell, out var priorityConnections))
+                return priorityConnections;
+
+            var connections = PipeConnections.None;
+            if (HasVisualConnection(cell, cell + Vector2Int.right, additionalCells, orientation))
+                connections |= PipeConnections.East;
+            if (HasVisualConnection(cell, cell + Vector2Int.up, additionalCells, orientation))
+                connections |= PipeConnections.North;
+            if (HasVisualConnection(cell, cell + Vector2Int.left, additionalCells, orientation))
+                connections |= PipeConnections.West;
+            if (HasVisualConnection(cell, cell + Vector2Int.down, additionalCells, orientation))
+                connections |= PipeConnections.South;
+            return connections;
+        }
+
+        private bool HasVisualConnection(Vector2Int cell, Vector2Int neighbor,
+            HashSet<Vector2Int> currentCells, PathPieceOrientation currentOrientation)
+        {
+            if (!IsInBounds(neighbor.x, neighbor.y)) return false;
+            if (_priorityVisualConnections.ContainsKey(neighbor)) return false;
+
+            // Cells belonging to the same placed/previewed segment always connect. Different
+            // pieces connect only at compatible endpoints; mere side adjacency is not a junction.
+            if (currentCells != null && currentCells.Contains(neighbor)) return true;
+            if (!TryGetPlacedPieceAt(neighbor, out var neighborPiece)) return false;
+
+            if (!IsEndpoint(cell, currentCells, currentOrientation) ||
+                !IsEndpoint(neighbor, neighborPiece.cells, neighborPiece.orientation))
+                return false;
+
+            if (currentOrientation != neighborPiece.orientation)
+                return true;
+
+            var delta = neighbor - cell;
+            return currentOrientation == PathPieceOrientation.Horizontal ? delta.y == 0 : delta.x == 0;
+        }
+
+        /// <summary>
+        ///     Makes an ordered pathfinder route authoritative for pipe-art connections. Each
+        ///     route cell receives openings only toward its previous/next route cell, plus the
+        ///     optional outside-board start/end anchors. Off-route visuals continue to use the
+        ///     normal best-effort piece connection rules.
+        /// </summary>
+        public void SetPriorityVisualPath(IReadOnlyList<Vector2Int> routeCells,
+            Vector3? startWorldPosition = null, Vector3? endWorldPosition = null,
+            IReadOnlyList<Vector2Int> alternateRouteCells = null)
+        {
+            var nextConnections = new Dictionary<Vector2Int, PipeConnections>();
+            AddPriorityRoute(nextConnections, routeCells);
+            AddPriorityRoute(nextConnections, alternateRouteCells);
+
+            if (routeCells is { Count: > 0 })
+            {
+                if (startWorldPosition.HasValue)
+                    AddPriorityOpening(nextConnections, routeCells[0],
+                        ClampToOutsideRing(WorldToCellUnclamped(startWorldPosition.Value)));
+                if (endWorldPosition.HasValue)
+                    AddPriorityOpening(nextConnections, routeCells[^1],
+                        ClampToOutsideRing(WorldToCellUnclamped(endWorldPosition.Value)));
+            }
+
+            if (HaveSameConnections(_priorityVisualConnections, nextConnections)) return;
+
+            _priorityVisualConnections.Clear();
+            foreach (var pair in nextConnections)
+                _priorityVisualConnections.Add(pair.Key, pair.Value);
+            RefreshAllPlacedPipeGeometry();
+        }
+
+        private static void AddPriorityRoute(IDictionary<Vector2Int, PipeConnections> connections,
+            IReadOnlyList<Vector2Int> routeCells)
+        {
+            if (routeCells == null) return;
+
+            for (var i = 0; i < routeCells.Count; i++)
+            {
+                connections.TryAdd(routeCells[i], PipeConnections.None);
+                if (i > 0)
+                    AddPriorityEdge(connections, routeCells[i - 1], routeCells[i]);
+            }
+        }
+
+        public void ClearPriorityVisualPath()
+        {
+            if (_priorityVisualConnections.Count == 0) return;
+            _priorityVisualConnections.Clear();
+            RefreshAllPlacedPipeGeometry();
+        }
+
+        private static void AddPriorityEdge(IDictionary<Vector2Int, PipeConnections> connections,
+            Vector2Int from, Vector2Int to)
+        {
+            var forward = GetConnectionDirection(to - from);
+            var backward = GetConnectionDirection(from - to);
+            if (forward == PipeConnections.None || backward == PipeConnections.None) return;
+
+            connections.TryAdd(from, PipeConnections.None);
+            connections.TryAdd(to, PipeConnections.None);
+            connections[from] |= forward;
+            connections[to] |= backward;
+        }
+
+        private static void AddPriorityOpening(IDictionary<Vector2Int, PipeConnections> connections,
+            Vector2Int cell, Vector2Int outsideCell)
+        {
+            var direction = GetConnectionDirection(outsideCell - cell);
+            if (direction != PipeConnections.None)
+                connections[cell] |= direction;
+        }
+
+        private static PipeConnections GetConnectionDirection(Vector2Int delta)
+        {
+            if (delta == Vector2Int.right) return PipeConnections.East;
+            if (delta == Vector2Int.up) return PipeConnections.North;
+            if (delta == Vector2Int.left) return PipeConnections.West;
+            if (delta == Vector2Int.down) return PipeConnections.South;
+            return PipeConnections.None;
+        }
+
+        private static bool HaveSameConnections(IReadOnlyDictionary<Vector2Int, PipeConnections> left,
+            IReadOnlyDictionary<Vector2Int, PipeConnections> right)
+        {
+            if (left.Count != right.Count) return false;
+            foreach (var pair in left)
+                if (!right.TryGetValue(pair.Key, out var connections) || connections != pair.Value)
+                    return false;
+            return true;
+        }
+
+        private bool TryGetPlacedPieceAt(Vector2Int cell, out PlacedPathPiece piece)
+        {
+            piece = null;
+            var pieceId = _pieceIds[cell.x, cell.y];
+            if (pieceId <= 0) return false;
+
+            piece = _placedPieces.Find(candidate => candidate.id == pieceId);
+            return piece != null;
+        }
+
+        private static bool IsEndpoint(Vector2Int cell, ICollection<Vector2Int> cells,
+            PathPieceOrientation orientation)
+        {
+            if (cells == null || cells.Count == 0) return false;
+            var axis = orientation == PathPieceOrientation.Horizontal ? Vector2Int.right : Vector2Int.up;
+            return !cells.Contains(cell - axis) || !cells.Contains(cell + axis);
+        }
+
+        private static int CountConnections(PipeConnections connections)
+        {
+            var count = 0;
+            if ((connections & PipeConnections.East) != 0) count++;
+            if ((connections & PipeConnections.North) != 0) count++;
+            if ((connections & PipeConnections.West) != 0) count++;
+            if ((connections & PipeConnections.South) != 0) count++;
+            return count;
+        }
+
+        private static bool IsStraight(PipeConnections connections)
+        {
+            return connections == (PipeConnections.East | PipeConnections.West) ||
+                   connections == (PipeConnections.North | PipeConnections.South);
+        }
+
+        private static float GetPipeRotation(PipeConnections connections,
+            PathPieceOrientation fallbackOrientation)
+        {
+            var count = CountConnections(connections);
+            if (count == 0)
+                return fallbackOrientation == PathPieceOrientation.Horizontal ? 0f : 90f;
+
+            if (count == 1)
+            {
+                if ((connections & PipeConnections.East) != 0) return 0f;
+                if ((connections & PipeConnections.South) != 0) return 90f;
+                if ((connections & PipeConnections.West) != 0) return 180f;
+                return 270f;
+            }
+
+            if (count == 2)
+            {
+                if (IsStraight(connections))
+                    return (connections & PipeConnections.East) != 0 ? 0f : 90f;
+
+                // brick_cornerPipe is authored opening north+west; after the source-axis
+                // correction it opens north+east at zero, so each quadrant steps by 90.
+                if (connections == (PipeConnections.North | PipeConnections.East)) return 0f;
+                if (connections == (PipeConnections.East | PipeConnections.South)) return 90f;
+                if (connections == (PipeConnections.South | PipeConnections.West)) return 180f;
+                return 270f;
+            }
+
+            if (count == 3)
+            {
+                // brick_TPipe is authored opening north+south+west, so after the correction its
+                // closed side faces south at zero. Rotate by whichever side has no connection.
+                if ((connections & PipeConnections.South) == 0) return 0f;
+                if ((connections & PipeConnections.West) == 0) return 90f;
+                if ((connections & PipeConnections.North) == 0) return 180f;
+                return 270f;
+            }
+
+            // The four-way mesh is rotationally symmetric.
+            return 0f;
         }
 
         /// <summary>
@@ -690,11 +1176,22 @@ namespace _project.Scripts.Object_Scripts
                 SetVisualColor(visual, color);
         }
 
-        private static void SetVisualColor(GameObject visual, Color color)
+        private void SetVisualColor(GameObject visual, Color color)
         {
-            if (!visual || !visual.TryGetComponent<Renderer>(out var rend)) return;
+            if (!visual) return;
 
-            rend.material.color = color;
+            foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+                RendererColorUtility.SetColor(renderer, color, ref _colorPropertyBlock);
+        }
+
+        [Flags]
+        private enum PipeConnections
+        {
+            None = 0,
+            East = 1 << 0,
+            North = 1 << 1,
+            West = 1 << 2,
+            South = 1 << 3
         }
 
         /// <summary>
@@ -736,7 +1233,10 @@ namespace _project.Scripts.Object_Scripts
         public Vector3 GetPathWaypointPosition(Vector2Int position)
         {
             var basePos = GetCellWorldPosition(position);
-            return new Vector3(basePos.x, basePos.y + cellHeight * 0.5f + pipeVisualHeight, basePos.z);
+            // The kit's pipes are open-topped channels, so issues sit part-way up the walls
+            // rather than on top of them.
+            return new Vector3(basePos.x,
+                basePos.y + cellHeight * 0.5f + PipeSurfaceHeight * entityRideHeightFraction, basePos.z);
         }
 
         /// <summary>
@@ -776,6 +1276,19 @@ namespace _project.Scripts.Object_Scripts
 
             rotation = Quaternion.LookRotation(direction, Vector3.up);
             return true;
+        }
+
+        /// <summary>
+        ///     Returns true when this position is the currently discovered fork for a path using
+        ///     this board. Live path previews keep the split point current as pieces are edited.
+        /// </summary>
+        public bool IsPathSplitPoint(Vector3 worldPosition)
+        {
+            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
+                if (path && path.UsesBoard(this) && path.IsSplitPoint(worldPosition))
+                    return true;
+
+            return false;
         }
 
         /// <summary>

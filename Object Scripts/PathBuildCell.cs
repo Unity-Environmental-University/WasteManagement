@@ -12,6 +12,7 @@ namespace _project.Scripts.Object_Scripts
     {
         private PathBuildBoard _board;
         private Renderer _cellRenderer;
+        private MaterialPropertyBlock _propertyBlock;
 
         /// <summary>
         ///     The column index of this cell in the grid (X axis).
@@ -102,8 +103,9 @@ namespace _project.Scripts.Object_Scripts
         /// <param name="color">The color to apply to the cell's material.</param>
         public void SetColor(Color color)
         {
-            if (_cellRenderer)
-                _cellRenderer.material.color = color;
+            if (!_cellRenderer) return;
+
+            RendererColorUtility.SetColor(_cellRenderer, color, ref _propertyBlock);
         }
 
         /// <summary>

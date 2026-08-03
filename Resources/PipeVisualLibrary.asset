@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50793a0f8f3b440ff98572c691eaa078, type: 3}
+  m_Name: PipeVisualLibrary
+  m_EditorClassIdentifier: Scripts::_project.Scripts.Object_Scripts.PipeVisualLibrary
+  straightPipe: {fileID: 919132149155446097, guid: d8b68c050b70f4abda9f0c83411c9362, type: 3}
+  cornerPipe: {fileID: 919132149155446097, guid: b8f008535981e4a85a657e7aacae1820, type: 3}
+  endPipe: {fileID: 919132149155446097, guid: ad15c635a0262430ebb97a642980bc9d, type: 3}
+  junctionPipe: {fileID: 919132149155446097, guid: cf69fb2a33d7b445f9a5ad7f071d34fb, type: 3}
+  surfaceMaterial: {fileID: 2100000, guid: 1399afd5af4e12a4f9d7a0eaf749e7b4, type: 2}
