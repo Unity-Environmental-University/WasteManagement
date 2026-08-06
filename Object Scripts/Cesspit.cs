@@ -66,12 +66,14 @@ namespace _project.Scripts.Object_Scripts
             StinkSourceRegistry.Register(this);
             TurnController.OnCardPhaseEntered += PauseRunaways;
             TurnController.OnTowerPhaseEntered += ResumeRunaways;
+            TurnController.OnLevelChanged += HandleLevelChanged;
         }
 
         private void OnDisable()
         {
             TurnController.OnCardPhaseEntered -= PauseRunaways;
             TurnController.OnTowerPhaseEntered -= ResumeRunaways;
+            TurnController.OnLevelChanged -= HandleLevelChanged;
             StinkSourceRegistry.Unregister(this);
         }
 
@@ -204,7 +206,11 @@ namespace _project.Scripts.Object_Scripts
 
         private void StartRunaways()
         {
-            if (IsSealed || _spawningRunaways)
+            var currentLevel = GameMaster.Instance && GameMaster.Instance.turnController
+                ? GameMaster.Instance.turnController.currentLevel
+                : 1;
+
+            if (IsSealed || _spawningRunaways || currentLevel < 3)
                 return;
 
             _spawningRunaways = true;
@@ -231,6 +237,12 @@ namespace _project.Scripts.Object_Scripts
             if (_runawayCoroutine != null) return;
 
             _runawayCoroutine = StartCoroutine(SpawnRunaway());
+        }
+
+        private void HandleLevelChanged(int newLevel)
+        {
+            if (newLevel >= 3 && IsFull)
+                StartRunaways();
         }
 
         private void ResolveRunawayReferences()

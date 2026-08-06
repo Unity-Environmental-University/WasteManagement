@@ -592,6 +592,7 @@ namespace _project.Scripts.Tests
         {
             var fixture = CreateTurnFixture(true);
             fixture.TurnController.waveDuration = 0f;
+            fixture.TurnController.currentLevel = 3;
             var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
             cesspit.maxFullness = 1f;
             cesspit.fullness = 1f;
@@ -612,6 +613,9 @@ namespace _project.Scripts.Tests
         {
             var fixture = CreateTurnFixture(true);
             var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
+
+            fixture.TurnController.currentLevel = 3;
+
             cesspit.maxFullness = 1f;
             cesspit.fullness = 1f;
 

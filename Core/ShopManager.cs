@@ -124,13 +124,14 @@ namespace _project.Scripts.Core
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
         
         // Stock is retained while the player opens and closes the shop during one round.
-        // It is rebuilt at the start of the next round so every round gets a fresh shop.
+        // It is rebuilt at the start of the next round, so every round gets a fresh shop.
         private readonly List<IShopItem> _stockItems = new();
         private readonly HashSet<IShopItem> _purchasedItems = new();
         private bool _stockCreated;
 
         private static int CurrentLevel =>
-            GameMaster.Instance && GameMaster.Instance.turnController ? GameMaster.Instance.turnController.currentLevel : 1;
+            GameMaster.Instance && GameMaster.Instance.turnController ? 
+                GameMaster.Instance.turnController.currentLevel : 1;
 
         public bool CanSelectShortPipeTool => CurrentLevel >= shortPipeRequiredLevel;
         public bool CanSelectLongPipeTool => CurrentLevel >= longPipeRequiredLevel;
@@ -198,7 +199,7 @@ namespace _project.Scripts.Core
         /// <summary>Marks a finite-stock item as sold for the remainder of the current round.</summary>
         public void MarkPurchased(IShopItem item)
         {
-            if (item != null && item.RemoveAfterPurchase)
+            if (item is { RemoveAfterPurchase: true })
                 _purchasedItems.Add(item);
         }
 
@@ -271,7 +272,7 @@ namespace _project.Scripts.Core
             EnsureStockCreated();
             foreach (var item in _stockItems)
             {
-                // A purchased placeable stays visible only while it is waiting to be placed,
+                // Purchased placeable stays visible only while it is waiting to be placed,
                 // allowing the player to reselect it after closing the shop. Once consumed,
                 // it is no longer part of the shop's stock.
                 if (_purchasedItems.Contains(item) && (item is not IPlaceable placeable || !queued.Contains(placeable)))
