@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using _project.Scripts.Core;
 using UnityEngine;
@@ -10,6 +11,12 @@ namespace _project.Scripts.Object_Scripts
     /// </summary>
     public class PathSplitter : MonoBehaviour
     {
+        /// <summary>
+        ///     Raised when a splitter enters or leaves the active scene, so live route previews can
+        ///     immediately reveal or hide their alternate branch.
+        /// </summary>
+        public static event Action AvailabilityChanged;
+
         private readonly HashSet<EntityId> _routedIssueIds = new();
         private int _nextRouteIndex;
 
@@ -18,7 +25,12 @@ namespace _project.Scripts.Object_Scripts
         private void Awake()
         {
             if (!TryGetComponent<Collider>(out var trigger))
-                trigger = gameObject.AddComponent<BoxCollider>();
+            {
+                var box = gameObject.AddComponent<BoxCollider>();
+                box.center = new Vector3(0f, 0.5f, 0f);
+                box.size = new Vector3(0.9f, 1.25f, 0.9f);
+                trigger = box;
+            }
 
             trigger.isTrigger = true;
         }
@@ -26,11 +38,13 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             TurnController.OnTowerPhaseEntered += ResetSplit;
+            AvailabilityChanged?.Invoke();
         }
 
         private void OnDisable()
         {
             TurnController.OnTowerPhaseEntered -= ResetSplit;
+            AvailabilityChanged?.Invoke();
         }
 
         private void OnTriggerEnter(Collider other)

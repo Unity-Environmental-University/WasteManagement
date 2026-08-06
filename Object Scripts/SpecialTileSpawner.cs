@@ -14,6 +14,12 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] [Min(3)] private int utilityTileCount = 3;
         [SerializeField] private GameObject utilityTilePrefab;
 
+        [Tooltip("Roll a die for extra utility slots every time the town levels up.")]
+        [SerializeField] private bool spawnUtilityTilesOnLevelUp = true;
+
+        [Tooltip("Sides on the die rolled per level gained. 4 = D4, so 1-4 new slots per level.")]
+        [SerializeField] [Min(1)] private int levelUpUtilityDieSides = 4;
+
         #endregion
 
 #region Buff Spawner
@@ -42,10 +48,30 @@ namespace _project.Scripts.Object_Scripts
         public List<SpecialInteractController> SpawnedUtilityTiles { get; } = new();
         public List<BuffDebuffTileController> SpawnedBuffTiles { get; } = new();
 
+        // Tracks the level the last OnLevelChanged reported so a level-up can be told apart from
+        // the initial level broadcast in TurnController.GameStartSequence. -1 = nothing seen yet.
+        private int _lastKnownLevel = -1;
+
         // Grid cells are built in PathBuildBoard.Awake, so any Start runs after the grid exists.
         private void Start()
-        { 
+        {
             SpawnRandomSlots();
+        }
+
+        private void OnEnable()
+        {
+            // Seed from the live level when the run is already underway (currentLevel is still 0
+            // before GameStartSequence); otherwise the start-of-run broadcast seeds it instead.
+            if (_lastKnownLevel < 0 && GameMaster.Instance && GameMaster.Instance.turnController &&
+                GameMaster.Instance.turnController.currentLevel > 0)
+                _lastKnownLevel = GameMaster.Instance.turnController.currentLevel;
+
+            TurnController.OnLevelChanged += HandleLevelChanged;
+        }
+
+        private void OnDisable()
+        {
+            TurnController.OnLevelChanged -= HandleLevelChanged;
         }
 
         /// <summary>
@@ -64,18 +90,8 @@ namespace _project.Scripts.Object_Scripts
             }
 
             // Spawn Utility Tiles
-            if (randomizeUtilityPlacement && utilityTilePrefab)
-            {
-                foreach (var cell in GridSamplingHelper.PickUniqueRandomCells(board, utilityTileCount))
-                {
-                    var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
-                    var slot = Instantiate(utilityTilePrefab, position, Quaternion.identity, transform);
-                    slot.name = $"{utilityTilePrefab.name} ({cell.x},{cell.y})";
+            if (randomizeUtilityPlacement) SpawnUtilityTiles(utilityTileCount);
 
-                    SpawnedUtilityTiles.Add(slot.GetComponent<SpecialInteractController>());
-                }
-            }
-            
             // Spawn Buff/Debuff Tiles
             if (randomizeBuffPlacement &&  buffTilePrefab)
             {
@@ -97,6 +113,86 @@ namespace _project.Scripts.Object_Scripts
             }
             if (Debugging) Debug.Log($"[SpecialTileSpawner] Spawned up to {utilityTileCount} slots on the grid.");
         }
+
+#region UtilityTileFunctions
+
+        /// <summary>
+        ///     Instantiates up to <paramref name="count" /> utility slots on random cells that don't
+        ///     already hold one. Returns the slots actually created — fewer than requested when the
+        ///     board has run out of free cells.
+        /// </summary>
+        private List<SpecialInteractController> SpawnUtilityTiles(int count)
+        {
+            var spawned = new List<SpecialInteractController>();
+
+            if (!board) board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (!board || !utilityTilePrefab || count <= 0) return spawned;
+
+            var occupied = OccupiedUtilityCells();
+
+            foreach (var cell in GridSamplingHelper.PickUniqueRandomCells(board, count, occupied.Contains))
+            {
+                var position = board.GetCellTopPosition(cell) + Vector3.up * heightOffset;
+                var slot = Instantiate(utilityTilePrefab, position, Quaternion.identity, transform);
+                slot.name = $"{utilityTilePrefab.name} ({cell.x},{cell.y})";
+
+                // Slots added mid-wave must stay hidden until the next card phase, which is when
+                // TurnController re-enables every tile renderer.
+                if (IsTowerPhase && slot.TryGetComponent<Renderer>(out var slotRenderer))
+                    slotRenderer.enabled = false;
+
+                var controller = slot.GetComponent<SpecialInteractController>();
+                SpawnedUtilityTiles.Add(controller);
+                spawned.Add(controller);
+            }
+
+            return spawned;
+        }
+
+        private static bool IsTowerPhase
+        {
+            get
+            {
+                var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+                return turnController && turnController.currentPhase == GamePhase.Tower;
+            }
+        }
+
+        // Scans every slot in the scene, not just SpawnedUtilityTiles, so hand-placed slots also
+        // block a cell from being picked again.
+        private HashSet<Vector2Int> OccupiedUtilityCells()
+        {
+            return FindObjectsByType<SpecialInteractController>(FindObjectsInactive.Include)
+                .Select(slot => board.WorldToCell(slot.transform.position))
+                .ToHashSet();
+        }
+
+        private void HandleLevelChanged(int newLevel)
+        {
+            // The first event is TurnController broadcasting the starting level, not a level-up.
+            if (_lastKnownLevel < 0)
+            {
+                _lastKnownLevel = newLevel;
+                return;
+            }
+
+            var levelsGained = newLevel - _lastKnownLevel;
+            _lastKnownLevel = newLevel;
+
+            if (!spawnUtilityTilesOnLevelUp || levelsGained <= 0) return;
+
+            // One die roll per level gained, so skipping several levels at once pays out for each.
+            var count = 0;
+            for (var i = 0; i < levelsGained; i++) count += Random.Range(1, levelUpUtilityDieSides + 1);
+
+            var spawned = SpawnUtilityTiles(count);
+
+            if (Debugging)
+                Debug.Log($"[SpecialTileSpawner] Level {newLevel}: rolled {count} utility slot(s), " +
+                          $"placed {spawned.Count}.");
+        }
+
+        #endregion
 
 
 #region BuffTileFunctions

@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -17,25 +19,36 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public static List<Vector2Int> PickUniqueRandomCells(PathBuildBoard board, int count)
         {
+            return PickUniqueRandomCells(board, count, null);
+        }
+
+        /// <summary>
+        ///     Same as <see cref="PickUniqueRandomCells(PathBuildBoard,int)" />, but skips any cell for
+        ///     which <paramref name="isBlocked" /> returns true. Fewer than <paramref name="count" />
+        ///     cells come back when the board doesn't have that many free ones left.
+        /// </summary>
+        public static List<Vector2Int> PickUniqueRandomCells(PathBuildBoard board, int count,
+            Func<Vector2Int, bool> isBlocked)
+        {
             var total = board ? board.Columns * board.Rows : 0;
-            count = Mathf.Clamp(count, 0, total);
+
+            var candidates = new List<Vector2Int>(total);
+            for (var i = 0; i < total; i++)
+            {
+                var cell = new Vector2Int(i % board.Columns, i / board.Columns);
+                if (isBlocked is null || !isBlocked(cell)) candidates.Add(cell);
+            }
+
+            count = Mathf.Clamp(count, 0, candidates.Count);
 
             var result = new List<Vector2Int>(count);
             if (count == 0) return result;
 
-            var indices = new List<int>(total);
-            for (var i = 0; i < total; i++) indices.Add(i);
-
             for (var i = 0; i < count; i++)
             {
-                var j = Random.Range(i, total);
-                (indices[i], indices[j]) = (indices[j], indices[i]);
-            }
-
-            for (var i = 0; i < count; i++)
-            {
-                var index = indices[i];
-                result.Add(new Vector2Int(index % board.Columns, index / board.Columns));
+                var j = Random.Range(i, candidates.Count);
+                (candidates[i], candidates[j]) = (candidates[j], candidates[i]);
+                result.Add(candidates[i]);
             }
 
             return result;

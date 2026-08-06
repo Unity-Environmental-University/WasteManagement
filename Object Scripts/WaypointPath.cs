@@ -38,10 +38,13 @@ namespace _project.Scripts.Object_Scripts
 
         [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
         [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
+        [Tooltip("Color used for the fork-to-rejoin branch while a path splitter is installed.")]
+        [SerializeField] private Color alternatePreviewColor = new(1f, 0.52f, 0.08f, 0.95f);
         [SerializeField, Min(0.01f)] private float previewWidth = 0.12f;
         [SerializeField, Min(0f)] private float previewHeightOffset = 0.7f;
 
         private LineRenderer _livePreview;
+        private LineRenderer _alternateLivePreview;
         private PathBuildBoard _subscribedBoard;
 
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
@@ -78,18 +81,37 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnEnable()
         {
+            PathSplitter.AvailabilityChanged += RefreshLivePreview;
             BindBoardEvents();
             RefreshLivePreview();
         }
 
         private void Update()
         {
-            // Also handles references assigned after this component is enabled.
+            // Handles references assigned after this component is enabled.
             BindBoardEvents();
+            RefreshAlternatePreviewIfAvailabilityChanged();
+        }
+
+        /// <summary>
+        ///     Utility prefabs can become enabled before their final board transform has settled.
+        ///     Detect that one-frame placement transition so the alternate route cannot remain
+        ///     stale until another pipe is edited or the wave begins.
+        /// </summary>
+        private void RefreshAlternatePreviewIfAvailabilityChanged()
+        {
+            if (!showLivePreview || !_splitCell.HasValue || !pathBuildBoard) return;
+
+            var shouldShowAlternate = HasActiveSplitterAtSplitCell();
+            var isShowingAlternate = _alternateLivePreview && _alternateLivePreview.enabled &&
+                                     _alternateLivePreview.positionCount >= 2;
+            if (shouldShowAlternate != isShowingAlternate)
+                RefreshLivePreview();
         }
 
         private void OnDisable()
         {
+            PathSplitter.AvailabilityChanged -= RefreshLivePreview;
             if (_subscribedBoard)
                 _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
             if (pathBuildBoard)
@@ -336,11 +358,8 @@ namespace _project.Scripts.Object_Scripts
             _splitCell = null;
 
             var renderer = GetLivePreviewRenderer();
-            if (renderer)
-            {
-                renderer.enabled = false;
-                renderer.positionCount = 0;
-            }
+            ClearPreviewRenderer(renderer);
+            ClearPreviewRenderer(_alternateLivePreview);
 
             if (!pathBuildBoard || !startPoint || !endPoint)
             {
@@ -387,6 +406,67 @@ namespace _project.Scripts.Object_Scripts
             renderer.startColor = color;
             renderer.endColor = color;
             renderer.enabled = true;
+
+            if (alternatePreviewCells == null || !HasActiveSplitterAtSplitCell()) return;
+
+            var alternateRenderer = GetAlternateLivePreviewRenderer();
+            if (!alternateRenderer) return;
+
+            SetAlternateBranchPositions(alternateRenderer, previewCells, alternatePreviewCells);
+            alternateRenderer.startColor = alternatePreviewColor;
+            alternateRenderer.endColor = alternatePreviewColor;
+            alternateRenderer.enabled = alternateRenderer.positionCount >= 2;
+        }
+
+        private bool HasActiveSplitterAtSplitCell()
+        {
+            if (!_splitCell.HasValue || !pathBuildBoard) return false;
+
+            foreach (var splitter in FindObjectsByType<PathSplitter>(FindObjectsInactive.Exclude))
+                if (splitter && splitter.isActiveAndEnabled &&
+                    pathBuildBoard.TryWorldToCell(splitter.transform.position, out var cell) &&
+                    cell == _splitCell.Value)
+                    return true;
+
+            return false;
+        }
+
+        /// <summary>
+        ///     Displays only the distinct portion of the alternate route. The final shared cell on
+        ///     either side is retained so the amber line visibly leaves and rejoins the cyan route.
+        /// </summary>
+        private void SetAlternateBranchPositions(LineRenderer renderer,
+            IReadOnlyList<Vector2Int> defaultRoute, IReadOnlyList<Vector2Int> alternateRoute)
+        {
+            var sharedPrefixCount = 0;
+            while (sharedPrefixCount < defaultRoute.Count && sharedPrefixCount < alternateRoute.Count &&
+                   defaultRoute[sharedPrefixCount] == alternateRoute[sharedPrefixCount])
+                sharedPrefixCount++;
+
+            var sharedSuffixCount = 0;
+            while (sharedSuffixCount < defaultRoute.Count - sharedPrefixCount &&
+                   sharedSuffixCount < alternateRoute.Count - sharedPrefixCount &&
+                   defaultRoute[defaultRoute.Count - 1 - sharedSuffixCount] ==
+                   alternateRoute[alternateRoute.Count - 1 - sharedSuffixCount])
+                sharedSuffixCount++;
+
+            var firstIndex = Mathf.Max(0, sharedPrefixCount - 1);
+            var lastIndex = sharedSuffixCount > 0
+                ? alternateRoute.Count - sharedSuffixCount
+                : alternateRoute.Count - 1;
+            var pointCount = Mathf.Max(0, lastIndex - firstIndex + 1);
+            renderer.positionCount = pointCount;
+
+            for (var i = 0; i < pointCount; i++)
+                renderer.SetPosition(i,
+                    GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i])));
+        }
+
+        private static void ClearPreviewRenderer(LineRenderer renderer)
+        {
+            if (!renderer) return;
+            renderer.enabled = false;
+            renderer.positionCount = 0;
         }
 
         private Vector3 GetPreviewPosition(Vector3 worldPosition)
@@ -397,35 +477,45 @@ namespace _project.Scripts.Object_Scripts
 
         private LineRenderer GetLivePreviewRenderer()
         {
-            if (_livePreview) return _livePreview;
+            return GetPreviewRenderer("Live Path Preview", ref _livePreview, previewWidth);
+        }
+
+        private LineRenderer GetAlternateLivePreviewRenderer()
+        {
+            return GetPreviewRenderer("Alternate Path Preview", ref _alternateLivePreview, previewWidth * 0.85f);
+        }
+
+        private LineRenderer GetPreviewRenderer(string objectName, ref LineRenderer cachedRenderer, float width)
+        {
+            if (cachedRenderer) return cachedRenderer;
             if (!showLivePreview) return null;
 
             var previewObject = pathBuildBoard
-                ? pathBuildBoard.transform.Find("Live Path Preview")
+                ? pathBuildBoard.transform.Find(objectName)
                 : null;
             if (!previewObject && pathBuildBoard)
             {
-                var child = new GameObject("Live Path Preview");
+                var child = new GameObject(objectName);
                 child.transform.SetParent(pathBuildBoard.transform, false);
                 previewObject = child.transform;
             }
 
             if (!previewObject) return null;
-            _livePreview = previewObject.GetComponent<LineRenderer>();
-            if (!_livePreview) _livePreview = previewObject.gameObject.AddComponent<LineRenderer>();
-            _livePreview.useWorldSpace = true;
-            _livePreview.loop = false;
-            _livePreview.startWidth = previewWidth;
-            _livePreview.endWidth = previewWidth;
-            _livePreview.numCapVertices = 4;
-            _livePreview.numCornerVertices = 4;
-            _livePreview.textureMode = LineTextureMode.Stretch;
-            if (!_livePreview.sharedMaterial)
+            cachedRenderer = previewObject.GetComponent<LineRenderer>();
+            if (!cachedRenderer) cachedRenderer = previewObject.gameObject.AddComponent<LineRenderer>();
+            cachedRenderer.useWorldSpace = true;
+            cachedRenderer.loop = false;
+            cachedRenderer.startWidth = width;
+            cachedRenderer.endWidth = width;
+            cachedRenderer.numCapVertices = 4;
+            cachedRenderer.numCornerVertices = 4;
+            cachedRenderer.textureMode = LineTextureMode.Stretch;
+            if (!cachedRenderer.sharedMaterial)
             {
                 var shader = Shader.Find("Sprites/Default");
-                if (shader) _livePreview.sharedMaterial = new Material(shader);
+                if (shader) cachedRenderer.sharedMaterial = new Material(shader);
             }
-            return _livePreview;
+            return cachedRenderer;
         }
 
         private List<Vector2Int> FindPreviewPath(
@@ -576,8 +666,8 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Finds one genuine second branch without enumerating every possible route. At the
         ///     first fork on the normal shortest path, try each unused exit and keep the first one
-        ///     that can still reach the goal. The shared prefix is retained and the fork cell is
-        ///     blocked during the second BFS so the alternate cannot immediately turn around.
+        ///     that can still reach the goal. The shared prefix is retained, and the fork cell is
+        ///     blocked during the second BFS, so the alternate cannot immediately turn around.
         /// </summary>
         private List<Vector2Int> FindAlternateRoute(
             IReadOnlyList<Vector2Int> defaultRoute,
