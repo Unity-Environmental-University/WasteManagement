@@ -182,6 +182,7 @@ namespace _project.Scripts.Object_Scripts
             if (!spawnUtilityTilesOnLevelUp || levelsGained <= 0) return;
 
             // One die roll per level gained, so skipping several levels at once pays out for each.
+            // TODO: Add visual for this.
             var count = 0;
             for (var i = 0; i < levelsGained; i++) count += Random.Range(1, levelUpUtilityDieSides + 1);
 
