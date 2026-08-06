@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-06
+
 ### Added
 - Token-based shop system (`ShopManager`, `ShopObject`) with a level-gated catalog and `PlacementInventory` for queued purchases
 - Grid-based path building (`PathBuildBoard`/`PathBuildCell`): place/break tools, live placement/break previews, path-facing rotation for oriented placement, modular pipe tile rendering, path splitter routing, and an alternate path preview
