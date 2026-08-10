@@ -91,15 +91,10 @@ namespace _project.Scripts.Core
             if (selectedItem == null) return null;
 
             _items.RemoveAt(_selectedIndex);
-
-            // After consuming an item, keep selection valid so repeated placements can continue.
-            if (_items.Count == 0)
-                _selectedIndex = -1;
-            else if (_selectedIndex >= _items.Count)
-                _selectedIndex = _items.Count - 1;
+            _selectedIndex = -1;
 
             InventoryChanged?.Invoke();
-            SelectionChanged?.Invoke(SelectedItem);
+            SelectionChanged?.Invoke(null);
             return selectedItem;
         }
     }

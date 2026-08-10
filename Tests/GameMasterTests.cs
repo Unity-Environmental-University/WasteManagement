@@ -114,6 +114,23 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PlacementInventory_ConsumeSelected_ClearsSelectionWhenAnotherItemIsQueued()
+        {
+            var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
+            var first = new TestPlaceable();
+            var second = new TestPlaceable();
+
+            inventory.Add(first);
+            inventory.Add(second);
+
+            Assert.AreEqual(first, inventory.ConsumeSelected());
+            Assert.AreEqual(1, inventory.Items.Count);
+            Assert.AreEqual(second, inventory.Items[0]);
+            Assert.IsNull(inventory.SelectedItem);
+            Assert.AreEqual(-1, inventory.SelectedIndex);
+        }
+
+        [Test]
         public void PlacementInventory_Clear_DiscardsQueuedItemsAndSelection()
         {
             var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
