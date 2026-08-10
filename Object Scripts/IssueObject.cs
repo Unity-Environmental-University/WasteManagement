@@ -41,7 +41,13 @@ namespace _project.Scripts.Object_Scripts
             "Clicks needed to break one size off a pipe-blocking issue. Keep clicking to shrink it back to a movable size.")]
         [SerializeField]
         [Min(1)]
-        private int clicksPerShrink = 6;
+        private int clicksPerShrink = 3;
+
+        [Tooltip(
+            "Seconds a pipe-blocking issue can remain uncleared before it bursts the pipe and spills into the lake.")]
+        [SerializeField]
+        [Min(0.1f)]
+        private float blockedBurstDelay = 10f;
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
         
@@ -64,6 +70,7 @@ namespace _project.Scripts.Object_Scripts
         private GameObject _activeVisual;
         private Renderer[] _activeVisualRenderers;
         private int _blockedClickCount;
+        private float _blockedDuration;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
         private float _moveSpeedBeforeTemporaryEffect;
@@ -119,9 +126,16 @@ namespace _project.Scripts.Object_Scripts
         private void Update()
         {
             // BLOCKED: the issue is too large for the pipe — it sits in place, plugging the
-            // path, until it either shrinks (sifting) or grows past maxMergeSize and breaks the pipe.
+            // path, until it shrinks, grows past maxMergeSize, or its burst deadline expires.
             if (IsBlockingPipe)
             {
+                _blockedDuration += Time.deltaTime;
+                if (_blockedDuration >= Mathf.Max(0.1f, blockedBurstDelay))
+                {
+                    BreakPipe();
+                    return;
+                }
+
                 GameMaster.Instance?.cameraController?.Shake(1f);
                 return;
             }
@@ -170,7 +184,7 @@ namespace _project.Scripts.Object_Scripts
         ///     Turns the issue to face where it is heading — the model's +Z (blue) axis is its front.
         ///     Only yaw is applied: the target's Y varies with the issue's size (it rides on top of
         ///     the pipe), and pitching toward that would tip the model onto its nose. A near-zero
-        ///     direction is ignored so an issue sitting on its waypoint keeps its last heading
+        ///     direction is ignored, so an issue sitting on its waypoint keeps its last heading
         ///     instead of snapping to an arbitrary one.
         /// </summary>
         private void FaceTravelDirection(Vector3 direction)
@@ -187,7 +201,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnMouseDown()
         {
-            // Clicks on overlay UI must not fall through to issues on the board. This cannot use
+            // Clicks on the overlay UI must not fall through to issues on the board. This cannot use
             // IsPointerOverGameObject: the camera's PhysicsRaycaster makes it true over this very
             // issue, which would reject every click. See PointerUi.
             if (PointerUi.IsPointerOverInteractiveUi()) return;
@@ -209,7 +223,7 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Player clicks chip away at a pipe blockage: each click trembles the issue as
         ///     feedback, and every <see cref="clicksPerShrink" /> clicks knock one size off it.
-        ///     Once it shrinks below <see cref="pipeBlockSize" /> (via SetSize) the pipe unclogs
+        ///     Once it shrinks below <see cref="pipeBlockSize" /> (via SetSize), the pipe unclogs
         ///     and the issue resumes moving.
         /// </summary>
         private void HandleBlockedClick()
@@ -279,7 +293,7 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Reduces size by <paramref name="power" />. Read <see cref="SiftCost" /> BEFORE
-        ///     calling this — _size is mutated immediately and SiftCost reflects the post-process value.
+        ///     calling this — _size is mutated immediately, and SiftCost reflects the post-process value.
         /// </summary>
         public void Process(int power, string processLabel)
         {
@@ -320,6 +334,7 @@ namespace _project.Scripts.Object_Scripts
             if (!IsBlockingPipe)
             {
                 _blockedClickCount = 0;
+                _blockedDuration = 0f;
                 // Complete the shake so the position resets — a live shake would fight Update() movement.
                 _trembleTween?.Kill(true);
                 _trembleTween = null;
@@ -363,7 +378,7 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Moves this issue onto one of the path's two routes while preserving its progress.
-        ///     Used by PathSplitter; route 0 is the normal shortest route and route 1 is the
+        ///     Used by PathSplitter; route 0 is the normal shortest route, and route 1 is the
         ///     alternate branch discovered during WaypointPath.Rebuild().
         /// </summary>
         public bool TrySetRoute(int routeIndex)
@@ -565,9 +580,10 @@ namespace _project.Scripts.Object_Scripts
         public static event Action<IssueObject> OnReachedEnd;
 
         /// <summary>
-        ///     Fired when a pipe-blocking issue grows past <see cref="maxMergeSize" /> and bursts
-        ///     the pipe. EMPTY HOOK for the real broken-pipe system (destroying/disabling the pipe
-        ///     segment, VFX, rerouting, etc.) — nothing subscribes to it yet.
+        ///     Fired when a pipe-blocking issue grows past <see cref="maxMergeSize" /> or remains
+        ///     blocked longer than <see cref="blockedBurstDelay" /> and bursts the pipe. EMPTY HOOK
+        ///     for the real broken-pipe system (destroying/disabling the pipe segment, VFX,
+        ///     rerouting, etc.) — nothing subscribes to it yet.
         /// </summary>
         public static event Action<IssueObject> OnPipeBroken;
 

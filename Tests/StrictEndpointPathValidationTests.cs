@@ -398,6 +398,21 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
+        public IEnumerator IssueObject_BlockageBurstsAfterDeadline_WhenNotBrokenDown()
+        {
+            var issue = CreatePrimitive("Timed Blocking Issue").AddComponent<IssueObject>();
+            SetField(issue, "blockedBurstDelay", 0.05f);
+            issue.SetSize(4);
+
+            Assert.IsTrue(issue.IsBlockingPipe);
+
+            yield return new WaitForSeconds(0.1f);
+            yield return null;
+
+            Assert.IsFalse(issue, "An uncleared pipe blockage should burst and destroy itself after its deadline.");
+        }
+
+        [UnityTest]
         public IEnumerator IssueObject_DirectDestinationCollision_DoesNotMerge()
         {
             var fixture = CreatePathFixture();
