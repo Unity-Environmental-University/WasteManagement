@@ -119,7 +119,12 @@ namespace _project.Scripts.Core
             switch (currentPhase)
             {
                 case GamePhase.Card:
-                    if (!CanBeginWave()) return;
+                    if (!CanBeginWave(out var invalidReason))
+                    {
+                        Debug.LogWarning($"Cannot begin wave: {invalidReason}");
+                        return;
+                    }
+
                     BeginWaveSequence();
                     break;
                 case GamePhase.Tower:
@@ -261,17 +266,19 @@ namespace _project.Scripts.Core
                     tileRenderer.enabled = enabled;
         }
 
-        private bool CanBeginWave()
+        /// <summary>
+        ///     The wave-start gate: every spawner's path must validate. Public so other
+        ///     systems (e.g. the tutorial's route check) share the same rule.
+        /// </summary>
+        public bool CanBeginWave(out string invalidReason)
         {
-            if (_gm.entitySpawners == null) return true;
+            invalidReason = null;
+            if (!_gm || _gm.entitySpawners == null) return true;
 
             foreach (var spawner in _gm.entitySpawners)
             {
                 if (!spawner) continue;
-                if (spawner.ValidatePath(out var reason)) continue;
-
-                Debug.LogWarning($"Cannot begin wave: {reason}");
-                return false;
+                if (!spawner.ValidatePath(out invalidReason)) return false;
             }
 
             return true;

@@ -41,6 +41,10 @@ namespace _project.Scripts.UI
             public TMP_Text Label;
         }
 
+        /// <summary>The PIPE 2-CELL switch, for external callers (e.g. the tutorial highlight).</summary>
+        public RectTransform ShortPipeButtonRect =>
+            shortPipeButton ? (RectTransform)shortPipeButton.transform : null;
+
         private readonly Dictionary<Button, ButtonStyle> _styles = new();
         private bool _isBound;
         private bool _warnedMissingButtons;

@@ -172,6 +172,16 @@ namespace _project.Scripts.UI
             if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
+        /// <summary>The toolbar, resolved or instantiated on demand — for external callers (e.g. the tutorial highlight).</summary>
+        public PathToolBar PathToolBar
+        {
+            get
+            {
+                EnsurePathToolBar();
+                return pathToolBar;
+            }
+        }
+
         private void EnsurePathToolBar()
         {
             if (!pathToolBar)
