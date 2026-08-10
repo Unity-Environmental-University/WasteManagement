@@ -187,14 +187,12 @@ namespace _project.Scripts.Object_Scripts
 
             if (fillVisual)
             {
-                var scale = fillVisual.localScale;
-                scale.y = Mathf.Lerp(minFillHeight, maxFillHeight, ratio);
-                fillVisual.localScale = scale;
-
-                // Cylinder mesh spans ±scale.y; keep the sludge anchored to the pit's top face (local y = 1)
-                var pos = fillVisual.localPosition;
-                pos.y = 1f + scale.y;
-                fillVisual.localPosition = pos;
+                // The imported waste-level mesh is a flat surface beneath a heavily scaled FBX
+                // parent. Position it in world space relative to the pit so the parent's scale
+                // cannot magnify a small local offset and launch the surface out of the vessel.
+                var pos = fillVisual.position;
+                pos.y = transform.position.y + Mathf.Lerp(minFillHeight, maxFillHeight, ratio);
+                fillVisual.position = pos;
             }
 
             if (fillRenderer)
