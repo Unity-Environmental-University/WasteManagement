@@ -15,7 +15,6 @@ namespace _project.Scripts.Object_Scripts
         [Header("Visuals")]
         [SerializeField] private Renderer slotRenderer;
         [SerializeField] private Color hoverColor = new Color(0.4f, 0.8f, 1f, 0.6f);
-        [SerializeField] private Color occupiedColor = new Color(1f, 0.4f, 0.4f, 0.6f);
         private Color _defaultColor;
 
         [Header("Utility Slot (optional)")]
@@ -31,6 +30,7 @@ namespace _project.Scripts.Object_Scripts
         private void Awake()
         {
             _slotCollider = GetComponent<Collider>();
+            if (!slotRenderer) slotRenderer = GetComponentInChildren<Renderer>();
             if (slotRenderer) _defaultColor = slotRenderer.material.color;
         }
 
@@ -138,6 +138,15 @@ namespace _project.Scripts.Object_Scripts
             RefreshInteractionState();
         }
 
+        /// <summary>
+        ///     Reapplies this slot's occupied and phase visibility after an external system changes
+        ///     its renderer, such as TurnController entering the placement phase.
+        /// </summary>
+        public void RefreshVisibility()
+        {
+            UpdateVisualState(GameMaster.Instance ? GameMaster.Instance.PendingPlacement : null);
+        }
+
         private void BindInventory()
         {
             var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
@@ -183,11 +192,11 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!slotRenderer) return;
 
-            if (_isOccupied)
-            {
-                slotRenderer.material.color = occupiedColor;
+            var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+            var runInProgress = turnController && turnController.currentPhase == GamePhase.Tower;
+            slotRenderer.enabled = !_isOccupied && !runInProgress;
+            if (_isOccupied || runInProgress)
                 return;
-            }
 
             slotRenderer.material.color = _isHovered && CanAccept(pending) ? hoverColor : _defaultColor;
         }

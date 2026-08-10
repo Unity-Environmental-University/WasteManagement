@@ -245,6 +245,9 @@ namespace _project.Scripts.Core
 
             _gm.interfaceManager.HidePrepUI();
             SetRenderersEnabled(_gm.tileSpawner.SpawnedUtilityTiles, visible);
+            foreach (var slot in _gm.tileSpawner.SpawnedUtilityTiles)
+                if (slot)
+                    slot.RefreshVisibility();
             SetRenderersEnabled(_gm.tileSpawner.SpawnedBuffTiles, visible);
         }
 
