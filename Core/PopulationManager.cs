@@ -36,7 +36,7 @@ namespace _project.Scripts.Core
 
     public class PopulationManager : MonoBehaviour
     {
-        // Level 1 is an onboarding ramp. It should be difficult to lose all momentum
+        // Level 1 is an onboarding ramp. It should be challenging to lose all momentum
         // before the player has unlocked the level 2 tools.
         private const float LevelOneWavePressureMultiplier = 0.5f;
         private const int LevelOneGrowthBonus = 4;
@@ -44,6 +44,10 @@ namespace _project.Scripts.Core
         private const int LevelOneMinimumGrowth = 2;
 
         [SerializeField] private int startingPopSize = 4;
+
+        [Header("Level Thresholds")]
+        [SerializeField] private int levelTwoPopulationThreshold = 10;
+        [SerializeField] private int levelThreePopulationThreshold = 16;
 
         [Header("Wave Pressure")]
         [SerializeField] private float startingSpawnRateMultiplier = 0.7f;
@@ -64,7 +68,7 @@ namespace _project.Scripts.Core
         private float _wavePollution;
 
         /// <summary>
-        ///     Current town stink level. Includes the base value plus active lake and utility stink sources.
+        ///     The current town stink level. Includes the base value plus active lake and utility stink sources.
         /// </summary>
         public float StinkValue
         {
@@ -174,8 +178,10 @@ namespace _project.Scripts.Core
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            // startingPopSize must stay within level 1 (≤10).
-            startingPopSize = Mathf.Clamp(startingPopSize, 1, 10);
+            levelTwoPopulationThreshold = Mathf.Max(1, levelTwoPopulationThreshold);
+            levelThreePopulationThreshold = Mathf.Max(levelTwoPopulationThreshold + 1, levelThreePopulationThreshold);
+            // startingPopSize must stay within level 1.
+            startingPopSize = Mathf.Clamp(startingPopSize, 1, levelTwoPopulationThreshold);
             startingSpawnRateMultiplier = Mathf.Max(startingSpawnRateMultiplier, 0.01f);
             spawnRateGrowthPerPop = Mathf.Max(spawnRateGrowthPerPop, 0f);
             startingWaveDurationMultiplier = Mathf.Max(startingWaveDurationMultiplier, 0f);
@@ -194,14 +200,11 @@ namespace _project.Scripts.Core
             return CalculateLevelByPopulationSize(_populationSize);
         }
 
-        private static int CalculateLevelByPopulationSize(int populationSize)
+        private int CalculateLevelByPopulationSize(int populationSize)
         {
-            return populationSize switch
-            {
-                <= 10 => 1,
-                <= 20 => 2,
-                _ => 3
-            };
+            if (populationSize <= levelTwoPopulationThreshold) return 1;
+            if (populationSize <= levelThreePopulationThreshold) return 2;
+            return 3;
         }
 
         private int PopulationAboveStart()

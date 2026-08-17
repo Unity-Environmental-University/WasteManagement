@@ -41,13 +41,13 @@ namespace _project.Scripts.Object_Scripts
             "Clicks needed to break one size off a pipe-blocking issue. Keep clicking to shrink it back to a movable size.")]
         [SerializeField]
         [Min(1)]
-        private int clicksPerShrink = 3;
+        private int clicksPerShrink = 2;
 
         [Tooltip(
             "Seconds a pipe-blocking issue can remain uncleared before it bursts the pipe and spills into the lake.")]
         [SerializeField]
         [Min(0.1f)]
-        private float blockedBurstDelay = 10f;
+        private float blockedBurstDelay = 5f;
 
         private static bool Debugging => GameMaster.Instance?.debugging ?? false;
         
