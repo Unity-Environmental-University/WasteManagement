@@ -73,10 +73,12 @@ namespace _project.Scripts.Object_Scripts
 
         private IEnumerator SpawnTimer(float interval)
         {
+            yield return new WaitForSeconds(Mathf.Min(interval, Mathf.Max(0f, spawnInterval)));
+
             while (true)
             {
-                yield return new WaitForSeconds(interval);
                 SpawnObject(spawnerObject);
+                yield return new WaitForSeconds(interval);
             }
         }
 
