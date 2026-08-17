@@ -46,6 +46,9 @@ namespace _project.Scripts.Core
         [Tooltip("Performance sample interval in seconds")]
         public float perfSampleInterval = 10f;
 
+        [Tooltip("Max performance samples held back waiting for an event to travel with")]
+        public int maxRetainedPerfSamples = 360;
+
         // ─── Internal state ──────────────────────────────────────────────
 
         private readonly List<QueuedEvent> _eventQueue = new();
@@ -217,6 +220,18 @@ namespace _project.Scripts.Core
             if (_eventQueue.Count == 0 && _perfQueue.Count == 0) return;
             if (_isFlushing) return;
 
+            // The ingest API requires a non-empty events array and answers a
+            // performance-only batch with 400 "Array must contain at least 1
+            // element(s)". Because the queues were cleared before the request,
+            // every idle flush silently destroyed its samples. Hold them back
+            // until an event can carry them instead.
+            if (_eventQueue.Count == 0)
+            {
+                TrimRetainedPerfSamples();
+                _lastFlushTime = Time.realtimeSinceStartup;
+                return;
+            }
+
 #if !UNITY_EDITOR
         var events = new List<QueuedEvent>(_eventQueue);
         var perfs = new List<PerfSample>(_perfQueue);
@@ -242,6 +257,16 @@ namespace _project.Scripts.Core
                 _lastFlushTime = Time.realtimeSinceStartup;
             }
 #endif
+        }
+
+        /// <summary>
+        ///     Caps the retained sample backlog for sessions that idle for a long
+        ///     time without producing an event, dropping the oldest first.
+        /// </summary>
+        private void TrimRetainedPerfSamples()
+        {
+            var excess = _perfQueue.Count - Mathf.Max(1, maxRetainedPerfSamples);
+            if (excess > 0) _perfQueue.RemoveRange(0, excess);
         }
 
         /// <summary>

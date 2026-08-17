@@ -69,6 +69,13 @@ namespace _project.Scripts.Core
 
         private string PendingUploadDirectory => Path.Combine(Application.persistentDataPath, "TrailheadPendingUploads");
 
+        private string RecordingsEndpoint => apiUrl.TrimEnd('/') + "/api/recordings";
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern int SessionBeaconPost(string url, string apiKey, string json);
+#endif
+
         private void Start()
         {
             if (CanUpload()) StartCoroutine(UploadPendingRecordings());
@@ -263,7 +270,13 @@ namespace _project.Scripts.Core
         ///     coroutine and does not block the game. Check OnUploadComplete or
         ///     poll LastRecordingId for the result.
         /// </summary>
-        public void FinishRecording()
+        /// <param name="viaBeacon">
+        ///     Upload with a request that outlives page unload. Required on WebGL,
+        ///     where the browser tears the player down long before a coroutine
+        ///     upload could finish. Falls back to the coroutine when the beacon is
+        ///     unavailable or the payload is too large for it.
+        /// </param>
+        public void FinishRecording(bool viaBeacon = false)
         {
             if (!IsRecording)
             {
@@ -280,10 +293,41 @@ namespace _project.Scripts.Core
                 return;
             }
 
+            // The beacon is fire-and-forget, so it deliberately skips the retry
+            // queue: a queued copy would be re-uploaded on the next launch and
+            // duplicate the recording every time the beacon succeeded.
+            if (viaBeacon && TryBeaconUpload(json)) return;
+
             // Persist before starting the coroutine. Unity can terminate a play-mode
             // run or scene unexpectedly, which would otherwise discard the payload.
             var pendingPath = SavePendingRecording(json);
             BeginUpload(json, pendingPath);
+        }
+
+        /// <summary>
+        ///     Hands the payload to a browser request that survives page unload.
+        ///     Returns false off WebGL, or when the payload exceeds the browser's
+        ///     keepalive budget, so the caller can fall back to a normal upload.
+        /// </summary>
+        private bool TryBeaconUpload(string json)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                if (SessionBeaconPost(RecordingsEndpoint, apiKey, json) == 1)
+                {
+                    Debug.Log($"[TrailheadRecorder] Recording sent via unload beacon. Payload length: {json.Length}");
+                    return true;
+                }
+
+                Debug.LogWarning("[TrailheadRecorder] Beacon declined the payload; falling back to coroutine upload.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[TrailheadRecorder] Beacon upload unavailable: {exception.Message}");
+            }
+#endif
+            return false;
         }
 
         /// <summary>
@@ -516,10 +560,9 @@ namespace _project.Scripts.Core
 
         private IEnumerator UploadRecording(string json, string pendingPath)
         {
-            var url = apiUrl.TrimEnd('/') + "/api/recordings";
             var body = Encoding.UTF8.GetBytes(json);
 
-            using var request = new UnityWebRequest(url, "POST");
+            using var request = new UnityWebRequest(RecordingsEndpoint, "POST");
             request.uploadHandler = new UploadHandlerRaw(body);
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using _project.Scripts.Object_Scripts;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -37,9 +38,19 @@ namespace _project.Scripts.Core
         private float _sessionStartedAt;
         private bool _finishing;
         private bool _quitting;
+        private int _frameCount;
+        private float _frameElapsed;
 
         private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
         private const string AnonymousIdKey = "SludgeTowerAnonymousID";
+
+        /// <summary>Name of the unload callback invoked from SessionBeacon.jslib.</summary>
+        private const string UnloadCallbackName = nameof(HandleBrowserUnload);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void SessionBeaconRegisterUnload(string gameObjectName, string methodName);
+#endif
 
         private sealed class PathSnapshot
         {
@@ -138,6 +149,8 @@ namespace _project.Scripts.Core
 
             if (!trailheadReady) return;
 
+            RegisterBrowserUnloadHandler();
+
             trailhead.Identify(anonymousId);
             trailhead.StartRecording(recordingName);
             trailhead.SetMetadata("replay-profile", "waste-board");
@@ -151,7 +164,42 @@ namespace _project.Scripts.Core
             RecordEvent("Session Started");
         }
 
-        public void FinishSession(string reason = "Session Finished")
+        /// <summary>
+        ///     Asks the browser to call <see cref="HandleBrowserUnload" /> when the
+        ///     page goes away. Unity never raises OnApplicationQuit for a closed or
+        ///     navigated-away tab, so without this a web session ends silently, and
+        ///     Trailhead -- which uploads only from FinishRecording -- gets nothing.
+        /// </summary>
+        private void RegisterBrowserUnloadHandler()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            try
+            {
+                SessionBeaconRegisterUnload(gameObject.name, UnloadCallbackName);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[WasteBoardReplay] Could not register unload handler: {exception.Message}", this);
+            }
+#endif
+        }
+
+        /// <summary>
+        ///     Invoked from SessionBeacon.jslib via SendMessage as the page unloads.
+        ///     Must stay public and parameterless-by-string for SendMessage to bind.
+        /// </summary>
+        public void HandleBrowserUnload(string _)
+        {
+            FinishSession("Page Unloaded", viaBeacon: true);
+        }
+
+        /// <param name="reason">Named Reason String</param>
+        /// <param name="viaBeacon">
+        ///     Upload through a request that survives page unload. Set only from the
+        ///     browser unload callback, where a coroutine upload would be killed
+        ///     mid-flight.
+        /// </param>
+        public void FinishSession(string reason = "Session Finished", bool viaBeacon = false)
         {
             if (_finishing) return;
             _finishing = true;
@@ -164,7 +212,8 @@ namespace _project.Scripts.Core
                 { "reason", reason },
                 { "round", controller ? controller.currentTurn.ToString(Invariant) : "0" },
                 { "moves", controller ? controller.moveCount.ToString(Invariant) : "0" },
-                { "level", controller ? controller.currentLevel.ToString(Invariant) : "1" }
+                { "level", controller ? controller.currentLevel.ToString(Invariant) : "1" },
+                { "avg-fps", F(_frameElapsed > 0f ? _frameCount / _frameElapsed : 0f) }
             };
 
             SyncSquareContents(false);
@@ -173,7 +222,7 @@ namespace _project.Scripts.Core
             {
                 foreach (var pair in summary)
                     trailhead.SetMetadata(pair.Key, pair.Value);
-                trailhead.FinishRecording();
+                trailhead.FinishRecording(viaBeacon);
             }
 
             if (summit && summit.IsSessionActive)
@@ -198,12 +247,12 @@ namespace _project.Scripts.Core
         /// </summary>
         public static void RequestRestartCurrentScene()
         {
-            var activeScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            var activeScene = SceneManager.GetActiveScene();
             var recorder = FindAnyObjectByType<WasteBoardReplayRecorder>();
             if (recorder)
                 recorder.BeginFinishThenLoad(activeScene.name);
             else
-                UnityEngine.SceneManagement.SceneManager.LoadScene(activeScene.name);
+                SceneManager.LoadScene(activeScene.name);
         }
 
         private void BeginGracefulQuit()
@@ -231,7 +280,7 @@ namespace _project.Scripts.Core
         {
             FinishSession("Scene Restarted");
             yield return WaitForTrailheadUpload();
-            UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
+            SceneManager.LoadScene(sceneName);
         }
 
         private IEnumerator WaitForTrailheadUpload()
@@ -243,6 +292,12 @@ namespace _project.Scripts.Core
 
         private void Update()
         {
+            if (trailhead && trailhead.IsRecording)
+            {
+                _frameCount++;
+                _frameElapsed += Time.unscaledDeltaTime;
+            }
+
             if (!trailhead || !trailhead.IsRecording || Time.unscaledTime < _nextSubjectDiscovery) return;
 
             _nextSubjectDiscovery = Time.unscaledTime + subjectDiscoveryInterval;
