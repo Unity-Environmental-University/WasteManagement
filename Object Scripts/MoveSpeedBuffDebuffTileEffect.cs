@@ -17,10 +17,10 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float debuffMoveSpeed = 1f;
 
         [Tooltip("Minimum number of path tiles the temporary speed change lasts.")]
-        [SerializeField] [Min(1)] private int minimumTileDuration = 3;
+        [SerializeField] [Min(1)] private int minimumTileDuration = 2;
 
         [Tooltip("Maximum number of path tiles the temporary speed change lasts (inclusive).")]
-        [SerializeField] [Min(1)] private int maximumTileDuration = 4;
+        [SerializeField] [Min(1)] private int maximumTileDuration = 3;
 
         public override void Apply(BuffDebuffEffectContext context)
         {
