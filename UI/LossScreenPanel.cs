@@ -1,7 +1,7 @@
 using System;
+using _project.Scripts.Core;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace _project.Scripts.UI
@@ -25,10 +25,11 @@ namespace _project.Scripts.UI
 
         public void Show(int turn, int moveCount, int populationSize, int level)
         {
-            Show(turn, moveCount, populationSize, level, RestartCurrentScene, Application.Quit);
+            Show(turn, moveCount, populationSize, level, RestartCurrentScene,
+                WasteBoardReplayRecorder.RequestApplicationQuit);
         }
 
-        public void Show(int turn, int moveCount, int populationSize, int level, Action onRetry, Action onQuit)
+        private void Show(int turn, int moveCount, int populationSize, int level, Action onRetry, Action onQuit)
         {
             if (!IsConfigured())
             {
@@ -63,8 +64,7 @@ namespace _project.Scripts.UI
 
         private static void RestartCurrentScene()
         {
-            var activeScene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(activeScene.name);
+            WasteBoardReplayRecorder.RequestRestartCurrentScene();
         }
 
         private void Retry()

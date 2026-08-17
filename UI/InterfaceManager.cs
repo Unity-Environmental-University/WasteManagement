@@ -37,7 +37,7 @@ namespace _project.Scripts.UI
             if (quitButton) Destroy(quitButton);
 #endif
 
-            if (quitButton) quitButton.onClick.AddListener(Application.Quit);
+            if (quitButton) quitButton.onClick.AddListener(WasteBoardReplayRecorder.RequestApplicationQuit);
             EnsurePathToolBar();
         }
 
