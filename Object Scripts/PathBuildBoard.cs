@@ -123,6 +123,11 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public Vector3 CellWorldSize => Vector3.Scale(transform.lossyScale, new Vector3(cellSize, cellHeight, cellSize));
 
+        /// <summary>World-space center-to-center spacing of adjacent cells.</summary>
+        public Vector2 CellWorldPitch => new(
+            Mathf.Abs(transform.lossyScale.x) * PipeCellPitch,
+            Mathf.Abs(transform.lossyScale.z) * PipeCellPitch);
+
         /// <summary>
         ///     Footprint every pipe tile is scaled to. Matching the cell pitch means adjacent tiles
         ///     share an edge rather than leaving the cell gap open; the seam overlap then pushes the

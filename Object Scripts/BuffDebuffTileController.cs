@@ -40,6 +40,7 @@ namespace _project.Scripts.Object_Scripts
         private static SceneHandle _raycastersPatchedSceneHandle;
 
         public BuffDebuffKind Kind => kind;
+        public IReadOnlyList<BuffDebuffTileEffect> Effects => effects;
 
         private void Awake()
         {

@@ -27,6 +27,9 @@ namespace _project.Scripts.Object_Scripts
         private PlacementInventory _placementInventory;
         private static bool Debugging => GameMaster.Instance.debugging;
 
+        public PlaceableType AcceptedType => acceptedType;
+        public bool IsOccupied => _isOccupied;
+
         private void Awake()
         {
             _slotCollider = GetComponent<Collider>();
@@ -112,7 +115,7 @@ namespace _project.Scripts.Object_Scripts
             _isOccupied = true;
             _isHovered = false;
             var gm = GameMaster.Instance;
-            gm.CompletePlacement();
+            gm.CompletePlacement(placed);
             gm.turnController.infrastructureValue += pending.InfraValue;
             gm.interfaceManager?.RefreshStinkMeter();
             RefreshInteractionState();

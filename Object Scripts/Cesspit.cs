@@ -110,11 +110,11 @@ namespace _project.Scripts.Object_Scripts
             {
                 case CesspitCapShopItem when !IsSealed:
                     Seal();
-                    gm.CompletePlacement();
+                    gm.CompletePlacement(gameObject);
                     break;
                 case BuryCesspitShopItem:
                     Bury();
-                    gm.CompletePlacement();
+                    gm.CompletePlacement(gameObject);
                     break;
             }
         }

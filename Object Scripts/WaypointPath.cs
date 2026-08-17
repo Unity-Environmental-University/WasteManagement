@@ -49,6 +49,7 @@ namespace _project.Scripts.Object_Scripts
 
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
+        private readonly List<Vector2Int> _alternatePathCells = new();
 
         // Cells visited by BFS but NOT part of the final path. Used only for gizmo
         // visualization so the player can see which placed pieces were ignored.
@@ -74,6 +75,8 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public int Count => _waypoints.Count;
         public bool HasAlternateRoute => _alternateWaypoints.Count > 0;
+        public IReadOnlyList<Vector2Int> PathCells => _pathCells;
+        public IReadOnlyList<Vector2Int> AlternatePathCells => _alternatePathCells;
         public Transform Destination => endPoint;
 
         public bool IsValid { get; private set; }
@@ -272,6 +275,7 @@ namespace _project.Scripts.Object_Scripts
         {
             _waypoints.Clear();
             _alternateWaypoints.Clear();
+            _alternatePathCells.Clear();
             _splitCell = null;
             _pathCells.Clear();
             _unusedCells.Clear();
@@ -337,7 +341,10 @@ namespace _project.Scripts.Object_Scripts
             {
                 _alternateWaypoints.Add(startPoint.position);
                 foreach (var cell in alternateCellPath)
+                {
+                    _alternatePathCells.Add(cell);
                     _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+                }
                 _alternateWaypoints.Add(endPoint.position);
             }
 

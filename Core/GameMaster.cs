@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
@@ -32,11 +33,16 @@ namespace _project.Scripts.Core
         public IPlaceable PendingPlacement => placementInventory ? placementInventory.SelectedItem : null;
 
         /// <summary>Finishes the current placement: consumes the selected item, clears any active path tool, and registers a move.</summary>
-        public void CompletePlacement()
+        public static event Action<IPlaceable, GameObject> PlacementCompleted;
+
+        public void CompletePlacement(GameObject placedObject = null)
         {
+            var completedPlacement = PendingPlacement;
             placementInventory.ConsumeSelected();
             pathBuildBoard?.ClearActivePiece();
             if (turnController) turnController.RegisterMove();
+            if (completedPlacement != null)
+                PlacementCompleted?.Invoke(completedPlacement, placedObject);
         }
 
         public static GameMaster Instance { get; private set; }

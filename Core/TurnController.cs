@@ -48,6 +48,7 @@ namespace _project.Scripts.Core
 
         public static event Action OnCardPhaseEntered;
         public static event Action OnTowerPhaseEntered;
+        public static event Action OnGameLost;
 
         /// <summary>Fired whenever the current town level is set or changes. Payload is the new level.</summary>
         public static event Action<int> OnLevelChanged;
@@ -315,6 +316,7 @@ namespace _project.Scripts.Core
 
             var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
             _gm.interfaceManager?.ShowLossScreen(currentTurn, moveCount, populationSize, currentLevel);
+            OnGameLost?.Invoke();
 
             Debug.Log("[TurnController] Game Lost!");
         }
