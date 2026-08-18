@@ -44,12 +44,15 @@ namespace _project.Scripts.Core
         private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
         private const string AnonymousIdKey = "SludgeTowerAnonymousID";
 
-        /// <summary>Name of the unload callback invoked from SessionBeacon.jslib.</summary>
+        /// <summary>Name of the final (page-unload) callback invoked from SessionBeacon.jslib.</summary>
         private const string UnloadCallbackName = nameof(HandleBrowserUnload);
+
+        /// <summary>Name of the non-terminal (tab-hidden) checkpoint callback invoked from SessionBeacon.jslib.</summary>
+        private const string CheckpointCallbackName = nameof(HandleBrowserHidden);
 
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
-        private static extern void SessionBeaconRegisterUnload(string gameObjectName, string methodName);
+        private static extern void SessionBeaconRegisterUnload(string gameObjectName, string finalMethodName, string checkpointMethodName);
 #endif
 
         private sealed class PathSnapshot
@@ -166,16 +169,19 @@ namespace _project.Scripts.Core
 
         /// <summary>
         ///     Asks the browser to call <see cref="HandleBrowserUnload" /> when the
-        ///     page goes away. Unity never raises OnApplicationQuit for a closed or
-        ///     navigated-away tab, so without this a web session ends silently, and
-        ///     Trailhead -- which uploads only from FinishRecording -- gets nothing.
+        ///     page goes away, and <see cref="HandleBrowserHidden" /> when it's
+        ///     merely backgrounded. Unity never raises OnApplicationQuit for a
+        ///     closed or navigated-away tab. TrailheadRecorder uploads most of the
+        ///     recording incrementally as the session runs, so a silent close only
+        ///     risks losing the last deltaUploadInterval seconds -- these callbacks
+        ///     close that remaining gap.
         /// </summary>
         private void RegisterBrowserUnloadHandler()
         {
 #if UNITY_WEBGL && !UNITY_EDITOR
             try
             {
-                SessionBeaconRegisterUnload(gameObject.name, UnloadCallbackName);
+                SessionBeaconRegisterUnload(gameObject.name, UnloadCallbackName, CheckpointCallbackName);
             }
             catch (Exception exception)
             {
@@ -185,12 +191,26 @@ namespace _project.Scripts.Core
         }
 
         /// <summary>
-        ///     Invoked from SessionBeacon.jslib via SendMessage as the page unloads.
+        ///     Invoked from SessionBeacon.jslib via SendMessage as the page unloads
+        ///     (pagehide -- tab close, navigation, bfcache). Ends the session.
         ///     Must stay public and parameterless-by-string for SendMessage to bind.
         /// </summary>
         public void HandleBrowserUnload(string _)
         {
             FinishSession("Page Unloaded", viaBeacon: true);
+        }
+
+        /// <summary>
+        ///     Invoked from SessionBeacon.jslib via SendMessage when the tab is
+        ///     hidden. This also fires on ordinary tab-switching, not just
+        ///     teardown, so it must NOT end the session -- it only sends a
+        ///     best-effort snapshot in case the tab is later killed in the
+        ///     background. Must stay public and parameterless-by-string for
+        ///     SendMessage to bind.
+        /// </summary>
+        public void HandleBrowserHidden(string _)
+        {
+            trailhead?.SendCheckpoint();
         }
 
         /// <param name="reason">Named Reason String</param>
@@ -500,7 +520,10 @@ namespace _project.Scripts.Core
             if (!_board || !trailhead || !trailhead.IsRecording) return;
 
             var current = new Dictionary<EntityId, SquareContentSnapshot>();
-            foreach (var behaviour in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include))
+            // Inactive PlaceSpot prefabs retain their scene transforms. Including
+            // them projects those hidden slots onto unrelated board cells in the
+            // replay, so only capture content currently present in the game.
+            foreach (var behaviour in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude))
             {
                 if (!TrySnapshotSquareContent(behaviour, out var snapshot)) continue;
                 current[snapshot.Id] = snapshot;
