@@ -95,7 +95,7 @@ namespace _project.Scripts.Core
         private string SegmentsEndpoint => apiUrl.TrimEnd('/') + "/api/recordings/" + _recordingId + "/segments";
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-        [DllImport("__Internal")]
+        [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern int SessionBeaconPost(string url, string apiKey, string payloadBase64);
 #endif
 

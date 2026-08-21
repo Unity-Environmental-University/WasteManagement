@@ -51,7 +51,7 @@ namespace _project.Scripts.Core
         private const string CheckpointCallbackName = nameof(HandleBrowserHidden);
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-        [DllImport("__Internal")]
+        [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void SessionBeaconRegisterUnload(string gameObjectName, string finalMethodName, string checkpointMethodName);
 #endif
 
