@@ -32,7 +32,7 @@ namespace _project.Scripts.Core
         [SerializeField] private Sprite sifterSprite;
 
         [Header("Path Splitter Item")] [SerializeField]
-        private string pathSplitterDisplayName = "Path Splitter";
+        private string pathSplitterDisplayName = "Splitter Box";
 
         [SerializeField]
         private string pathSplitterDescription = "Splits issues evenly between two connected path options.";
