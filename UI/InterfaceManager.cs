@@ -65,15 +65,16 @@ namespace _project.Scripts.UI
             SetActive(openShopButton, false);
             SetActive(closeShopButton, false);
             SetActive(shopPanel, false);
+            SetActive(nextButton, false);
             EnsurePathToolBar();
             if (pathToolBar) pathToolBar.SetVisible(false);
         }
 
         public void ShowPrepUI()
         {
-            //SetActive(nextButton, true);
             SetActive(openShopButton, true);
             SetActive(closeShopButton, true);
+            SetActive(nextButton, true);
             EnsurePathToolBar();
             if (pathToolBar) pathToolBar.SetVisible(true);
         }
@@ -172,7 +173,7 @@ namespace _project.Scripts.UI
             if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
-        /// <summary>The toolbar, resolved or instantiated on demand — for external callers (e.g. the tutorial highlight).</summary>
+        /// <summary>The toolbar, resolved or instantiated on demand — for external callers (e.g., the tutorial highlight).</summary>
         public PathToolBar PathToolBar
         {
             get
