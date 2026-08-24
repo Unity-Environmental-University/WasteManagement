@@ -69,6 +69,8 @@ namespace _project.Scripts.Object_Scripts
         private Material _visualOverrideMaterial;
         private GameObject _activeVisual;
         private Renderer[] _activeVisualRenderers;
+        private Renderer[] _fallbackVisualRenderers;
+        private IssueBlockHighlight _blockHighlight;
         private int _blockedClickCount;
         private float _blockedDuration;
         private Tween _trembleTween;
@@ -341,6 +343,26 @@ namespace _project.Scripts.Object_Scripts
             }
 
             RefreshBurstPulse();
+            UpdateBlockHighlight();
+        }
+
+        /// <summary>
+        ///     Shows the block highlight while this issue clogs the pipe (which also covers the
+        ///     click-to-shrink trembling and the ready-to-burst pulse — those only happen while
+        ///     blocked) and hides it once the pipe unclogs.
+        /// </summary>
+        private void UpdateBlockHighlight()
+        {
+            if (!IsBlockingPipe)
+            {
+                _blockHighlight?.Hide();
+                return;
+            }
+
+            if (!_blockHighlight)
+                _blockHighlight = gameObject.AddComponent<IssueBlockHighlight>();
+
+            _blockHighlight.Show(GetVisualRenderers());
         }
 
         public IssueType GetIssueType()
@@ -485,7 +507,14 @@ namespace _project.Scripts.Object_Scripts
             if (!issueRenderer)
                 issueRenderer = GetComponentInChildren<Renderer>(true);
 
-            return issueRenderer ? new[] { issueRenderer } : Array.Empty<Renderer>();
+            // Cached by reference (not reallocated per call) so callers that compare renderer
+            // sets by identity — IssueBlockHighlight skips a full ghost rebuild when the set is
+            // unchanged — see a stable array across repeated calls instead of a "new" one every time.
+            if (_fallbackVisualRenderers == null ||
+                (_fallbackVisualRenderers.Length > 0 ? _fallbackVisualRenderers[0] : null) != issueRenderer)
+                _fallbackVisualRenderers = issueRenderer ? new[] { issueRenderer } : Array.Empty<Renderer>();
+
+            return _fallbackVisualRenderers;
         }
 
         private bool CanMergeWith(IssueObject other)
@@ -533,6 +562,8 @@ namespace _project.Scripts.Object_Scripts
         {
             transform.localScale = _baseScale * Size;
             ApplySizeVisualModel();
+            // The outline shell mirrors the active model's meshes — rebuild it around the new tier.
+            _blockHighlight?.Refresh(GetVisualRenderers());
         }
 
         /// <summary>
