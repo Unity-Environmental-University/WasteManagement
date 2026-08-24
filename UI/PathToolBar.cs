@@ -46,6 +46,9 @@ namespace _project.Scripts.UI
             shortPipeButton ? (RectTransform)shortPipeButton.transform : null;
 
         private readonly Dictionary<Button, ButtonStyle> _styles = new();
+        private readonly Dictionary<Button, (bool Selected, bool Interactable)> _appliedStates = new();
+        private bool _hintApplied;
+        private bool _hintLit;
         private bool _isBound;
         private bool _warnedMissingButtons;
 
@@ -152,26 +155,45 @@ namespace _project.Scripts.UI
             var activeTool = board ? board.ActiveTool : PathBuildTool.None;
             var activePiece = board ? board.ActivePiece : null;
 
-            ApplyButton(shortPipeButton,
+            ApplyButtonIfChanged(shortPipeButton,
                 activeTool == PathBuildTool.Place && activePiece is { Length: 2 },
                 shop && shop.CanSelectShortPipeTool);
-            ApplyButton(longPipeButton,
+            ApplyButtonIfChanged(longPipeButton,
                 activeTool == PathBuildTool.Place && activePiece is { Length: 3 },
                 shop && shop.CanSelectLongPipeTool);
-            ApplyButton(breakPipeButton,
+            ApplyButtonIfChanged(breakPipeButton,
                 activeTool == PathBuildTool.Break,
                 shop && shop.CanSelectBreakPipeTool);
-            ApplyButton(clearToolButton,
+            ApplyButtonIfChanged(clearToolButton,
                 activeTool == PathBuildTool.None,
                 true);
 
             // R only rotates while a pipe piece is armed, so dim the hint otherwise.
-            if (rotateHintLabel)
-            {
-                var hintColor = rotateHintLabel.color;
-                hintColor.a = activeTool == PathBuildTool.Place && activePiece != null ? 1f : 0.35f;
-                rotateHintLabel.color = hintColor;
-            }
+            if (!rotateHintLabel) return;
+            var hintLit = activeTool == PathBuildTool.Place && activePiece != null;
+            if (_hintApplied && hintLit == _hintLit) return;
+            _hintApplied = true;
+            _hintLit = hintLit;
+
+            var hintColor = rotateHintLabel.color;
+            hintColor.a = hintLit ? 1f : 0.35f;
+            rotateHintLabel.color = hintColor;
+        }
+
+        /// <summary>
+        ///     Applies a switch's state only when it actually changed — writing Button.colors
+        ///     dirties the graphic and would otherwise rebuild the canvas every frame.
+        /// </summary>
+        private void ApplyButtonIfChanged(Button button, bool selected, bool interactable)
+        {
+            if (!button) return;
+
+            if (_appliedStates.TryGetValue(button, out var applied) &&
+                applied.Selected == selected && applied.Interactable == interactable)
+                return;
+
+            _appliedStates[button] = (selected, interactable);
+            ApplyButton(button, selected, interactable);
         }
 
         /// <summary>Drives a switch's lit/idle face and its label colour + dimming.</summary>
