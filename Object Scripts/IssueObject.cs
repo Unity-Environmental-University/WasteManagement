@@ -494,11 +494,8 @@ namespace _project.Scripts.Object_Scripts
             if (!isActiveAndEnabled || !other.isActiveAndEnabled) return false;
             if (IsDirectDestination || other.IsDirectDestination) return false;
             if (!path || path != other.path) return false;
-            if (!path.CanRoutesMergeAtProgress(_routeIndex, _waypointIndex,
-                    other._routeIndex, other._waypointIndex))
-                return false;
-
-            return true;
+            return path.CanRoutesMergeAtProgress(_routeIndex, _waypointIndex,
+                other._routeIndex, other._waypointIndex);
         }
 
         private void Absorb(IssueObject other)
