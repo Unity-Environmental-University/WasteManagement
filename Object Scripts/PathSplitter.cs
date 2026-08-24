@@ -18,7 +18,8 @@ namespace _project.Scripts.Object_Scripts
         public static event Action AvailabilityChanged;
 
         private static readonly List<PathSplitter> LiveSplitters = new();
-        
+
+        /// <summary>All currently enabled splitters.</summary>
         public static IReadOnlyList<PathSplitter> Live => LiveSplitters;
 
         private readonly HashSet<EntityId> _routedIssueIds = new();
