@@ -17,6 +17,10 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public static event Action AvailabilityChanged;
 
+        private static readonly List<PathSplitter> LiveSplitters = new();
+        
+        public static IReadOnlyList<PathSplitter> Live => LiveSplitters;
+
         private readonly HashSet<EntityId> _routedIssueIds = new();
         private int _nextRouteIndex;
 
@@ -37,12 +41,14 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnEnable()
         {
+            LiveSplitters.Add(this);
             TurnController.OnTowerPhaseEntered += ResetSplit;
             AvailabilityChanged?.Invoke();
         }
 
         private void OnDisable()
         {
+            LiveSplitters.Remove(this);
             TurnController.OnTowerPhaseEntered -= ResetSplit;
             AvailabilityChanged?.Invoke();
         }

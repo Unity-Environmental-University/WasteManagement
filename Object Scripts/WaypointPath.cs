@@ -429,7 +429,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!_splitCell.HasValue || !pathBuildBoard) return false;
 
-            foreach (var splitter in FindObjectsByType<PathSplitter>(FindObjectsInactive.Exclude))
+            foreach (var splitter in PathSplitter.Live)
                 if (splitter && splitter.isActiveAndEnabled &&
                     pathBuildBoard.TryWorldToCell(splitter.transform.position, out var cell) &&
                     cell == _splitCell.Value)
