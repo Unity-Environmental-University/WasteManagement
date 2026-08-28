@@ -64,6 +64,7 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             StinkSourceRegistry.Register(this);
+            LiveComponentRegistry.Register(this);
             TurnController.OnCardPhaseEntered += PauseRunaways;
             TurnController.OnTowerPhaseEntered += ResumeRunaways;
             TurnController.OnLevelChanged += HandleLevelChanged;
@@ -75,6 +76,7 @@ namespace _project.Scripts.Object_Scripts
             TurnController.OnTowerPhaseEntered -= ResumeRunaways;
             TurnController.OnLevelChanged -= HandleLevelChanged;
             StinkSourceRegistry.Unregister(this);
+            LiveComponentRegistry.Unregister(this);
         }
 
         private void Start()

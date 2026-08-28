@@ -26,6 +26,16 @@ namespace _project.Scripts.Object_Scripts
         // Reused between calls so per-sprinkle lookups don't allocate.
         private readonly List<Vector2Int> _surroundingCells = new(9);
 
+        private void OnEnable()
+        {
+            LiveComponentRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            LiveComponentRegistry.Unregister(this);
+        }
+
         #region Placement
 
         /// <summary>Called by <see cref="SpecialInteractController" /> when this utility is placed.</summary>

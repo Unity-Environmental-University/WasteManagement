@@ -25,11 +25,13 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             StinkSourceRegistry.Register(this);
+            LiveComponentRegistry.Register(this);
         }
 
         private void OnDisable()
         {
             StinkSourceRegistry.Unregister(this);
+            LiveComponentRegistry.Unregister(this);
         }
 
         private void Start()

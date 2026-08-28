@@ -43,6 +43,7 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             LiveSplitters.Add(this);
+            LiveComponentRegistry.Register(this);
             TurnController.OnTowerPhaseEntered += ResetSplit;
             AvailabilityChanged?.Invoke();
         }
@@ -50,6 +51,7 @@ namespace _project.Scripts.Object_Scripts
         private void OnDisable()
         {
             LiveSplitters.Remove(this);
+            LiveComponentRegistry.Unregister(this);
             TurnController.OnTowerPhaseEntered -= ResetSplit;
             AvailabilityChanged?.Invoke();
         }

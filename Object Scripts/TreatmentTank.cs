@@ -33,11 +33,13 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             StinkSourceRegistry.Register(this);
+            LiveComponentRegistry.Register(this);
         }
 
         private void OnDisable()
         {
             StinkSourceRegistry.Unregister(this);
+            LiveComponentRegistry.Unregister(this);
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)

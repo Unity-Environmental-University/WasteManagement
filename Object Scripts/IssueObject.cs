@@ -120,11 +120,13 @@ namespace _project.Scripts.Object_Scripts
         private void OnEnable()
         {
             ActiveCount++;
+            LiveComponentRegistry.Register(this);
         }
 
         private void OnDisable()
         {
             ActiveCount--;
+            LiveComponentRegistry.Unregister(this);
         }
 
         private void Awake()

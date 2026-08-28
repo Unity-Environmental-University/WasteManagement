@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -35,6 +36,16 @@ namespace _project.Scripts.Object_Scripts
 
         // Issues already affected by this tile, so the effect fires at most once per issue.
         private readonly HashSet<EntityId> _affectedIssueIds = new();
+
+        private void OnEnable()
+        {
+            LiveComponentRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            LiveComponentRegistry.Unregister(this);
+        }
 
         // Scene whose PhysicsRaycasters have already had the Ignore Raycast layer stripped.
         private static SceneHandle _raycastersPatchedSceneHandle;

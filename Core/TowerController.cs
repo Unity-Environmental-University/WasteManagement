@@ -19,6 +19,17 @@ namespace _project.Scripts.Core
         private static bool Debugging => GameMaster.Instance.debugging;
 
         public ICard[] GetCurrentUpgrades() => _upgrades;
+
+        private void OnEnable()
+        {
+            LiveComponentRegistry.Register(this);
+        }
+
+        private void OnDisable()
+        {
+            LiveComponentRegistry.Unregister(this);
+        }
+
         public float maintenanceHealth = BaseHealth;
         public float maintenanceRegen = BaseMaintenanceRegen;
         public float organicProcessPower = BaseOrganicProcessPower;

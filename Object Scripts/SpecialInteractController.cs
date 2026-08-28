@@ -39,6 +39,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnEnable()
         {
+            LiveComponentRegistry.Register(this);
             BindInventory();
             RefreshInteractionState();
         }
@@ -50,6 +51,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDisable()
         {
+            LiveComponentRegistry.Unregister(this);
             if (_placementInventory != null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
 
