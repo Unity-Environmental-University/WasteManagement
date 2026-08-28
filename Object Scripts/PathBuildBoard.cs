@@ -87,6 +87,16 @@ namespace _project.Scripts.Object_Scripts
         private readonly Dictionary<GameObject, Stack<GameObject>> _modelPool = new();
         private Transform _poolRoot;
 
+        // What each live tile was last configured as, so hover-driven rebuilds skip the model
+        // swap / bounds measurement / layer walk for tiles whose cell and connections are
+        // unchanged (the common case when the preview footprint moves by one cell).
+        private readonly Dictionary<GameObject, (Vector2Int cell, PipeConnections connections,
+            PathPieceOrientation orientation)> _tileConfigurations = new();
+
+        // Last color actually applied to each visual, so an unchanged preview/placement repaint
+        // can skip the GetComponentsInChildren<Renderer> walk entirely.
+        private readonly Dictionary<GameObject, Color> _appliedVisualColors = new();
+
         private static readonly Vector2Int[] CellNeighborOffsets =
         {
             Vector2Int.right,
@@ -606,6 +616,8 @@ namespace _project.Scripts.Object_Scripts
             _tileModelPrefabs.Clear();
             _tilePool.Clear();
             _modelPool.Clear();
+            _tileConfigurations.Clear();
+            _appliedVisualColors.Clear();
         }
 
         /// <summary>
@@ -709,17 +721,21 @@ namespace _project.Scripts.Object_Scripts
                     tileMap.Remove(cell);
                 }
 
+            var tilesChanged = staleCells != null;
             foreach (var cell in footprint)
             {
                 if (!GetCell(cell)) continue;
 
                 var connections = GetVisualConnections(cell, additionalCells, orientation);
                 var tile = AcquireTile(visual.transform, tileMap, cell);
-                ConfigureTile(tile, cell, connections, orientation);
-                tile.name = $"Pipe Tile {cell.x},{cell.y}";
+                tilesChanged |= ConfigureTile(tile, cell, connections, orientation);
             }
 
-            SetVisualColor(visual, color);
+            // Repaint only when a tile actually changed or the color did — repainting walks
+            // every renderer under the visual.
+            if (tilesChanged || !_appliedVisualColors.TryGetValue(visual, out var appliedColor) ||
+                appliedColor != color)
+                SetVisualColor(visual, color);
             visual.SetActive(true);
         }
 
@@ -759,6 +775,7 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>Returns a visual's tiles to the pool. Call before destroying the visual.</summary>
         private void ReleaseVisualTiles(GameObject visual)
         {
+            _appliedVisualColors.Remove(visual);
             if (!_visualTiles.TryGetValue(visual, out var tileMap)) return;
 
             foreach (var tile in tileMap.Values)
@@ -799,6 +816,8 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!tile) return;
 
+            _tileConfigurations.Remove(tile);
+
             if (_tileModels.TryGetValue(tile, out var model))
             {
                 _tileModelPrefabs.TryGetValue(tile, out var prefab);
@@ -822,9 +841,14 @@ namespace _project.Scripts.Object_Scripts
         // The tile transform carries the board rotation and the one shared footprint scale;
         // the model beneath it carries the per-axis seam adjustment. Splitting the two keeps
         // every tile reporting the same uniform footprint whichever mesh it happens to use.
-        private void ConfigureTile(GameObject tile, Vector2Int cell, PipeConnections connections,
+        // Returns true when the tile was actually (re)configured; an unchanged tile is skipped.
+        private bool ConfigureTile(GameObject tile, Vector2Int cell, PipeConnections connections,
             PathPieceOrientation fallbackOrientation)
         {
+            var configuration = (cell, connections, fallbackOrientation);
+            if (_tileConfigurations.TryGetValue(tile, out var applied) && applied == configuration)
+                return false;
+
             var library = GetPipeVisualLibrary();
             var prefab = SelectPipePrefab(library, connections);
 
@@ -843,6 +867,10 @@ namespace _project.Scripts.Object_Scripts
             // junction opens on both axes and so has to reach past the cell edge on both.
             var opensOnBothAxes = !prefab || !library || prefab != library.StraightPipe;
             NormalizePipeTile(tile, model.transform, cell, renderers, prefab, opensOnBothAxes);
+
+            tile.name = $"Pipe Tile {cell.x},{cell.y}";
+            _tileConfigurations[tile] = configuration;
+            return true;
         }
 
         /// <summary>
@@ -1384,6 +1412,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!visual) return;
 
+            _appliedVisualColors[visual] = color;
             foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
                 RendererColorUtility.SetColor(renderer, color, ref _colorPropertyBlock);
         }

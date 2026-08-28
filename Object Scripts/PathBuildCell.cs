@@ -13,6 +13,8 @@ namespace _project.Scripts.Object_Scripts
         private PathBuildBoard _board;
         private Renderer _cellRenderer;
         private MaterialPropertyBlock _propertyBlock;
+        private Color _appliedColor;
+        private bool _hasAppliedColor;
 
         /// <summary>
         ///     The column index of this cell in the grid (X axis).
@@ -105,6 +107,12 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!_cellRenderer) return;
 
+            // The board repaints every cell on each hover change; only the few cells whose
+            // color actually differs pay for a property-block write.
+            if (_hasAppliedColor && _appliedColor == color) return;
+
+            _hasAppliedColor = true;
+            _appliedColor = color;
             RendererColorUtility.SetColor(_cellRenderer, color, ref _propertyBlock);
         }
 
