@@ -81,6 +81,8 @@ namespace _project.Scripts.Object_Scripts
         private bool _wasBlockingPipe;
         private int _blockedClickCount;
         private float _blockedDuration;
+        private float _nextBlockedShakeTime;
+        private const float BlockedShakeInterval = 1f;
         private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
@@ -166,9 +168,16 @@ namespace _project.Scripts.Object_Scripts
 
                 // While a modal pause holds the clock (first-clog tutorial), starting a
                 // shake would only latch its scaled-time tween mid-flight — skip the
-                // rumble until time flows again.
-                if (!GameSpeed.IsPaused)
-                    GameMaster.Instance?.cameraController?.Shake(1f);
+                // rumble until time flows again. Otherwise re-arm it on the shake's own
+                // cadence instead of calling into the camera controller (and spawning a
+                // tween the moment the last one completes) every frame per blocked issue.
+                if (!GameSpeed.IsPaused && Time.time >= _nextBlockedShakeTime)
+                {
+                    _nextBlockedShakeTime = Time.time + BlockedShakeInterval;
+                    var gm = GameMaster.Instance;
+                    if (gm && gm.cameraController) gm.cameraController.Shake(BlockedShakeInterval);
+                }
+
                 return;
             }
 
@@ -375,6 +384,7 @@ namespace _project.Scripts.Object_Scripts
             {
                 _blockedClickCount = 0;
                 _blockedDuration = 0f;
+                _nextBlockedShakeTime = 0f;
                 // Complete the shake so the position resets — a live shake would fight Update() movement.
                 _trembleTween?.Kill(true);
                 _trembleTween = null;
