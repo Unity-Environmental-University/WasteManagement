@@ -31,7 +31,10 @@ namespace _project.Scripts.Core
 
         private readonly Dictionary<int, PathSnapshot> _paths = new();
         private readonly Dictionary<EntityId, TrackedSubject> _subjects = new();
-        private readonly Dictionary<EntityId, SquareContentSnapshot> _squareContents = new();
+        private Dictionary<EntityId, SquareContentSnapshot> _squareContents = new();
+        // Scratch collections reused every discovery tick so the periodic sync doesn't allocate.
+        private Dictionary<EntityId, SquareContentSnapshot> _squareContentsScratch = new();
+        private readonly List<EntityId> _removedIdsScratch = new();
         private readonly HashSet<EntityId> _summitSquareContents = new();
         private PathBuildBoard _board;
         private float _nextSubjectDiscovery;
@@ -87,6 +90,17 @@ namespace _project.Scripts.Core
 
             public string Signature =>
                 $"{Cell.x},{Cell.y}|{Kind}|{Label}|{Color}|{State}|{Effect}|{RangeCells}|{FullnessPercent}|{HealthPercent}";
+
+            /// <summary>
+            ///     Field-by-field change check used by the periodic sync — equivalent to comparing
+            ///     <see cref="Signature" /> strings but without building two strings per tracked
+            ///     object per tick.
+            /// </summary>
+            public bool StateEquals(SquareContentSnapshot other) =>
+                other != null && Cell == other.Cell && Kind == other.Kind && Label == other.Label &&
+                Color == other.Color && State == other.State && Effect == other.Effect &&
+                RangeCells == other.RangeCells && FullnessPercent == other.FullnessPercent &&
+                HealthPercent == other.HealthPercent;
         }
 
         private void Awake()
@@ -413,45 +427,35 @@ namespace _project.Scripts.Core
             DiscoverSubjects();
         }
 
+        /// <summary>
+        ///     Registers any not-yet-tracked gameplay object as a Trailhead subject. Reads the
+        ///     LiveComponentRegistry (maintained from each type's OnEnable/OnDisable) instead of
+        ///     scanning every MonoBehaviour in the scene — this runs several times a second.
+        /// </summary>
         private void DiscoverSubjects()
         {
-            foreach (var behaviour in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude))
-            {
-                if (!behaviour || behaviour == this) continue;
+            foreach (var issue in LiveComponentRegistry.GetLive<IssueObject>())
+                if (!IsTracked(issue))
+                    RegisterSubject(issue, $"Issue {issue.GetEntityId()}", "issue", "sphere", "#d97706",
+                        Vector3.one * 0.35f, "Spawned");
 
-                switch (behaviour)
-                {
-                    case IssueObject issue:
-                        RegisterSubject(issue, $"Issue {issue.GetEntityId()}", "issue", "sphere", "#d97706",
-                            Vector3.one * 0.35f, "Spawned");
-                        break;
-                    case TowerController tower:
-                        RegisterPlacedSubject(tower, "Tower", "#38bdf8");
-                        break;
-                    case WasteSifter sifter:
-                        RegisterPlacedSubject(sifter, "Waste Sifter", "#84cc16");
-                        break;
-                    case Cesspit cesspit:
-                        RegisterPlacedSubject(cesspit, "Cesspit", "#a16207");
-                        break;
-                    case TreatmentTank tank:
-                        RegisterPlacedSubject(tank, "Treatment Tank", "#14b8a6");
-                        break;
-                    case LimeSprinkler sprinkler:
-                        RegisterPlacedSubject(sprinkler, "Lime Sprinkler", "#bef264");
-                        break;
-                    case PathSplitter splitter:
-                        RegisterPlacedSubject(splitter, "Path Splitter", "#c084fc");
-                        break;
-                }
-            }
+            DiscoverPlacedSubjects<TowerController>("Tower", "#38bdf8");
+            DiscoverPlacedSubjects<WasteSifter>("Waste Sifter", "#84cc16");
+            DiscoverPlacedSubjects<Cesspit>("Cesspit", "#a16207");
+            DiscoverPlacedSubjects<TreatmentTank>("Treatment Tank", "#14b8a6");
+            DiscoverPlacedSubjects<LimeSprinkler>("Lime Sprinkler", "#bef264");
+            DiscoverPlacedSubjects<PathSplitter>("Path Splitter", "#c084fc");
         }
 
-        private void RegisterPlacedSubject(Component component, string displayName, string color)
+        private void DiscoverPlacedSubjects<T>(string displayName, string color) where T : Component
         {
-            RegisterSubject(component, $"{displayName} {component.GetEntityId()}", "placement", "box", color,
-                Measure(component), "Placed");
+            foreach (var component in LiveComponentRegistry.GetLive<T>())
+                if (!IsTracked(component))
+                    RegisterSubject(component, $"{displayName} {component.GetEntityId()}", "placement", "box",
+                        color, Measure(component), "Placed");
         }
+
+        private bool IsTracked(Component component) => _subjects.ContainsKey(component.GetEntityId());
 
         private void RegisterSubject(Component component, string subjectName, string category, string geometry,
             string color, Vector3 scale, string initialEvent)
@@ -478,13 +482,19 @@ namespace _project.Scripts.Core
 
         private void RetireDestroyedSubjects()
         {
-            foreach (var entry in _subjects.Where(pair => !pair.Value.Target).ToArray())
+            _removedIdsScratch.Clear();
+            foreach (var pair in _subjects)
+                if (!pair.Value.Target)
+                    _removedIdsScratch.Add(pair.Key);
+
+            foreach (var id in _removedIdsScratch)
             {
-                trailhead.AddSubjectEvent(entry.Value.Handle, "Removed", new Dictionary<string, string>
+                var subject = _subjects[id];
+                trailhead.AddSubjectEvent(subject.Handle, "Removed", new Dictionary<string, string>
                 {
-                    { "category", entry.Value.Category }
+                    { "category", subject.Category }
                 });
-                _subjects.Remove(entry.Key);
+                _subjects.Remove(id);
             }
         }
 
@@ -530,27 +540,45 @@ namespace _project.Scripts.Core
         {
             if (!_board || !trailhead || !trailhead.IsRecording) return;
 
-            var current = new Dictionary<EntityId, SquareContentSnapshot>();
-            // Inactive PlaceSpot prefabs retain their scene transforms. Including
-            // them projects those hidden slots onto unrelated board cells in the
-            // replay, so only capture content currently present in the game.
-            foreach (var behaviour in FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Exclude))
-            {
-                if (!TrySnapshotSquareContent(behaviour, out var snapshot)) continue;
-                current[snapshot.Id] = snapshot;
-            }
+            // The LiveComponentRegistry only holds enabled components on active objects, which
+            // preserves the old FindObjectsInactive.Exclude behavior: inactive PlaceSpot prefabs
+            // retain their scene transforms, and including them would project those hidden slots
+            // onto unrelated board cells in the replay.
+            var current = _squareContentsScratch;
+            current.Clear();
+            CollectSquareContents<SpecialInteractController>(current);
+            CollectSquareContents<BuffDebuffTileController>(current);
+            CollectSquareContents<TowerController>(current);
+            CollectSquareContents<WasteSifter>(current);
+            CollectSquareContents<Cesspit>(current);
+            CollectSquareContents<TreatmentTank>(current);
+            CollectSquareContents<LimeSprinkler>(current);
+            CollectSquareContents<PathSplitter>(current);
 
-            foreach (var removedId in _squareContents.Keys.Except(current.Keys).ToArray())
+            _removedIdsScratch.Clear();
+            foreach (var pair in _squareContents)
+                if (!current.ContainsKey(pair.Key))
+                    _removedIdsScratch.Add(pair.Key);
+            foreach (var removedId in _removedIdsScratch)
                 RecordSquareContentEvent("Square Content Removed", _squareContents[removedId], initial);
 
             foreach (var pair in current)
                 if (!_squareContents.TryGetValue(pair.Key, out var previous))
                     RecordSquareContentEvent("Square Content Added", pair.Value, initial);
-                else if (previous.Signature != pair.Value.Signature)
+                else if (!previous.StateEquals(pair.Value))
                     RecordSquareContentEvent("Square Content Changed", pair.Value, initial);
 
-            _squareContents.Clear();
-            foreach (var pair in current) _squareContents[pair.Key] = pair.Value;
+            // Swap instead of copy: `current` becomes the tracked state and the old dictionary
+            // becomes next tick's scratch space.
+            (_squareContents, _squareContentsScratch) = (current, _squareContents);
+        }
+
+        private void CollectSquareContents<T>(Dictionary<EntityId, SquareContentSnapshot> current)
+            where T : MonoBehaviour
+        {
+            foreach (var behaviour in LiveComponentRegistry.GetLive<T>())
+                if (TrySnapshotSquareContent(behaviour, out var snapshot))
+                    current[snapshot.Id] = snapshot;
         }
 
         private bool TrySnapshotSquareContent(MonoBehaviour behaviour, out SquareContentSnapshot snapshot)
