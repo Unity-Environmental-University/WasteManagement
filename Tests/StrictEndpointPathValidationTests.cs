@@ -345,7 +345,11 @@ namespace _project.Scripts.Tests
             issue.SetVisualOverride(runawayColor);
             issue.Process(1, "Test Process");
 
-            Assert.AreEqual(runawayColor, issue.GetComponent<Renderer>().material.color);
+            // The override tint rides in a MaterialPropertyBlock (no per-renderer material
+            // instance), so read it back from the block rather than .material.color.
+            var propertyBlock = new MaterialPropertyBlock();
+            issue.GetComponent<Renderer>().GetPropertyBlock(propertyBlock);
+            Assert.AreEqual(runawayColor, propertyBlock.GetColor("_Color"));
         }
 
         [UnityTest]

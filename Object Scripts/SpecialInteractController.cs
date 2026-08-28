@@ -25,6 +25,7 @@ namespace _project.Scripts.Object_Scripts
         private bool _isHovered;
         private Collider _slotCollider;
         private PlacementInventory _placementInventory;
+        private MaterialPropertyBlock _slotColorPropertyBlock;
         private static bool Debugging => GameMaster.Instance.debugging;
 
         public PlaceableType AcceptedType => acceptedType;
@@ -34,7 +35,8 @@ namespace _project.Scripts.Object_Scripts
         {
             _slotCollider = GetComponent<Collider>();
             if (!slotRenderer) slotRenderer = GetComponentInChildren<Renderer>();
-            if (slotRenderer) _defaultColor = slotRenderer.material.color;
+            // sharedMaterial: reading .material here would clone an instance just to learn the color.
+            if (slotRenderer && slotRenderer.sharedMaterial) _defaultColor = slotRenderer.sharedMaterial.color;
         }
 
         private void OnEnable()
@@ -203,7 +205,9 @@ namespace _project.Scripts.Object_Scripts
             if (_isOccupied || runInProgress)
                 return;
 
-            slotRenderer.material.color = _isHovered && CanAccept(pending) ? hoverColor : _defaultColor;
+            // Property-block tint — `.material.color` would clone a material instance per slot.
+            RendererColorUtility.SetColor(slotRenderer,
+                _isHovered && CanAccept(pending) ? hoverColor : _defaultColor, ref _slotColorPropertyBlock);
         }
     }
 }

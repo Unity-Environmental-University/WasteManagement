@@ -37,6 +37,8 @@ namespace _project.Scripts.Object_Scripts
         // Issues already affected by this tile, so the effect fires at most once per issue.
         private readonly HashSet<EntityId> _affectedIssueIds = new();
 
+        private MaterialPropertyBlock _colorPropertyBlock;
+
         private void OnEnable()
         {
             LiveComponentRegistry.Register(this);
@@ -160,9 +162,11 @@ namespace _project.Scripts.Object_Scripts
 
         private void ApplyColor()
         {
+            // Property-block tint: `.material.color` would clone a material instance per
+            // renderer per tile, breaking batching for the whole tile population.
             var color = kind == BuffDebuffKind.Buff ? buffColor : debuffColor;
             foreach (var rend in GetComponentsInChildren<Renderer>(true))
-                rend.material.color = color;
+                RendererColorUtility.SetColor(rend, color, ref _colorPropertyBlock);
         }
 
         private static void SetLayerRecursively(Transform root, int layer)

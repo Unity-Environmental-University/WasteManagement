@@ -19,8 +19,10 @@ namespace _project.Scripts.Object_Scripts
             if (TryGetComponent<Rigidbody>(out var rb))
                 rb.isKinematic = true;
 
+            // sharedMaterial: nothing mutates the water material per instance, and effluent
+            // spawns per treated issue — `.material` would clone a new instance every time.
             if (cleanWaterMaterial && TryGetComponent<Renderer>(out var r))
-                r.material = cleanWaterMaterial;
+                r.sharedMaterial = cleanWaterMaterial;
         }
 
         private void Update()

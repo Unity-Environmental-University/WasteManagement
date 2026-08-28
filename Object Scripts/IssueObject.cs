@@ -81,6 +81,7 @@ namespace _project.Scripts.Object_Scripts
         private bool _wasBlockingPipe;
         private int _blockedClickCount;
         private float _blockedDuration;
+        private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
         private float _moveSpeedBeforeTemporaryEffect;
@@ -530,12 +531,15 @@ namespace _project.Scripts.Object_Scripts
             {
                 if (!visualRenderer) continue;
 
-                // Assign the shared asset first, then tint — reading .material clones a
-                // per-instance copy, so the override never mutates the source material.
+                // The override material stays a shared asset and the tint rides in a
+                // MaterialPropertyBlock, so no per-renderer material instance is ever cloned —
+                // runaways spawn and die constantly, and each clone would break batching and
+                // survive until scene unload.
                 if (_visualOverrideMaterial)
-                    visualRenderer.material = _visualOverrideMaterial;
+                    visualRenderer.sharedMaterial = _visualOverrideMaterial;
 
-                visualRenderer.material.color = _visualOverrideColor.Value;
+                RendererColorUtility.SetColor(visualRenderer, _visualOverrideColor.Value,
+                    ref _visualOverridePropertyBlock);
             }
         }
 
