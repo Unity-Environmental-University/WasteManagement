@@ -69,6 +69,10 @@ namespace _project.Scripts.Core
         private readonly List<SubjectData> _subjects = new();
         private int _activeUploads;
         private int _syncedEventCount;
+        // Count of global events already trimmed from the front of _recordingEvents. Confirmed
+        // segments are dropped from memory (see CommitSyncTargets); counts stay absolute and
+        // list indices are recovered by subtracting the base.
+        private int _globalEventBase;
         private int _segmentSequence;
         private Coroutine _deltaUploadCoroutine;
 
@@ -115,9 +119,10 @@ namespace _project.Scripts.Core
                 // Respect sample rate
                 if (elapsed - subject.LastSampleTime < _sampleInterval) continue;
 
-                // Respect minimum position delta
+                // Respect minimum position delta. HasRecordedSample (not T.Count — synced
+                // samples are trimmed from the lists) gates the always-record-first-sample case.
                 var pos = subject.TrackedTransform.position;
-                if (subject.T.Count > 0 &&
+                if (subject.HasRecordedSample &&
                     Vector3.Distance(pos, subject.LastRecordedPosition) < minPositionDelta)
                     continue;
 
@@ -134,6 +139,7 @@ namespace _project.Scripts.Core
 
                 subject.LastRecordedPosition = pos;
                 subject.LastSampleTime = elapsed;
+                subject.HasRecordedSample = true;
             }
         }
 
@@ -165,6 +171,7 @@ namespace _project.Scripts.Core
             _subjects.Clear();
             _recordingEvents.Clear();
             _syncedEventCount = 0;
+            _globalEventBase = 0;
             _segmentSequence = 0;
             _recordingStartTime = Time.time;
             _sampleInterval = 1f / sampleRate;
@@ -458,12 +465,49 @@ namespace _project.Scripts.Core
         {
             foreach (var target in segment.Subjects)
             {
-                target.Subject.Introduced = true;
-                target.Subject.SyncedFrameCount = target.FrameTarget;
-                target.Subject.SyncedEventCount = target.EventTarget;
+                var subject = target.Subject;
+                subject.Introduced = true;
+                // Max guards against out-of-order confirmations when two segments overlap.
+                subject.SyncedFrameCount = Mathf.Max(subject.SyncedFrameCount, target.FrameTarget);
+                subject.SyncedEventCount = Mathf.Max(subject.SyncedEventCount, target.EventTarget);
+                TrimSyncedSubjectData(subject);
             }
 
-            _syncedEventCount = segment.GlobalEventTarget;
+            _syncedEventCount = Mathf.Max(_syncedEventCount, segment.GlobalEventTarget);
+            var removableGlobalEvents = _syncedEventCount - _globalEventBase;
+            if (removableGlobalEvents <= 0) return;
+
+            _recordingEvents.RemoveRange(0, removableGlobalEvents);
+            _globalEventBase = _syncedEventCount;
+        }
+
+        /// <summary>
+        ///     Drops confirmed-synced samples and events from memory. Without this, every
+        ///     subject's sample lists grow for the whole session (10 samples/sec per subject) even
+        ///     though the data already landed server-side, and retired subjects keep their full
+        ///     history until the recording ends.
+        /// </summary>
+        private static void TrimSyncedSubjectData(SubjectData subject)
+        {
+            var removableFrames = subject.SyncedFrameCount - subject.FrameBase;
+            if (removableFrames > 0)
+            {
+                subject.T.RemoveRange(0, removableFrames);
+                subject.X.RemoveRange(0, removableFrames);
+                subject.Y.RemoveRange(0, removableFrames);
+                subject.Z.RemoveRange(0, removableFrames);
+                subject.Rx.RemoveRange(0, removableFrames);
+                subject.Ry.RemoveRange(0, removableFrames);
+                subject.Rz.RemoveRange(0, removableFrames);
+                subject.RW.RemoveRange(0, removableFrames);
+                subject.FrameBase = subject.SyncedFrameCount;
+            }
+
+            var removableEvents = subject.SyncedEventCount - subject.EventBase;
+            if (removableEvents <= 0) return;
+
+            subject.Events.RemoveRange(0, removableEvents);
+            subject.EventBase = subject.SyncedEventCount;
         }
 
         /// <summary>
@@ -524,8 +568,10 @@ namespace _project.Scripts.Core
             for (var i = 0; i < _subjects.Count; i++)
             {
                 var subject = _subjects[i];
-                var frameTarget = subject.T.Count;
-                var eventTarget = subject.Events.Count;
+                // Targets are absolute counts; the lists only hold [FrameBase..) because
+                // confirmed-synced prefixes are trimmed away in CommitSyncTargets.
+                var frameTarget = subject.FrameBase + subject.T.Count;
+                var eventTarget = subject.EventBase + subject.Events.Count;
                 var introduce = !subject.Introduced;
 
                 if (!introduce && frameTarget == subject.SyncedFrameCount && eventTarget == subject.SyncedEventCount)
@@ -533,7 +579,7 @@ namespace _project.Scripts.Core
 
                 if (!firstSubject) sb.Append(',');
                 firstSubject = false;
-                AppendSegmentSubjectJson(sb, subject, introduce, i, frameTarget, eventTarget);
+                AppendSegmentSubjectJson(sb, subject, introduce, i);
 
                 subjectTargets.Add(new SubjectSyncTarget
                 {
@@ -545,9 +591,10 @@ namespace _project.Scripts.Core
 
             sb.Append(']');
 
-            var globalEventTarget = _recordingEvents.Count;
+            var globalEventTarget = _globalEventBase + _recordingEvents.Count;
             sb.Append(",\"events\":");
-            AppendEventsJsonRange(sb, _recordingEvents, _syncedEventCount, globalEventTarget);
+            AppendEventsJsonRange(sb, _recordingEvents, _syncedEventCount - _globalEventBase,
+                _recordingEvents.Count);
 
             sb.Append(",\"final\":");
             sb.Append(final ? "true" : "false");
@@ -567,9 +614,14 @@ namespace _project.Scripts.Core
             };
         }
 
-        private static void AppendSegmentSubjectJson(StringBuilder sb, SubjectData subject, bool introduce, int index,
-            int frameTarget, int eventTarget)
+        private static void AppendSegmentSubjectJson(StringBuilder sb, SubjectData subject, bool introduce, int index)
         {
+            // List-relative range of the not-yet-synced tail (absolute counts minus the trimmed base).
+            var frameFrom = subject.SyncedFrameCount - subject.FrameBase;
+            var frameTo = subject.T.Count;
+            var eventFrom = subject.SyncedEventCount - subject.EventBase;
+            var eventTo = subject.Events.Count;
+
             sb.Append('{');
 
             sb.Append("\"index\":");
@@ -585,25 +637,25 @@ namespace _project.Scripts.Core
             AppendJsonDict(sb, subject.Metadata);
 
             sb.Append(",\"frames\":{");
-            AppendFloatArrayRange(sb, "t", subject.T, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "t", subject.T, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "x", subject.X, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "x", subject.X, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "y", subject.Y, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "y", subject.Y, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "z", subject.Z, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "z", subject.Z, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "rx", subject.Rx, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "rx", subject.Rx, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "ry", subject.Ry, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "ry", subject.Ry, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "rz", subject.Rz, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "rz", subject.Rz, frameFrom, frameTo);
             sb.Append(',');
-            AppendFloatArrayRange(sb, "rw", subject.RW, subject.SyncedFrameCount, frameTarget);
+            AppendFloatArrayRange(sb, "rw", subject.RW, frameFrom, frameTo);
             sb.Append('}');
 
             sb.Append(",\"events\":");
-            AppendEventsJsonRange(sb, subject.Events, subject.SyncedEventCount, eventTarget);
+            AppendEventsJsonRange(sb, subject.Events, eventFrom, eventTo);
 
             sb.Append('}');
         }
@@ -691,6 +743,11 @@ namespace _project.Scripts.Core
         private class SubjectData
         {
             public readonly List<EventData> Events = new();
+            /// <summary>Frames trimmed from the front of the sample lists after a confirmed sync.</summary>
+            public int FrameBase;
+            /// <summary>Events trimmed from the front of <see cref="Events" /> after a confirmed sync.</summary>
+            public int EventBase;
+            public bool HasRecordedSample;
             public bool Introduced;
             public Vector3 LastRecordedPosition;
             public float LastSampleTime;
