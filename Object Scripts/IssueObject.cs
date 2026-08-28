@@ -16,6 +16,13 @@ namespace _project.Scripts.Object_Scripts
     public class IssueObject : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 2f;
+
+        [Tooltip(
+            "How strongly size changes travel speed: each size step below 2 adds this fraction of moveSpeed, each step above subtracts it. Small issues hustle, heavy merged ones lumber.")]
+        [SerializeField]
+        [Range(0f, 0.5f)]
+        private float sizeSpeedStep = 0.25f;
+
         [SerializeField] private IssueType type;
         [SerializeField] private WaypointPath path;
         [SerializeField] private Renderer issueRenderer;
@@ -71,6 +78,7 @@ namespace _project.Scripts.Object_Scripts
         private Renderer[] _activeVisualRenderers;
         private Renderer[] _fallbackVisualRenderers;
         private IssueBlockHighlight _blockHighlight;
+        private bool _wasBlockingPipe;
         private int _blockedClickCount;
         private float _blockedDuration;
         private Tween _trembleTween;
@@ -80,6 +88,21 @@ namespace _project.Scripts.Object_Scripts
         private static float PathHeight => GameMaster.Instance.pathBuildBoard.entityOnBoardHeight;
 
         private int Size { get; set; }
+
+        /// <summary>
+        ///     Pipe-travel speed adjusted for size: size 2 is neutral, size 1 moves noticeably
+        ///     faster, size 3+ slower (clamped so neither extreme gets silly). A live tile
+        ///     effect (SetTemporaryMoveSpeed) is an authored ABSOLUTE speed and is honored
+        ///     exactly — buff/debuff tiles promise a specific speed, not a size-relative one.
+        ///     Only on-path movement uses this — runaway speed is set deliberately by the
+        ///     cesspit, and a pipe-blocking issue doesn't move at all. moveSpeed itself stays
+        ///     untouched, so merging, tiles, and SetMoveSpeed keep operating on the base value.
+        /// </summary>
+        private float SizeAdjustedMoveSpeed =>
+            _temporaryMoveSpeedEndWaypoint >= 0
+                ? moveSpeed
+                : Mathf.Max(MinMoveSpeed, moveSpeed * Mathf.Clamp(1f + (2 - Size) * sizeSpeedStep, 0.4f, 1.6f));
+
         public float SiftCost => BaseSiftCost * Size;
         public float ProcessCost => BaseProcessCost * Size;
         public bool IsDirectDestination { get; private set; }
@@ -138,7 +161,11 @@ namespace _project.Scripts.Object_Scripts
                     return;
                 }
 
-                GameMaster.Instance?.cameraController?.Shake(1f);
+                // While a modal pause holds the clock (first-clog tutorial), starting a
+                // shake would only latch its scaled-time tween mid-flight — skip the
+                // rumble until time flows again.
+                if (!GameSpeed.IsPaused)
+                    GameMaster.Instance?.cameraController?.Shake(1f);
                 return;
             }
 
@@ -170,8 +197,10 @@ namespace _project.Scripts.Object_Scripts
 
             FaceTravelDirection(target - transform.position);
 
-            // Move toward the target at moveSpeed units/second (frame-rate independent)
-            transform.position = Vector3.MoveTowards(transform.position, target, moveSpeed * Time.deltaTime);
+            // Move toward the target at the size-adjusted speed (frame-rate independent):
+            // small issues zip along the pipe, heavy merged ones trundle.
+            transform.position =
+                Vector3.MoveTowards(transform.position, target, SizeAdjustedMoveSpeed * Time.deltaTime);
 
             // ADVANCE: If within ~0.1 units of the waypoint (0.01 squared), snap to the next waypoint.
             // Using sqrMagnitude avoids an expensive sqrt — compare squared distances instead
@@ -333,6 +362,12 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void UpdatePipeBlockState()
         {
+            // Announce only the not-blocking -> blocking edge, so repeated SetSize calls
+            // while already jammed don't re-fire for the same clog.
+            if (IsBlockingPipe && !_wasBlockingPipe)
+                OnPipeBlockStarted?.Invoke(this);
+            _wasBlockingPipe = IsBlockingPipe;
+
             if (!IsBlockingPipe)
             {
                 _blockedClickCount = 0;
@@ -396,6 +431,10 @@ namespace _project.Scripts.Object_Scripts
             _routeIndex = 0;
             _waypointIndex = 0;
             IsDirectDestination = false;
+            // Mirror SetDirectDestination: leaving direct mode can flip IsBlockingPipe on
+            // for an oversized issue, and skipping this would miss the OnPipeBlockStarted
+            // edge, the burst pulse, and the block highlight.
+            UpdatePipeBlockState();
         }
 
         /// <summary>
@@ -606,6 +645,13 @@ namespace _project.Scripts.Object_Scripts
         }
 
         public static event Action<IssueObject> OnReachedEnd;
+
+        /// <summary>
+        ///     Fired the moment an issue grows too large for the pipe and starts blocking it
+        ///     (the not-blocking → blocking edge only never re-fired while it stays jammed).
+        ///     Consumed by the first-clog tutorial popup (PipeClogTutorial).
+        /// </summary>
+        public static event Action<IssueObject> OnPipeBlockStarted;
 
         /// <summary>
         ///     Fired when a pipe-blocking issue grows past <see cref="maxMergeSize" /> or remains
