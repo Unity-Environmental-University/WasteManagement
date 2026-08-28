@@ -20,6 +20,7 @@ namespace _project.Scripts.Tutorial
         private const int StepCount = 8;
 
         [SerializeField] private bool debugging;
+        [SerializeField] private TutorialPanel panelPrefab;
         private PathBuildBoard _board;
         private SpecialInteractController[] _buildSquares;
         private int _initialCesspitCount;
@@ -147,7 +148,26 @@ namespace _project.Scripts.Tutorial
             if (_started) return;
             _started = true;
 
-            _panel = TutorialPanel.Create();
+            if (!panelPrefab)
+            {
+                Debug.LogWarning($"{nameof(TutorialManager)} is missing its panel prefab — tutorial skipped.", this);
+                enabled = false;
+                return;
+            }
+
+            _panel = Instantiate(panelPrefab);
+            if (!_panel.IsConfigured())
+            {
+                // Failing loudly here beats an NRE inside the OnCardPhaseEntered dispatch,
+                // which would also knock out every later phase subscriber.
+                Debug.LogError($"{nameof(TutorialManager)}'s panel prefab is missing references — tutorial skipped.",
+                    this);
+                Destroy(_panel.gameObject);
+                _panel = null;
+                enabled = false;
+                return;
+            }
+
             _panel.NextRequested += HandleNextRequested;
             _panel.SkipRequested += HandleSkipRequested;
 
@@ -279,11 +299,9 @@ namespace _project.Scripts.Tutorial
             _toolHighlightPulse?.Kill();
             _toolHighlightPulse = null;
 
-            if (_toolHighlight)
-            {
-                Destroy(_toolHighlight);
-                _toolHighlight = null;
-            }
+            if (!_toolHighlight) return;
+            Destroy(_toolHighlight);
+            _toolHighlight = null;
         }
 
         /// <summary>
