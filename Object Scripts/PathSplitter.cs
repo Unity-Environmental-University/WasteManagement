@@ -25,7 +25,14 @@ namespace _project.Scripts.Object_Scripts
         private readonly HashSet<EntityId> _routedIssueIds = new();
         private int _nextRouteIndex;
 
-        private static bool Debugging => GameMaster.Instance?.debugging ?? false;
+        private static bool Debugging
+        {
+            get
+            {
+                var gm = GameMaster.Instance;
+                return gm && gm.debugging;
+            }
+        }
 
         private void Awake()
         {

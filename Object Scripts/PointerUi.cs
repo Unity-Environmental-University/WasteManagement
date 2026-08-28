@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
@@ -37,8 +36,14 @@ namespace _project.Scripts.Object_Scripts
             RaycastResults.Clear();
             eventSystem.RaycastAll(eventData, RaycastResults);
 
-            var overUi = RaycastResults.Where(result => result.module is GraphicRaycaster)
-                .Any(result => HandlesPointerInput(result.gameObject));
+            var overUi = false;
+            foreach (var result in RaycastResults)
+            {
+                if (result.module is not GraphicRaycaster) continue;
+                if (!HandlesPointerInput(result.gameObject)) continue;
+                overUi = true;
+                break;
+            }
 
             RaycastResults.Clear();
             return overUi;

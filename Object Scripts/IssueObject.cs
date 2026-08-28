@@ -56,7 +56,14 @@ namespace _project.Scripts.Object_Scripts
         [Min(0.1f)]
         private float blockedBurstDelay = 5f;
 
-        private static bool Debugging => GameMaster.Instance?.debugging ?? false;
+        private static bool Debugging
+        {
+            get
+            {
+                var gm = GameMaster.Instance;
+                return gm && gm.debugging;
+            }
+        }
         
         private Vector3 _baseScale;
         private readonly HashSet<EntityId> _siftersProcessed = new();
