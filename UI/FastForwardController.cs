@@ -15,11 +15,11 @@ namespace _project.Scripts.UI
     [RequireComponent(typeof(CanvasGroup))]
     public class FastForwardController : MonoBehaviour
     {
-        [SerializeField] private int fastForwardMultipier = 2;
+        [SerializeField] private int fastForwardMultiplier = 2;
         [SerializeField] private Button ffButton;
         [SerializeField] private TextMeshProUGUI ffButtonText;
 
-        private float fastForwardScale;
+        private float _fastForwardScale;
         private bool IsFastForwarding { get; set; }
 
         private void Awake()
@@ -83,26 +83,33 @@ namespace _project.Scripts.UI
 
         private void StartFastForward()
         {
-            IsFastForwarding = true;
-            if (fastForwardScale < 4) fastForwardScale += fastForwardMultipier;
-            else
+            // Cycled past max — back to normal speed, so the next click starts at x2 again.
+            // Checked before anything else so the reset can't be swallowed by
+            // StopFastForward's IsFastForwarding guard, whatever order fields are set in.
+            if (_fastForwardScale >= 4)
             {
-                fastForwardScale = 0;
                 StopFastForward();
                 return;
             }
-            Time.timeScale = fastForwardScale;
-            ffButtonText.text = ">> x" + fastForwardScale;
-            Debug.Log("Current TimeScale = " + Time.timeScale);
+
+            IsFastForwarding = true;
+            _fastForwardScale += fastForwardMultiplier;
+            GameSpeed.SetBaseScale(_fastForwardScale);
+            ffButtonText.text = ">> x" + _fastForwardScale;
         }
 
         private void StopFastForward()
         {
             if (!IsFastForwarding) return;
             IsFastForwarding = false;
-            Time.timeScale = 1f;
+            // Reset the cycle too, not just the speed — otherwise a phase change mid-
+            // fast-forward leaves the stale value behind, and the first click of the NEXT
+            // tower phase wraps it back to normal speed instead of starting at x2.
+            _fastForwardScale = 0f;
+            // Through GameSpeed: if a modal pause is holding the clock at zero, this only
+            // resets the base speed underneath it instead of unfreezing the game.
+            GameSpeed.ResetBaseScale();
             ffButtonText.text = ">>";
-            Debug.Log("Current TimeScale = " + Time.timeScale);
         }
     }
 }

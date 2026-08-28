@@ -75,16 +75,22 @@ namespace _project.Scripts.Core
 
         private void Update()
         {
-            // Track frame times for FPS calculation
-            _frameTimes[_frameTimeIndex % _frameTimes.Length] = Time.unscaledDeltaTime;
-            _frameTimeIndex++;
-
-            // Auto-collect performance
-            if (autoCollectPerformance && IsSessionActive &&
-                Time.realtimeSinceStartup - _lastPerfSampleTime >= perfSampleInterval)
+            // Frozen frames during a modal pause (first-clog tutorial) aren't gameplay —
+            // keep them out of the FPS window and perf samples. Flushing below continues:
+            // uploading queued events during a pause is fine.
+            if (!GameSpeed.IsPaused)
             {
-                CollectPerformanceSample();
-                _lastPerfSampleTime = Time.realtimeSinceStartup;
+                // Track frame times for FPS calculation
+                _frameTimes[_frameTimeIndex % _frameTimes.Length] = Time.unscaledDeltaTime;
+                _frameTimeIndex++;
+
+                // Auto-collect performance
+                if (autoCollectPerformance && IsSessionActive &&
+                    Time.realtimeSinceStartup - _lastPerfSampleTime >= perfSampleInterval)
+                {
+                    CollectPerformanceSample();
+                    _lastPerfSampleTime = Time.realtimeSinceStartup;
+                }
             }
 
             // Auto-flush

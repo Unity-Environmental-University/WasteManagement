@@ -13,20 +13,20 @@ using UnityEditor;
 namespace _project.Scripts.Core
 {
     /// <summary>
-    /// Bridges SludgeTower gameplay into Summit analytics and Trailhead replay.
-    /// The board is recorded as metadata plus path mutations; only moving or
-    /// placed gameplay objects become sampled Trailhead subjects.
+    ///     Bridges SludgeTower gameplay into Summit analytics and Trailhead replay.
+    ///     The board is recorded as metadata plus path mutations; only moving or
+    ///     placed gameplay objects become sampled Trailhead subjects.
     /// </summary>
     [RequireComponent(typeof(TrailheadRecorder), typeof(SummitAnalytics))]
     public sealed class WasteBoardReplayRecorder : MonoBehaviour
     {
-        [Header("Session")]
-        [SerializeField] private bool startOnLaunch = true;
+        [Header("Session")] [SerializeField] private bool startOnLaunch = true;
         [SerializeField] private string recordingName = "SludgeTower Session";
-        [SerializeField, Min(0.05f)] private float subjectDiscoveryInterval = 0.25f;
+        [SerializeField] [Min(0.05f)] private float subjectDiscoveryInterval = 0.25f;
 
-        [Header("Linked Clients")]
-        [SerializeField] private TrailheadRecorder trailhead;
+        [Header("Linked Clients")] [SerializeField]
+        private TrailheadRecorder trailhead;
+
         [SerializeField] private SummitAnalytics summit;
 
         private readonly Dictionary<int, PathSnapshot> _paths = new();
@@ -57,33 +57,33 @@ namespace _project.Scripts.Core
 
         private sealed class PathSnapshot
         {
+            public List<Vector2Int> Cells;
             public int Id;
+            public int InfraValue;
             public int Length;
             public string Orientation;
-            public int InfraValue;
-            public List<Vector2Int> Cells;
         }
 
         private sealed class TrackedSubject
         {
-            public Component Target;
-            public int Handle;
             public string Category;
+            public int Handle;
+            public Component Target;
         }
 
         private sealed class SquareContentSnapshot
         {
-            public EntityId Id;
-            public Component Target;
             public Vector2Int Cell;
-            public string Kind;
-            public string Label;
             public string Color;
-            public string State;
             public string Effect;
-            public int? RangeCells;
             public float? FullnessPercent;
             public float? HealthPercent;
+            public EntityId Id;
+            public string Kind;
+            public string Label;
+            public int? RangeCells;
+            public string State;
+            public Component Target;
 
             public string Signature =>
                 $"{Cell.x},{Cell.y}|{Kind}|{Label}|{Color}|{State}|{Effect}|{RangeCells}|{FullnessPercent}|{HealthPercent}";
@@ -122,11 +122,13 @@ namespace _project.Scripts.Core
         {
             if (_finishing || (trailhead && trailhead.IsRecording)) return;
 
-            var trailheadReady = trailhead && (Application.isEditor || IsConfigured(trailhead.apiUrl, trailhead.apiKey));
+            var trailheadReady =
+                trailhead && (Application.isEditor || IsConfigured(trailhead.apiUrl, trailhead.apiKey));
             var summitReady = summit && (Application.isEditor || IsConfigured(summit.apiUrl, summit.apiKey));
             if (!trailheadReady && !summitReady)
             {
-                Debug.LogWarning("[WasteBoardReplay] Summit and Trailhead are not configured; session capture is disabled.", this);
+                Debug.LogWarning(
+                    "[WasteBoardReplay] Summit and Trailhead are not configured; session capture is disabled.", this);
                 return;
             }
 
@@ -197,7 +199,7 @@ namespace _project.Scripts.Core
         /// </summary>
         public void HandleBrowserUnload(string _)
         {
-            FinishSession("Page Unloaded", viaBeacon: true);
+            FinishSession("Page Unloaded", true);
         }
 
         /// <summary>
@@ -312,6 +314,10 @@ namespace _project.Scripts.Core
 
         private void Update()
         {
+            // A modal pause (first-clog tutorial) freezes gameplay in realtime, which this
+            // recorder samples on — don't count frozen frames or spend discovery on them.
+            if (GameSpeed.IsPaused) return;
+
             if (trailhead && trailhead.IsRecording)
             {
                 _frameCount++;
@@ -401,7 +407,9 @@ namespace _project.Scripts.Core
         private void RegisterInitialSubjects()
         {
             var camera = Camera.main;
-            if (camera) RegisterSubject(camera, "Player Camera", "camera", "box", "#ffffff", new Vector3(0.2f, 0.2f, 0.4f), "Present");
+            if (camera)
+                RegisterSubject(camera, "Player Camera", "camera", "box", "#ffffff", new Vector3(0.2f, 0.2f, 0.4f),
+                    "Present");
             DiscoverSubjects();
         }
 
@@ -480,7 +488,10 @@ namespace _project.Scripts.Core
             }
         }
 
-        private void HandlePathLayoutChanged() => SyncPaths(false);
+        private void HandlePathLayoutChanged()
+        {
+            SyncPaths(false);
+        }
 
         private void SyncPaths(bool initial)
         {
@@ -533,12 +544,10 @@ namespace _project.Scripts.Core
                 RecordSquareContentEvent("Square Content Removed", _squareContents[removedId], initial);
 
             foreach (var pair in current)
-            {
                 if (!_squareContents.TryGetValue(pair.Key, out var previous))
                     RecordSquareContentEvent("Square Content Added", pair.Value, initial);
                 else if (previous.Signature != pair.Value.Signature)
                     RecordSquareContentEvent("Square Content Changed", pair.Value, initial);
-            }
 
             _squareContents.Clear();
             foreach (var pair in current) _squareContents[pair.Key] = pair.Value;
@@ -552,8 +561,8 @@ namespace _project.Scripts.Core
             string kind;
             string label;
             string color;
-            string state = "active";
-            string effect = "";
+            var state = "active";
+            var effect = "";
             int? rangeCells = null;
             float? fullnessPercent = null;
             float? healthPercent = null;
@@ -696,13 +705,17 @@ namespace _project.Scripts.Core
                 { "infra-value", item.InfraValue.ToString(Invariant) }
             };
             if (placedObject)
-                foreach (var pair in SubjectLocation(placedObject.transform)) data[pair.Key] = pair.Value;
+                foreach (var pair in SubjectLocation(placedObject.transform))
+                    data[pair.Key] = pair.Value;
 
             RecordEvent(item.PlaceableType == PlaceableType.Targeted ? "Targeted Action" : "Item Placed", data,
                 new Dictionary<string, double> { { "infrastructure_value", item.InfraValue } });
         }
 
-        private void HandleCardPhase() => RecordEvent("Card Phase Entered");
+        private void HandleCardPhase()
+        {
+            RecordEvent("Card Phase Entered");
+        }
 
         private void HandleTowerPhase()
         {
@@ -761,17 +774,29 @@ namespace _project.Scripts.Core
             });
         }
 
-        private void HandleLevelChanged(int level) => RecordEvent("Level Changed",
-            new Dictionary<string, string> { { "level", level.ToString(Invariant) } },
-            new Dictionary<string, double> { { "level", level } });
+        private void HandleLevelChanged(int level)
+        {
+            RecordEvent("Level Changed",
+                new Dictionary<string, string> { { "level", level.ToString(Invariant) } },
+                new Dictionary<string, double> { { "level", level } });
+        }
 
-        private void HandleGameLost() => FinishSession("Game Lost");
+        private void HandleGameLost()
+        {
+            FinishSession("Game Lost");
+        }
 
-        private void HandleIssueReachedEnd(IssueObject issue) => RecordEvent("Issue Reached End",
-            SubjectLocation(issue), new Dictionary<string, double> { { "process_cost", issue.ProcessCost } });
+        private void HandleIssueReachedEnd(IssueObject issue)
+        {
+            RecordEvent("Issue Reached End",
+                SubjectLocation(issue), new Dictionary<string, double> { { "process_cost", issue.ProcessCost } });
+        }
 
-        private void HandlePipeBroken(IssueObject issue) => RecordEvent("Pipe Broken",
-            SubjectLocation(issue), new Dictionary<string, double> { { "process_cost", issue.ProcessCost } });
+        private void HandlePipeBroken(IssueObject issue)
+        {
+            RecordEvent("Pipe Broken",
+                SubjectLocation(issue), new Dictionary<string, double> { { "process_cost", issue.ProcessCost } });
+        }
 
         private void RecordEvent(string eventName, Dictionary<string, string> data = null,
             Dictionary<string, double> measurements = null)
@@ -789,8 +814,10 @@ namespace _project.Scripts.Core
             summit.Track(eventName, properties, tags: new[] { "waste-board", "replay" }, measurements: measurements);
         }
 
-        private Dictionary<string, string> SubjectLocation(Component component) =>
-            component ? SubjectLocation(component.transform) : new Dictionary<string, string>();
+        private Dictionary<string, string> SubjectLocation(Component component)
+        {
+            return component ? SubjectLocation(component.transform) : new Dictionary<string, string>();
+        }
 
         private Dictionary<string, string> SubjectLocation(Transform target)
         {
@@ -804,14 +831,17 @@ namespace _project.Scripts.Core
             return data;
         }
 
-        private static PathSnapshot Snapshot(PathBuildBoard.PlacedPathPiece piece) => new()
+        private static PathSnapshot Snapshot(PathBuildBoard.PlacedPathPiece piece)
         {
-            Id = piece.id,
-            Length = piece.length,
-            Orientation = piece.orientation.ToString(),
-            InfraValue = piece.infraValue,
-            Cells = new List<Vector2Int>(piece.cells)
-        };
+            return new PathSnapshot
+            {
+                Id = piece.id,
+                Length = piece.length,
+                Orientation = piece.orientation.ToString(),
+                InfraValue = piece.infraValue,
+                Cells = new List<Vector2Int>(piece.cells)
+            };
+        }
 
         private static Vector3 Measure(Component component)
         {
@@ -830,13 +860,26 @@ namespace _project.Scripts.Core
             return id;
         }
 
-        private static bool IsConfigured(string url, string key) =>
-            !string.IsNullOrWhiteSpace(key) &&
-            !string.IsNullOrWhiteSpace(url) &&
-            !url.Contains("your-", StringComparison.OrdinalIgnoreCase);
+        private static bool IsConfigured(string url, string key)
+        {
+            return !string.IsNullOrWhiteSpace(key) &&
+                   !string.IsNullOrWhiteSpace(url) &&
+                   !url.Contains("your-", StringComparison.OrdinalIgnoreCase);
+        }
 
-        private static string F(float value) => value.ToString("R", Invariant);
-        private static string V(Vector3 value) => $"{F(value.x)},{F(value.y)},{F(value.z)}";
-        private static string Q(Quaternion value) => $"{F(value.x)},{F(value.y)},{F(value.z)},{F(value.w)}";
+        private static string F(float value)
+        {
+            return value.ToString("R", Invariant);
+        }
+
+        private static string V(Vector3 value)
+        {
+            return $"{F(value.x)},{F(value.y)},{F(value.z)}";
+        }
+
+        private static string Q(Quaternion value)
+        {
+            return $"{F(value.x)},{F(value.y)},{F(value.z)},{F(value.w)}";
+        }
     }
 }
