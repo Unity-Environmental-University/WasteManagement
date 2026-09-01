@@ -176,7 +176,7 @@ namespace _project.Scripts.Object_Scripts
 
                 // While a modal pause holds the clock (first-clog tutorial), starting a
                 // shake would only latch its scaled-time tween mid-flight — skip the
-                // rumble until time flows again. Otherwise re-arm it on the shake's own
+                // rumble until time flows again. Otherwise, re-arm it on the shake's own
                 // cadence instead of calling into the camera controller (and spawning a
                 // tween the moment the last one completes) every frame per blocked issue.
                 if (!GameSpeed.IsPaused && Time.time >= _nextBlockedShakeTime)
