@@ -10,6 +10,8 @@ namespace _project.Scripts.Object_Scripts
         public HealthBar healthBar;
         public float maxHealth;
         public float health;
+        public float debrisAccumulation;
+        public float maxDebrisAccumulation;
         
         [SerializeField] private int siftPower = 1;
 
@@ -21,6 +23,12 @@ namespace _project.Scripts.Object_Scripts
         private int _infraValue;
 
         public float CurrentStink => -Mathf.Max(0f, stinkReduction);
+        private float DebrisRatio => maxDebrisAccumulation > 0f
+            ? Mathf.Clamp01(debrisAccumulation / maxDebrisAccumulation)
+            : 0f;
+
+        private bool IsBlocked => maxDebrisAccumulation > 0f && debrisAccumulation >= maxDebrisAccumulation;
+
 
         private void OnEnable()
         {
@@ -47,8 +55,22 @@ namespace _project.Scripts.Object_Scripts
         public void SetHealth(float newHealth)
         {
             health = newHealth;
-            var survived = healthBar ? healthBar.SetHealth(newHealth, maxHealth) : newHealth > 0;
-            if (!survived && !_isBreaking) StartCoroutine(BreakSifter());
+            if (healthBar) healthBar.SetHealth(newHealth, maxHealth);
+        }
+
+        private void AccumulateDebris(float amount)
+        {
+            if (maxDebrisAccumulation <= 0f) return;
+
+            debrisAccumulation = Mathf.Clamp(
+                debrisAccumulation + Mathf.Max(0f, amount),
+                0f,
+                maxDebrisAccumulation);
+        }
+
+        public void ClearDebris()
+        {
+            debrisAccumulation = 0f;
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
@@ -63,8 +85,23 @@ namespace _project.Scripts.Object_Scripts
             var issue = other.GetComponent<IssueObject>();
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
-            var damage = issue.SiftCost;
-            SetHealth(health - damage);
+            if (issue.GetIssueType() == IssueType.NonWaste)
+                AccumulateDebris(issue.SiftCost);
+
+            var speedMultiplier = DebrisRatio switch
+            {
+                < 0.2f => 1f,
+                < 0.6f => 0.8f,
+                < 0.8f => 0.5f,
+                _ => 0.2f
+            };
+
+            if (speedMultiplier < 1f)
+                issue.SetTemporaryMoveSpeedMultiplier(speedMultiplier, 2);
+
+            // A debris-blocked sifter opens its gates: issues keep moving but remain slowed.
+            if (IsBlocked) return;
+
             issue.Process(siftPower, "Sifted");
         }
 
