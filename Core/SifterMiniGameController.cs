@@ -4,12 +4,12 @@ using UnityEngine;
 
 namespace _project.Scripts.Core
 {
-    public class SifterMinigameHandler : MonoBehaviour
+    public class SifterMiniGameController : MonoBehaviour
     {
         [SerializeField] private GameObject minigamePanel;
 
         private readonly List<DebrisMiniBucket> buckets = new();
-        private readonly List<DebrisMiniHandler> debris = new();
+        private readonly List<DebrisHandler> debris = new();
         private WasteSifter _activeSifter;
 
         public void RegisterBucket(DebrisMiniBucket bucket)
@@ -22,12 +22,12 @@ namespace _project.Scripts.Core
             buckets.Remove(bucket);
         }
 
-        public void RegisterHandler(DebrisMiniHandler handler)
+        public void RegisterHandler(DebrisHandler handler)
         {
             debris.Add(handler);
         }
 
-        public void UnregisterHandler(DebrisMiniHandler handler)
+        public void UnregisterHandler(DebrisHandler handler)
         {
             debris.Remove(handler);
             if (debris.Count is 0)

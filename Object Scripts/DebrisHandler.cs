@@ -8,7 +8,7 @@ using Random = UnityEngine.Random;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class DebrisMiniHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
+    public class DebrisHandler : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         public enum DebrisType
         {
@@ -31,7 +31,7 @@ namespace _project.Scripts.Object_Scripts
             var rand = Random.Range(0, 3);
             type = (DebrisType)rand;
 
-            GameMaster.Instance.sifterMiniHandler.RegisterHandler(this);
+            GameMaster.Instance.sifterMiniController.RegisterHandler(this);
 
             if (!rectTransform) rectTransform = (RectTransform)transform;
 
@@ -42,7 +42,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDisable()
         {
-            GameMaster.Instance.sifterMiniHandler.UnregisterHandler(this);
+            GameMaster.Instance.sifterMiniController.UnregisterHandler(this);
         }
 
         public void OnBeginDrag(PointerEventData eventData)

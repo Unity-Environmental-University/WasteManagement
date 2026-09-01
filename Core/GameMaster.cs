@@ -25,7 +25,7 @@ namespace _project.Scripts.Core
         public ShopManager shopManager;
         public PathBuildBoard pathBuildBoard;
         public SpecialTileSpawner tileSpawner;
-        public SifterMinigameHandler sifterMiniHandler;
+        public SifterMiniGameController sifterMiniController;
 
         [Header("Debug")] public bool debugging;
 

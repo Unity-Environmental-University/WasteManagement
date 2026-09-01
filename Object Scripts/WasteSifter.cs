@@ -107,7 +107,7 @@ namespace _project.Scripts.Object_Scripts
         public void OnPointerClick(PointerEventData eventData)
         {
             if (debrisAccumulation > 0)
-                GameMaster.Instance.sifterMiniHandler.StartMiniGame(this);
+                GameMaster.Instance.sifterMiniController.StartMiniGame(this);
         }
     }
 }
