@@ -1,11 +1,11 @@
-using System.Collections;
 using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class WasteSifter : MonoBehaviour, IStinkSource
+    public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler
     {
         public HealthBar healthBar;
         public float maxHealth;
@@ -18,17 +18,16 @@ namespace _project.Scripts.Object_Scripts
         [Header("Stink")]
         [SerializeField] private float stinkReduction = 0.5f;
 
-        private bool _isBreaking;
         private SpecialInteractController _slot;
         private int _infraValue;
 
         public float CurrentStink => -Mathf.Max(0f, stinkReduction);
+
         private float DebrisRatio => maxDebrisAccumulation > 0f
             ? Mathf.Clamp01(debrisAccumulation / maxDebrisAccumulation)
             : 0f;
 
         private bool IsBlocked => maxDebrisAccumulation > 0f && debrisAccumulation >= maxDebrisAccumulation;
-
 
         private void OnEnable()
         {
@@ -105,19 +104,10 @@ namespace _project.Scripts.Object_Scripts
             issue.Process(siftPower, "Sifted");
         }
 
-        private IEnumerator BreakSifter()
+        public void OnPointerClick(PointerEventData eventData)
         {
-            _isBreaking = true;
-
-            // A broken sifter stops interacting entirely; disabling the colliders covers
-            // every physics callback at once instead of guarding each handler.
-            foreach (var col in GetComponentsInChildren<Collider>())
-                col.enabled = false;
-
-            yield return new WaitForSeconds(4f);
-            _slot?.ClearOccupied(_infraValue);
-            if (healthBar) healthBar.gameObject.SetActive(false);
-            Destroy(gameObject);
+            if (debrisAccumulation > 0)
+                GameMaster.Instance.sifterMiniHandler.StartMiniGame(this);
         }
     }
 }
