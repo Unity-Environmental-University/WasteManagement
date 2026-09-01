@@ -10,7 +10,8 @@ namespace _project.Scripts.Object_Scripts
     public enum IssueType
     {
         Organic,
-        Chemical
+        Chemical,
+        NonWaste
     }
     
     public class IssueObject : MonoBehaviour
@@ -331,13 +332,16 @@ namespace _project.Scripts.Object_Scripts
 
         public void AssignType()
         {
-            var rand = Random.Range(0, 2);
+            // var rand = Random.Range(0, 2);
+            // if (GameMaster.Instance.turnController.currentLevel >= 3)
+                 var rand = Random.Range(0, 3);
 
             type = rand switch
             {
                 0 => IssueType.Organic,
                 1 => IssueType.Chemical,
-                _ => IssueType.Chemical
+                2 => IssueType.NonWaste,
+                _ => IssueType.Organic
             };
         }
 
