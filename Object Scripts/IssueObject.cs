@@ -521,6 +521,19 @@ namespace _project.Scripts.Object_Scripts
             _temporaryMoveSpeedEndWaypoint = _waypointIndex + tileDuration;
         }
 
+        /// <summary>
+        ///     Temporarily scales the issue's preserved base speed. Reapplying a multiplier replaces
+        ///     the active temporary effect instead of compounding against its already-modified speed.
+        /// </summary>
+        public void SetTemporaryMoveSpeedMultiplier(float multiplier, int tileDuration)
+        {
+            var baseSpeed = _temporaryMoveSpeedEndWaypoint >= 0
+                ? _moveSpeedBeforeTemporaryEffect
+                : moveSpeed;
+
+            SetTemporaryMoveSpeed(baseSpeed * Mathf.Max(0f, multiplier), tileDuration);
+        }
+
         private void RestoreMoveSpeedIfTemporaryEffectExpired()
         {
             if (_temporaryMoveSpeedEndWaypoint < 0 || _waypointIndex < _temporaryMoveSpeedEndWaypoint)
