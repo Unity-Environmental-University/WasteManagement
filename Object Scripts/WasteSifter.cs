@@ -6,7 +6,7 @@ using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler
+    public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     {
         private static readonly int OpeningAnimation = Animator.StringToHash(
             "Base Layer.sifterOpening");
@@ -24,6 +24,7 @@ namespace _project.Scripts.Object_Scripts
 
         private SpecialInteractController _slot;
         private int _infraValue;
+        private bool _isHovered;
         private Animator _animator;
         private bool _isSifting;
         private Coroutine _closeAnimation;
@@ -50,6 +51,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDisable()
         {
+            UtilityHoverStatsPopup.Instance?.Hide(transform);
             StinkSourceRegistry.Unregister(this);
             LiveComponentRegistry.Unregister(this);
         }
@@ -182,10 +184,34 @@ namespace _project.Scripts.Object_Scripts
             issue.Process(siftPower, "Sifted");
         }
 
+        private void Update()
+        {
+            if (_isHovered)
+                UtilityHoverStatsPopup.Instance?.SetStats(BuildHoverStats());
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            _isHovered = true;
+            UtilityHoverStatsPopup.Instance?.Show(transform, BuildHoverStats());
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            _isHovered = false;
+            UtilityHoverStatsPopup.Instance?.Hide(transform);
+        }
+
         public void OnPointerClick(PointerEventData eventData)
         {
             if (debrisAccumulation > 0)
                 GameMaster.Instance.sifterMiniController.StartMiniGame(this);
+        }
+
+        private string BuildHoverStats()
+        {
+            return
+                $"SIFTER\nHealth: {health:F0} / {maxHealth:F0}\nDebris: {debrisAccumulation:F0} / {maxDebrisAccumulation:F0}";
         }
     }
 }
