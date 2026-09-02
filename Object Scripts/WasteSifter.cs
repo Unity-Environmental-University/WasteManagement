@@ -1,3 +1,4 @@
+using System.Collections;
 using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
@@ -7,6 +8,9 @@ namespace _project.Scripts.Object_Scripts
 {
     public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler
     {
+        private static readonly int OpeningAnimation = Animator.StringToHash(
+            "Base Layer.sifterOpening");
+
         public HealthBar healthBar;
         public float maxHealth;
         public float health;
@@ -20,6 +24,9 @@ namespace _project.Scripts.Object_Scripts
 
         private SpecialInteractController _slot;
         private int _infraValue;
+        private Animator _animator;
+        private bool _isSifting;
+        private Coroutine _closeAnimation;
 
         public float CurrentStink => -Mathf.Max(0f, stinkReduction);
 
@@ -28,6 +35,12 @@ namespace _project.Scripts.Object_Scripts
             : 0f;
 
         private bool IsBlocked => maxDebrisAccumulation > 0f && debrisAccumulation >= maxDebrisAccumulation;
+
+        private void Awake()
+        {
+            _animator = GetComponentInChildren<Animator>(true);
+            SetSifting(!IsBlocked, true);
+        }
 
         private void OnEnable()
         {
@@ -61,15 +74,80 @@ namespace _project.Scripts.Object_Scripts
         {
             if (maxDebrisAccumulation <= 0f) return;
 
+            var wasBlocked = IsBlocked;
             debrisAccumulation = Mathf.Clamp(
                 debrisAccumulation + Mathf.Max(0f, amount),
                 0f,
                 maxDebrisAccumulation);
+
+            if (!wasBlocked && IsBlocked)
+                SetSifting(false);
         }
 
         public void ClearDebris()
         {
             debrisAccumulation = 0f;
+            SetSifting(true);
+        }
+
+        private void SetSifting(bool isSifting, bool force = false)
+        {
+            if (!force && _isSifting == isSifting) return;
+
+            _isSifting = isSifting;
+            if (!_animator) return;
+
+            if (_closeAnimation != null)
+            {
+                StopCoroutine(_closeAnimation);
+                _closeAnimation = null;
+            }
+
+            _animator.enabled = true;
+            if (isSifting)
+            {
+                if (force)
+                {
+                    SetOpeningFrame(0f);
+                    _animator.enabled = false;
+                }
+                else
+                {
+                    _closeAnimation = StartCoroutine(CloseSifter());
+                }
+
+                return;
+            }
+
+            _animator.speed = 1f;
+            SetOpeningFrame(0f);
+        }
+
+        private IEnumerator CloseSifter()
+        {
+            _animator.speed = 1f;
+            SetOpeningFrame(1f);
+            var duration = _animator.GetCurrentAnimatorStateInfo(0).length;
+            _animator.speed = 0f;
+            var elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                SetOpeningFrame(1f - elapsed / duration);
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            SetOpeningFrame(0f);
+            _animator.speed = 1f;
+            _animator.enabled = false;
+            _closeAnimation = null;
+        }
+
+        private void SetOpeningFrame(float normalizedTime)
+        {
+            _animator.Play(OpeningAnimation, 0, Mathf.Clamp01(normalizedTime));
+            _animator.Update(0f);
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
