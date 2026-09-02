@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Looping background music (`MusicPlayer`): a quiet, fade-in music bed that persists across scene loads so the track runs unbroken from the menu into gameplay
+- Prefab-driven `MusicToggleButton` HUD switch that mutes the music without stopping it, remembering the choice across sessions
+
 ## [0.1.2] - 2026-08-06
 
 ### Added
