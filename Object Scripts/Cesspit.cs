@@ -8,7 +8,7 @@ using UnityEngine.Serialization;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler
+    public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     { 
         [SerializeField] private int processPower = 3;
         [SerializeField] private GameObject runawayPrefab;
@@ -43,6 +43,7 @@ namespace _project.Scripts.Object_Scripts
         private int _infraValue;
         private Material _fillMaterial;
         private float _stinkReduction;
+        private bool _isHovered;
 
         public float CurrentStink => Mathf.Max(0f, baseStink + FullnessRatio * fullStinkBonus - _stinkReduction);
 
@@ -72,6 +73,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDisable()
         {
+            UtilityHoverStatsPopup.Instance?.Hide(transform);
             TurnController.OnCardPhaseEntered -= PauseRunaways;
             TurnController.OnTowerPhaseEntered -= ResumeRunaways;
             TurnController.OnLevelChanged -= HandleLevelChanged;
@@ -119,6 +121,24 @@ namespace _project.Scripts.Object_Scripts
                     gm.CompletePlacement(gameObject);
                     break;
             }
+        }
+
+        private void Update()
+        {
+            if (_isHovered)
+                UtilityHoverStatsPopup.Instance?.SetStats(BuildHoverStats());
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            _isHovered = true;
+            UtilityHoverStatsPopup.Instance?.Show(transform, BuildHoverStats());
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            _isHovered = false;
+            UtilityHoverStatsPopup.Instance?.Hide(transform);
         }
 
         private void Seal()
@@ -175,6 +195,12 @@ namespace _project.Scripts.Object_Scripts
         }
 
         public bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+
+        private string BuildHoverStats()
+        {
+            var state = IsSealed ? "SEALED" : IsFull ? "FULL" : "ACTIVE";
+            return $"CESSPIT ({state})\nStored: {fullness:F0} / {maxFullness:F0}";
+        }
 
         private float FullnessRatio => maxFullness > 0f ? Mathf.Clamp01(fullness / maxFullness) : 0f;
 
