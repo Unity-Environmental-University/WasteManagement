@@ -20,6 +20,8 @@ namespace _project.Scripts.UI
         [SerializeField] private Image lTowerUpgrades;
 
         [Header("Headline Banner")]
+        [Tooltip("Root of the masthead banner (background image plus the boxes and section line). Toggled with the rest of the prep UI so its image hides on wave start.")]
+        [SerializeField] private GameObject headlineBanner;
         [Tooltip("Number shown inside the left masthead box.")]
         [SerializeField] private TextMeshProUGUI turnValueText;
         [Tooltip("Number shown inside the middle masthead box.")]
@@ -73,6 +75,7 @@ namespace _project.Scripts.UI
 
         public void HidePrepUI()
         {
+            SetActive(headlineBanner, false);
             SetActive(lTowerUpgrades, false);
             SetActive(mTowerUpgrades, false);
             SetActive(rTowerUpgrades, false);
@@ -86,6 +89,7 @@ namespace _project.Scripts.UI
 
         public void ShowPrepUI()
         {
+            SetActive(headlineBanner, true);
             SetActive(openShopButton, true);
             SetActive(closeShopButton, true);
             SetActive(nextButton, true);

@@ -19,7 +19,6 @@ namespace _project.Scripts.UI
         [SerializeField] private Button ffButton;
         [SerializeField] private TextMeshProUGUI ffButtonText;
 
-        private float _fastForwardScale;
         private bool IsFastForwarding { get; set; }
 
         private void Awake()
@@ -34,7 +33,10 @@ namespace _project.Scripts.UI
             var trigger = ffButton.gameObject.GetComponent<EventTrigger>();
             if (!trigger) trigger = ffButton.gameObject.AddComponent<EventTrigger>();
 
-            AddTriggerEntry(trigger, EventTriggerType.PointerClick, StartFastForward);
+            // Hold to fast-forward: press starts it, release stops it. PointerExit
+            // covers a press that drags off the button before lifting.
+            AddTriggerEntry(trigger, EventTriggerType.PointerDown, StartFastForward);
+            AddTriggerEntry(trigger, EventTriggerType.PointerUp, StopFastForward);
             AddTriggerEntry(trigger, EventTriggerType.PointerExit, HandlePointerExit);
 
             SetVisible(false);
@@ -77,35 +79,24 @@ namespace _project.Scripts.UI
 
         private void HandlePointerExit()
         {
+            // A press that slides off the button before lifting still releases it.
+            StopFastForward();
             if (EventSystem.current && EventSystem.current.currentSelectedGameObject == ffButton.gameObject)
                 EventSystem.current.SetSelectedGameObject(null);
         }
 
         private void StartFastForward()
         {
-            // Cycled past max — back to normal speed, so the next click starts at x2 again.
-            // Checked before anything else so the reset can't be swallowed by
-            // StopFastForward's IsFastForwarding guard, whatever order fields are set in.
-            if (_fastForwardScale >= 4)
-            {
-                StopFastForward();
-                return;
-            }
-
+            if (IsFastForwarding) return;
             IsFastForwarding = true;
-            _fastForwardScale += fastForwardMultiplier;
-            GameSpeed.SetBaseScale(_fastForwardScale);
-            ffButtonText.text = ">> x" + _fastForwardScale;
+            GameSpeed.SetBaseScale(fastForwardMultiplier);
+            ffButtonText.text = ">> x" + fastForwardMultiplier;
         }
 
         private void StopFastForward()
         {
             if (!IsFastForwarding) return;
             IsFastForwarding = false;
-            // Reset the cycle too, not just the speed — otherwise a phase change mid-
-            // fast-forward leaves the stale value behind, and the first click of the NEXT
-            // tower phase wraps it back to normal speed instead of starting at x2.
-            _fastForwardScale = 0f;
             // Through GameSpeed: if a modal pause is holding the clock at zero, this only
             // resets the base speed underneath it instead of unfreezing the game.
             GameSpeed.ResetBaseScale();
