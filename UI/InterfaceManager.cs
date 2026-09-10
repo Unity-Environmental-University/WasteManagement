@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using _project.Scripts.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace _project.Scripts.UI
@@ -17,7 +18,20 @@ namespace _project.Scripts.UI
         [SerializeField] private Image mTowerUpgrades;
         [SerializeField] private Image rTowerUpgrades;
         [SerializeField] private Image lTowerUpgrades;
-        [SerializeField] private TextMeshProUGUI infoBarText;
+
+        [Header("Headline Banner")]
+        [Tooltip("Number shown inside the left masthead box.")]
+        [SerializeField] private TextMeshProUGUI turnValueText;
+        [Tooltip("Number shown inside the middle masthead box.")]
+        [SerializeField] private TextMeshProUGUI movesValueText;
+        [Tooltip("Number shown inside the right masthead box.")]
+        [SerializeField] private TextMeshProUGUI popValueText;
+        [Tooltip("Addressable section line beneath the masthead. Currently shows the level and edition year; change its content in UpdateSectionLine.")]
+        [FormerlySerializedAs("infoBarText")]
+        [SerializeField] private TextMeshProUGUI sectionLineText;
+        [Tooltip("Newspaper edition year shown on the section line.")]
+        [SerializeField] private string editionYear = "1870";
+
         [SerializeField] private Slider stinkMeter;
         [SerializeField] private PostRoundSummaryPanel postRoundSummaryPanelPrefab;
         [SerializeField] private LossScreenPanel lossScreenPanelPrefab;
@@ -79,9 +93,9 @@ namespace _project.Scripts.UI
             if (pathToolBar) pathToolBar.SetVisible(true);
         }
 
-        public void UpdateInfo(int moveCount, int populationSize, int currentLevel)
+        public void UpdateInfo(int turn, int moveCount, int populationSize, int currentLevel)
         {
-            UpdateInfoBar(moveCount, populationSize, currentLevel);
+            UpdateInfoBar(turn, moveCount, populationSize, currentLevel);
             RefreshStinkMeter();
         }
 
@@ -92,10 +106,22 @@ namespace _project.Scripts.UI
             UpdateStinkMeter(stink);
         }
 
-        private void UpdateInfoBar(int moveCount, int popVal, int currentLevel)
+        private void UpdateInfoBar(int turn, int moveCount, int popVal, int currentLevel)
         {
-            if (!infoBarText) return;
-            infoBarText.text = $"Moves Made: {moveCount} Population: {popVal} Level: {currentLevel}";
+            if (turnValueText) turnValueText.text = turn.ToString();
+            if (movesValueText) movesValueText.text = moveCount.ToString();
+            if (popValueText) popValueText.text = popVal.ToString();
+            UpdateSectionLine(currentLevel);
+        }
+
+        // The line beneath the masthead is a deliberately swappable "section" slot.
+        // Change what the banner reports here without touching the boxes above.
+        private void UpdateSectionLine(int currentLevel)
+        {
+            if (!sectionLineText) return;
+            sectionLineText.text = string.IsNullOrWhiteSpace(editionYear)
+                ? $"LEVEL {currentLevel}"
+                : $"LEVEL {currentLevel}   <color=#9a7d55>|</color>   EST. {editionYear}";
         }
 
         private void UpdateStinkMeter(float stinkValue)

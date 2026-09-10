@@ -77,12 +77,12 @@ namespace _project.Scripts.Core
         }
 
         /// <summary>
-        ///     Pushes the current move count, population, and level to the info bar UI.
+        ///     Pushes the current turn, move count, population, and level to the info bar UI.
         /// </summary>
         private void RefreshInfoBar()
         {
             var populationSize = _gm.popManager ? _gm.popManager.GetPopulationSize() : 0;
-            _gm.interfaceManager?.UpdateInfo(moveCount, populationSize, currentLevel);
+            _gm.interfaceManager?.UpdateInfo(currentTurn, moveCount, populationSize, currentLevel);
         }
 
         private void EnterCardSequence()
