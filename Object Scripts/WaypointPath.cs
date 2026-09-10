@@ -492,6 +492,12 @@ namespace _project.Scripts.Object_Scripts
             return GetPreviewRenderer("Alternate Path Preview", ref _alternateLivePreview, previewWidth * 0.85f);
         }
 
+        /// <summary>
+        ///     Returns the LineRenderer for a preview route. A pre-existing child (one you've placed
+        ///     and tuned in the scene/prefab) is returned as-is so your inspector edits — width,
+        ///     material, caps, texture mode — are never overwritten at runtime. Only a renderer this
+        ///     method generates from scratch gets the fallback code defaults applied.
+        /// </summary>
         private LineRenderer GetPreviewRenderer(string objectName, ref LineRenderer cachedRenderer, float width)
         {
             if (cachedRenderer) return cachedRenderer;
@@ -500,6 +506,15 @@ namespace _project.Scripts.Object_Scripts
             var previewObject = pathBuildBoard
                 ? pathBuildBoard.transform.Find(objectName)
                 : null;
+
+            // Respect an author-configured renderer; don't touch its styling, but make sure it has
+            // a working material so it never falls back to the magenta error shader.
+            if (previewObject && previewObject.TryGetComponent(out cachedRenderer))
+            {
+                if (!HasUsableMaterial(cachedRenderer)) EnsureWaterPreviewMaterial(cachedRenderer);
+                return cachedRenderer;
+            }
+
             if (!previewObject && pathBuildBoard)
             {
                 var child = new GameObject(objectName);
@@ -508,21 +523,47 @@ namespace _project.Scripts.Object_Scripts
             }
 
             if (!previewObject) return null;
-            cachedRenderer = previewObject.GetComponent<LineRenderer>();
-            if (!cachedRenderer) cachedRenderer = previewObject.gameObject.AddComponent<LineRenderer>();
+
+            // No renderer existed — generate one with the default flowing-water styling.
+            cachedRenderer = previewObject.gameObject.AddComponent<LineRenderer>();
             cachedRenderer.useWorldSpace = true;
             cachedRenderer.loop = false;
             cachedRenderer.startWidth = width;
             cachedRenderer.endWidth = width;
             cachedRenderer.numCapVertices = 4;
             cachedRenderer.numCornerVertices = 4;
-            cachedRenderer.textureMode = LineTextureMode.Stretch;
-            if (!cachedRenderer.sharedMaterial)
-            {
-                var shader = Shader.Find("Sprites/Default");
-                if (shader) cachedRenderer.sharedMaterial = new Material(shader);
-            }
+            // Tile the animated water pattern along the route so the ripple density
+            // stays constant regardless of how long the path is.
+            cachedRenderer.textureMode = LineTextureMode.Tile;
+            EnsureWaterPreviewMaterial(cachedRenderer);
             return cachedRenderer;
+        }
+
+        /// <summary>
+        ///     Applies the flowing-water preview shader to the line. The shader animates
+        ///     itself from <c>_Time</c>, so no per-frame material updates are needed here;
+        ///     the LineRenderer's vertex color still supplies the complete/incomplete tint.
+        /// </summary>
+        /// <summary>
+        ///     True when the renderer has a material whose shader actually compiles. Catches both a
+        ///     missing material and one whose shader is broken/stripped (which renders magenta).
+        /// </summary>
+        private static bool HasUsableMaterial(LineRenderer renderer)
+        {
+            var mat = renderer.sharedMaterial;
+            return mat && mat.shader && mat.shader.isSupported &&
+                   mat.shader.name != "Hidden/InternalErrorShader";
+        }
+
+        private static void EnsureWaterPreviewMaterial(LineRenderer renderer)
+        {
+            var current = renderer.sharedMaterial;
+            if (current && current.shader && current.shader.name == "WasteManagement/PathWaterPreview")
+                return;
+
+            var shader = Shader.Find("WasteManagement/PathWaterPreview")
+                         ?? Shader.Find("Sprites/Default");
+            if (shader) renderer.sharedMaterial = new Material(shader);
         }
 
         private List<Vector2Int> FindPreviewPath(
