@@ -8,14 +8,25 @@ namespace _project.Scripts.Object_Scripts
     {
         [SerializeField] private DebrisHandler.DebrisType type;
 
+        private static SifterMiniGameController Controller
+        {
+            get
+            {
+                var master = GameMaster.Instance;
+                return master ? master.sifterMiniController : null;
+            }
+        }
+
         private void OnEnable()
         {
-            GameMaster.Instance.sifterMiniController.RegisterBucket(this);
+            var controller = Controller;
+            if (controller) controller.RegisterBucket(this);
         }
 
         private void OnDisable()
         {
-            GameMaster.Instance.sifterMiniController.UnregisterBucket(this);
+            var controller = Controller;
+            if (controller) controller.UnregisterBucket(this);
         }
 
         public void OnDrop(PointerEventData eventData)

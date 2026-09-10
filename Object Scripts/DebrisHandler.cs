@@ -2,7 +2,6 @@ using System.Collections;
 using _project.Scripts.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
@@ -20,71 +19,100 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Image debrisImage;
         [SerializeField] private DebrisType type;
 
-        private bool handledByBucket;
-        private Coroutine strayReset;
-        private CanvasGroup canvasGroup;
-        private RectTransform rectTransform;
-        private Vector2 originalAnchoredPos;
+        private bool _handledByBucket;
+        private Coroutine _strayReset;
+        private CanvasGroup _canvasGroup;
+        private RectTransform _rectTransform;
+        private Vector2 _originalAnchoredPos;
+
+        private static SifterMiniGameController Controller
+        {
+            get
+            {
+                var master = GameMaster.Instance;
+                return master ? master.sifterMiniController : null;
+            }
+        }
+
+        private void Awake()
+        {
+            _rectTransform = (RectTransform)transform;
+            _originalAnchoredPos = _rectTransform.anchoredPosition;
+
+            _canvasGroup = GetComponent<CanvasGroup>();
+            if (!_canvasGroup) _canvasGroup = gameObject.AddComponent<CanvasGroup>();
+        }
 
         private void OnEnable()
         {
-            var rand = Random.Range(0, 3);
-            type = (DebrisType)rand;
+            type = (DebrisType)Random.Range(0, 3);
 
-            GameMaster.Instance.sifterMiniController.RegisterHandler(this);
+            // A sorted piece is deactivated rather than destroyed, so the next round can reuse it, so
+            // put it back where it started and make it draggable again before it returns to play.
+            _handledByBucket = false;
+            _strayReset = null;
+            _canvasGroup.blocksRaycasts = true;
+            ResetPos();
 
-            if (!rectTransform) rectTransform = (RectTransform)transform;
-
-            originalAnchoredPos = rectTransform.anchoredPosition;
-            canvasGroup = GetComponent<CanvasGroup>();
-            if (!canvasGroup) Debug.LogError("No CANVAS GROUP");
+            var controller = Controller;
+            if (controller) controller.RegisterHandler(this);
+            else Debug.LogWarning($"{name}: no SifterMiniGameController available to register with.", this);
         }
 
         private void OnDisable()
         {
-            GameMaster.Instance.sifterMiniController.UnregisterHandler(this);
+            var controller = Controller;
+            if (controller) controller.UnregisterHandler(this);
         }
 
         public void OnBeginDrag(PointerEventData eventData)
         {
-            if (strayReset is not null)
+            if (_strayReset is not null)
             {
-                StopCoroutine(strayReset);
-                strayReset = null;
+                StopCoroutine(_strayReset);
+                _strayReset = null;
             }
 
-            handledByBucket = false;
-            canvasGroup.blocksRaycasts = false;
+            _handledByBucket = false;
+            _canvasGroup.blocksRaycasts = false;
         }
 
         public void OnDrag(PointerEventData eventData)
         {
-            transform.position = Mouse.current.position.ReadValue();
+            transform.position = eventData.position;
         }
 
         public void OnEndDrag(PointerEventData eventData)
         {
-            canvasGroup.blocksRaycasts = true;
+            _canvasGroup.blocksRaycasts = true;
 
-            if (!handledByBucket)
-                strayReset = StartCoroutine(CollectStray());
+            if (!_handledByBucket)
+                _strayReset = StartCoroutine(CollectStray());
         }
 
         public void HandleBucketDrop(DebrisType bucketType)
         {
-            handledByBucket = true;
+            _handledByBucket = true;
 
-            if (bucketType == type)
-                Destroy(gameObject);
-            else
+            var controller = Controller;
+
+            // Sorting a piece away is only meaningful inside a round: the controller ends the game when
+            // its roster empties, and a roster is only built by StartMiniGame. Bounce the piece back
+            // otherwise, so a panel left live outside a round cannot be emptied into a stuck state.
+            if (bucketType != type || !controller || !controller.IsRunning)
+            {
                 ResetPos();
+                return;
+            }
+
+            gameObject.SetActive(false);
         }
 
         public DebrisType GetDebrisType() => type;
 
         public void ResetPos()
         {
-            rectTransform.anchoredPosition = originalAnchoredPos;
+            _rectTransform.anchoredPosition = _originalAnchoredPos;
         }
 
         private IEnumerator CollectStray()
