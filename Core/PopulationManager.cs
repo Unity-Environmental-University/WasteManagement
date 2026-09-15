@@ -42,12 +42,18 @@ namespace _project.Scripts.Core
         private const int LevelOneGrowthBonus = 4;
         private const float LevelOnePenaltyMultiplier = 0.25f;
         private const int LevelOneMinimumGrowth = 2;
+        private const int MaxLevel = 3;
 
         [SerializeField] private int startingPopSize = 4;
 
         [Header("Level Thresholds")]
         [SerializeField] private int levelTwoPopulationThreshold = 10;
         [SerializeField] private int levelThreePopulationThreshold = 16;
+
+        [Tooltip("When enabled, completing a round advances the level by exactly 1 " +
+                 "(capped at the max level) instead of deriving it from population size. " +
+                 "Population still grows normally underneath and continues to drive wave pressure scaling.")]
+        [SerializeField] private bool roundToLevelOneToOne;
 
         [Header("Wave Pressure")]
         [SerializeField] private float startingSpawnRateMultiplier = 0.7f;
@@ -137,11 +143,15 @@ namespace _project.Scripts.Core
             var appliedGrowth = Mathf.Max(minimumGrowth, Mathf.FloorToInt(growth));
             SetPopulationSize(_populationSize + appliedGrowth);
 
+            var levelAfter = roundToLevelOneToOne
+                ? Mathf.Min(levelBefore + 1, MaxLevel)
+                : CalculateLevelByPopulationSize(_populationSize);
+
             return new PostWaveGrowthResult(
                 populationBefore,
                 _populationSize,
                 levelBefore,
-                CalculateLevelByPopulationSize(_populationSize),
+                levelAfter,
                 appliedGrowth,
                 growth,
                 pollution,
