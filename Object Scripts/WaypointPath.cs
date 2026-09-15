@@ -40,12 +40,17 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
         [Tooltip("Color used for the fork-to-rejoin branch while a path splitter is installed.")]
         [SerializeField] private Color alternatePreviewColor = new(1f, 0.52f, 0.08f, 0.95f);
+        [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
         [SerializeField, Min(0.01f)] private float previewWidth = 0.12f;
-        [SerializeField, Min(0f)] private float previewHeightOffset = 0.7f;
+        [SerializeField, Min(0f)] private float previewHeightOffset = 0.2f;
 
-        private LineRenderer _livePreview;
-        private LineRenderer _alternateLivePreview;
+        private PathWaterTube _livePreview;
+        private PathWaterTube _alternateLivePreview;
         private PathBuildBoard _subscribedBoard;
+
+        // Reused each refresh to hand the current route's world-space points to the tube builder
+        // without allocating a fresh list every frame the preview updates.
+        private readonly List<Vector3> _previewPoints = new();
 
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
@@ -96,6 +101,15 @@ namespace _project.Scripts.Object_Scripts
             RefreshAlternatePreviewIfAvailabilityChanged();
         }
 
+        // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
+        // which otherwise only fires on board/splitter events — force one so Inspector tweaks during
+        // Play mode are visible immediately instead of appearing to do nothing.
+        private void OnValidate()
+        {
+            if (!Application.isPlaying) return;
+            RefreshLivePreview();
+        }
+
         /// <summary>
         ///     Utility prefabs can become enabled before their final board transform has settled.
         ///     Detect that one-frame placement transition so the alternate route cannot remain
@@ -106,8 +120,7 @@ namespace _project.Scripts.Object_Scripts
             if (!showLivePreview || !_splitCell.HasValue || !pathBuildBoard) return;
 
             var shouldShowAlternate = HasActiveSplitterAtSplitCell();
-            var isShowingAlternate = _alternateLivePreview && _alternateLivePreview.enabled &&
-                                     _alternateLivePreview.positionCount >= 2;
+            var isShowingAlternate = _alternateLivePreview && _alternateLivePreview.IsShowing;
             if (shouldShowAlternate != isShowingAlternate)
                 RefreshLivePreview();
         }
@@ -364,9 +377,9 @@ namespace _project.Scripts.Object_Scripts
             // Never let placement validation retain a fork from a previous board layout.
             _splitCell = null;
 
-            var renderer = GetLivePreviewRenderer();
-            ClearPreviewRenderer(renderer);
-            ClearPreviewRenderer(_alternateLivePreview);
+            var tube = GetLivePreviewTube();
+            if (tube) tube.Clear();
+            if (_alternateLivePreview) _alternateLivePreview.Clear();
 
             if (!pathBuildBoard || !startPoint || !endPoint)
             {
@@ -398,31 +411,24 @@ namespace _project.Scripts.Object_Scripts
             pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
                 complete ? endPoint.position : null, alternatePreviewCells);
 
-            if (!showLivePreview || !renderer) return;
+            if (!showLivePreview || !tube) return;
 
-            var pointCount = previewCells.Count + 1 + (complete ? 1 : 0);
-            renderer.positionCount = pointCount;
-            renderer.SetPosition(0, GetPreviewPosition(startPoint.position));
-            for (var i = 0; i < previewCells.Count; i++)
-                renderer.SetPosition(i + 1,
-                    GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(previewCells[i])));
+            _previewPoints.Clear();
+            _previewPoints.Add(GetPreviewPosition(startPoint.position));
+            foreach (var cell in previewCells)
+                _previewPoints.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(cell)));
             if (complete)
-                renderer.SetPosition(pointCount - 1, GetPreviewPosition(endPoint.position));
-
-            var color = complete ? completePreviewColor : incompletePreviewColor;
-            renderer.startColor = color;
-            renderer.endColor = color;
-            renderer.enabled = true;
+                _previewPoints.Add(GetPreviewPosition(endPoint.position));
+            tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
 
             if (alternatePreviewCells == null || !HasActiveSplitterAtSplitCell()) return;
 
-            var alternateRenderer = GetAlternateLivePreviewRenderer();
-            if (!alternateRenderer) return;
+            var alternateTube = GetAlternateLivePreviewTube();
+            if (!alternateTube) return;
 
-            SetAlternateBranchPositions(alternateRenderer, previewCells, alternatePreviewCells);
-            alternateRenderer.startColor = alternatePreviewColor;
-            alternateRenderer.endColor = alternatePreviewColor;
-            alternateRenderer.enabled = alternateRenderer.positionCount >= 2;
+            // SetPath hides the tube itself when the distinct branch has fewer than two points.
+            CollectAlternateBranchPoints(previewCells, alternatePreviewCells, _previewPoints);
+            alternateTube.SetPath(_previewPoints, GetPreviewUp(), alternatePreviewColor);
         }
 
         private bool HasActiveSplitterAtSplitCell()
@@ -440,10 +446,10 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Displays only the distinct portion of the alternate route. The final shared cell on
-        ///     either side is retained so the amber line visibly leaves and rejoins the cyan route.
+        ///     either side is retained so the amber stream visibly leaves and rejoins the cyan route.
         /// </summary>
-        private void SetAlternateBranchPositions(LineRenderer renderer,
-            IReadOnlyList<Vector2Int> defaultRoute, IReadOnlyList<Vector2Int> alternateRoute)
+        private void CollectAlternateBranchPoints(IReadOnlyList<Vector2Int> defaultRoute,
+            IReadOnlyList<Vector2Int> alternateRoute, List<Vector3> points)
         {
             var sharedPrefixCount = 0;
             while (sharedPrefixCount < defaultRoute.Count && sharedPrefixCount < alternateRoute.Count &&
@@ -462,108 +468,67 @@ namespace _project.Scripts.Object_Scripts
                 ? alternateRoute.Count - sharedSuffixCount
                 : alternateRoute.Count - 1;
             var pointCount = Mathf.Max(0, lastIndex - firstIndex + 1);
-            renderer.positionCount = pointCount;
-
+            points.Clear();
             for (var i = 0; i < pointCount; i++)
-                renderer.SetPosition(i,
+                points.Add(
                     GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i])));
         }
 
-        private static void ClearPreviewRenderer(LineRenderer renderer)
+        private Vector3 GetPreviewUp()
         {
-            if (!renderer) return;
-            renderer.enabled = false;
-            renderer.positionCount = 0;
+            return pathBuildBoard ? pathBuildBoard.transform.up : Vector3.up;
         }
 
         private Vector3 GetPreviewPosition(Vector3 worldPosition)
         {
-            var up = pathBuildBoard ? pathBuildBoard.transform.up : Vector3.up;
-            return worldPosition + up * previewHeightOffset;
+            return worldPosition + GetPreviewUp() * previewHeightOffset;
         }
 
-        private LineRenderer GetLivePreviewRenderer()
+        private PathWaterTube GetLivePreviewTube()
         {
-            return GetPreviewRenderer("Live Path Preview", ref _livePreview, previewWidth);
+            return GetPreviewTube("Live Path Preview", ref _livePreview, previewWidth);
         }
 
-        private LineRenderer GetAlternateLivePreviewRenderer()
+        private PathWaterTube GetAlternateLivePreviewTube()
         {
-            return GetPreviewRenderer("Alternate Path Preview", ref _alternateLivePreview, previewWidth * 0.85f);
-        }
-
-        /// <summary>
-        ///     Returns the LineRenderer for a preview route. A pre-existing child (one you've placed
-        ///     and tuned in the scene/prefab) is returned as-is so your inspector edits — width,
-        ///     material, caps, texture mode — are never overwritten at runtime. Only a renderer this
-        ///     method generates from scratch gets the fallback code defaults applied.
-        /// </summary>
-        private LineRenderer GetPreviewRenderer(string objectName, ref LineRenderer cachedRenderer, float width)
-        {
-            if (cachedRenderer) return cachedRenderer;
-            if (!showLivePreview) return null;
-
-            var previewObject = pathBuildBoard
-                ? pathBuildBoard.transform.Find(objectName)
-                : null;
-
-            // Respect an author-configured renderer; don't touch its styling, but make sure it has
-            // a working material so it never falls back to the magenta error shader.
-            if (previewObject && previewObject.TryGetComponent(out cachedRenderer))
-            {
-                if (!HasUsableMaterial(cachedRenderer)) EnsureWaterPreviewMaterial(cachedRenderer);
-                return cachedRenderer;
-            }
-
-            if (!previewObject && pathBuildBoard)
-            {
-                var child = new GameObject(objectName);
-                child.transform.SetParent(pathBuildBoard.transform, false);
-                previewObject = child.transform;
-            }
-
-            if (!previewObject) return null;
-
-            // No renderer existed — generate one with the default flowing-water styling.
-            cachedRenderer = previewObject.gameObject.AddComponent<LineRenderer>();
-            cachedRenderer.useWorldSpace = true;
-            cachedRenderer.loop = false;
-            cachedRenderer.startWidth = width;
-            cachedRenderer.endWidth = width;
-            cachedRenderer.numCapVertices = 4;
-            cachedRenderer.numCornerVertices = 4;
-            // Tile the animated water pattern along the route so the ripple density
-            // stays constant regardless of how long the path is.
-            cachedRenderer.textureMode = LineTextureMode.Tile;
-            EnsureWaterPreviewMaterial(cachedRenderer);
-            return cachedRenderer;
+            return GetPreviewTube("Alternate Path Preview", ref _alternateLivePreview, previewWidth * 0.85f);
         }
 
         /// <summary>
-        ///     Applies the flowing-water preview shader to the line. The shader animates
-        ///     itself from <c>_Time</c>, so no per-frame material updates are needed here;
-        ///     the LineRenderer's vertex color still supplies the complete/incomplete tint.
+        ///     Returns the water tube for a preview route. If the board already has a child with this
+        ///     name carrying a LineRenderer you tuned in the scene/prefab, its width, width curve and
+        ///     material carry over to the tube so the authored look is kept; that ribbon stays disabled
+        ///     and the tube is built on a child of it (a GameObject can hold only one Renderer). Without
+        ///     one, the tube gets the fallback code defaults.
         /// </summary>
-        /// <summary>
-        ///     True when the renderer has a material whose shader actually compiles. Catches both a
-        ///     missing material and one whose shader is broken/stripped (which renders magenta).
-        /// </summary>
-        private static bool HasUsableMaterial(LineRenderer renderer)
+        private PathWaterTube GetPreviewTube(string objectName, ref PathWaterTube cachedTube, float width)
         {
-            var mat = renderer.sharedMaterial;
-            return mat && mat.shader && mat.shader.isSupported &&
-                   mat.shader.name != "Hidden/InternalErrorShader";
+            if (cachedTube) return cachedTube;
+            if (!showLivePreview || !pathBuildBoard) return null;
+
+            var previewObject = FindOrCreateChild(pathBuildBoard.transform, objectName);
+            var authoredLine = previewObject.GetComponent<LineRenderer>();
+            if (authoredLine) authoredLine.enabled = false;
+            var host = authoredLine ? FindOrCreateChild(previewObject, "Water Tube") : previewObject;
+
+            if (!host.TryGetComponent(out cachedTube))
+                cachedTube = host.gameObject.AddComponent<PathWaterTube>();
+
+            if (authoredLine)
+                cachedTube.Configure(authoredLine.sharedMaterial, authoredLine.widthCurve, authoredLine.widthMultiplier);
+            else
+                cachedTube.Configure(null, null, width);
+            return cachedTube;
         }
 
-        private static void EnsureWaterPreviewMaterial(LineRenderer renderer)
+        private static Transform FindOrCreateChild(Transform parent, string childName)
         {
-            var current = renderer.sharedMaterial;
-            if (current && current.shader && current.shader.name == "WasteManagement/PathWaterPreview")
-                return;
+            var child = parent.Find(childName);
+            if (child) return child;
 
-            var shader = Shader.Find("WasteManagement/PathWaterPreview")
-                         ?? Shader.Find("Sprites/Default");
-            if (shader) renderer.sharedMaterial = new Material(shader);
+            child = new GameObject(childName).transform;
+            child.SetParent(parent, false);
+            return child;
         }
 
         private List<Vector2Int> FindPreviewPath(

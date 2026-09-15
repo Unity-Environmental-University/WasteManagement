@@ -133,15 +133,15 @@ namespace _project.Scripts.Tests
             splitterObject.AddComponent<PathSplitter>();
 
             var alternatePreview = fixture.Board.transform.Find("Alternate Path Preview")
-                ?.GetComponent<LineRenderer>();
+                ?.GetComponentInChildren<PathWaterTube>();
             Assert.IsNotNull(alternatePreview);
-            Assert.IsTrue(alternatePreview.enabled);
-            Assert.Greater(alternatePreview.positionCount, 2);
+            Assert.IsTrue(alternatePreview.IsShowing);
+            Assert.Greater(alternatePreview.PointCount, 2);
 
             splitterObject.SetActive(false);
 
-            Assert.IsFalse(alternatePreview.enabled);
-            Assert.AreEqual(0, alternatePreview.positionCount);
+            Assert.IsFalse(alternatePreview.IsShowing);
+            Assert.AreEqual(0, alternatePreview.PointCount);
         }
 
         [Test]
@@ -173,10 +173,10 @@ namespace _project.Scripts.Tests
             fixture.Path.SendMessage("Update");
 
             var alternatePreview = fixture.Board.transform.Find("Alternate Path Preview")
-                ?.GetComponent<LineRenderer>();
+                ?.GetComponentInChildren<PathWaterTube>();
             Assert.IsNotNull(alternatePreview);
-            Assert.IsTrue(alternatePreview.enabled);
-            Assert.Greater(alternatePreview.positionCount, 2);
+            Assert.IsTrue(alternatePreview.IsShowing);
+            Assert.Greater(alternatePreview.PointCount, 2);
         }
 
         [Test]
