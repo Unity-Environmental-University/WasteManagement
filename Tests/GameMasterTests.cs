@@ -144,6 +144,51 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PlacementInventory_SetActiveTool_KeepsToolArmedAcrossConsume()
+        {
+            var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
+            var tool = new TestPlaceable();
+
+            inventory.SetActiveTool(tool);
+            Assert.AreEqual(tool, inventory.SelectedItem);
+            Assert.IsTrue(inventory.HasPersistentTool);
+
+            // Infinite supply: placing (ConsumeSelected) reports the tool but leaves it armed so the
+            // player can keep placing copies without reselecting.
+            Assert.AreEqual(tool, inventory.ConsumeSelected());
+            Assert.AreEqual(tool, inventory.SelectedItem, "Persistent tool must stay armed after placement.");
+            Assert.AreEqual(tool, inventory.ConsumeSelected(), "A second placement must still be possible.");
+        }
+
+        [Test]
+        public void PlacementInventory_SetActiveTool_ThenClearSelection_DisarmsAndEmptiesInventory()
+        {
+            var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
+            inventory.SetActiveTool(new TestPlaceable());
+
+            inventory.ClearSelection();
+
+            Assert.IsFalse(inventory.HasPersistentTool);
+            Assert.IsNull(inventory.SelectedItem);
+            Assert.IsEmpty(inventory.Items);
+        }
+
+        [Test]
+        public void PlacementInventory_SetActiveTool_ReplacesAnyPreviousSelection()
+        {
+            var inventory = CreateGameObject("Inventory").AddComponent<PlacementInventory>();
+            var first = new TestPlaceable();
+            var second = new TestPlaceable();
+
+            inventory.SetActiveTool(first);
+            inventory.SetActiveTool(second);
+
+            Assert.AreEqual(second, inventory.SelectedItem);
+            Assert.AreEqual(1, inventory.Items.Count);
+            Assert.AreEqual(second, inventory.Items[0]);
+        }
+
+        [Test]
         public void ShopManager_OpenShop_ReactivatesInactiveUiRootAndShowsPanel()
         {
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();

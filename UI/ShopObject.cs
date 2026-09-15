@@ -40,7 +40,14 @@ namespace _project.Scripts.UI
             titleText.text = item.DisplayName;
             levelText.text = $"Level {item.RequiredLevel}";
             if (descriptionText) descriptionText.text = item.Description;
-            if (displayImage && item.DisplaySprite) displayImage.sprite = item.DisplaySprite;
+
+            // Only show the icon when the item actually has art; otherwise an empty Image draws a
+            // solid box on the plaque. Items without an icon fall back to a clean name-only tile.
+            if (displayImage)
+            {
+                displayImage.sprite = item.DisplaySprite;
+                displayImage.enabled = item.DisplaySprite;
+            }
 
             // Tint the shop item's frame/background rather than its icon. Preserve the
             // complete Button color block because its transition also drives this graphic.
@@ -52,10 +59,10 @@ namespace _project.Scripts.UI
             buyButton.onClick.AddListener(OnBuyPressed);
             buyButton.interactable = ShopManager.HasAccess(item);
 
-            // If this UI was generated for an already-queued item (reused on shop reopen),
-            // bind now so it removes itself when the item is placed, even before any buy press.
+            // Placeable tiles are persistent palette tools: bind for selection highlighting and
+            // reflect whatever is currently armed. One-shot items (cards) need no selection state.
             var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
-            if (!inventory || PlaceableItem == null || !inventory.Contains(PlaceableItem)) return;
+            if (!inventory || PlaceableItem == null) return;
             BindInventory(inventory);
             HandleSelectionChanged(inventory.SelectedItem);
         }
@@ -71,32 +78,36 @@ namespace _project.Scripts.UI
 
             if (PlaceableItem != null)
             {
-                QueueOrSelectPlaceable();
+                ArmOrDisarmPlaceable();
                 return;
             }
 
+            // One-shot, non-placeable items (cards) keep the original buy-and-remove behavior.
             ShopItem.Purchase();
             if (!ShopItem.RemoveAfterPurchase) return;
             ShopManager.Instance.MarkPurchased(ShopItem);
             ShopManager.Instance.RemoveShopItem(gameObject);
         }
 
-        private void QueueOrSelectPlaceable()
+        /// <summary>
+        ///     Arms this tile's placeable as the persistent, infinite-supply tool, or disarms it when
+        ///     it is already armed. The tile itself is never removed — it stays in the palette so the
+        ///     player can place as many copies as their infrastructure budget allows.
+        /// </summary>
+        private void ArmOrDisarmPlaceable()
         {
             var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
             if (!inventory) return;
 
             BindInventory(inventory);
 
-            if (inventory.SelectItem(PlaceableItem))
+            if (inventory.SelectedItem == PlaceableItem)
             {
-                GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
+                inventory.ClearSelection();
                 return;
             }
 
-            ShopItem.Purchase();
-            ShopManager.Instance.MarkPurchased(ShopItem);
-            inventory.SelectItem(PlaceableItem);
+            inventory.SetActiveTool(PlaceableItem);
             GameMaster.Instance.pathBuildBoard?.ClearActivePiece();
         }
 
@@ -105,7 +116,6 @@ namespace _project.Scripts.UI
             if (_placementInventory) return;
 
             _placementInventory = inventory;
-            _placementInventory.InventoryChanged += HandleInventoryChanged;
             _placementInventory.SelectionChanged += HandleSelectionChanged;
         }
 
@@ -113,7 +123,6 @@ namespace _project.Scripts.UI
         {
             if (_placementInventory == null) return;
 
-            _placementInventory.InventoryChanged -= HandleInventoryChanged;
             _placementInventory.SelectionChanged -= HandleSelectionChanged;
             _placementInventory = null;
         }
@@ -142,15 +151,6 @@ namespace _project.Scripts.UI
                     ? new Color(1f, 1f, 1f, _defaultTint.a)
                     : _defaultTint;
             buyButton.colors = colors;
-        }
-
-        private void HandleInventoryChanged()
-        {
-            if (PlaceableItem == null || _placementInventory == null) return;
-            if (_placementInventory.Contains(PlaceableItem)) return;
-
-            if (ShopManager.Instance)
-                ShopManager.Instance.RemoveShopItem(gameObject);
         }
     }
 }

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using _project.Scripts.UI;
 using UnityEngine;
 
@@ -27,7 +26,6 @@ namespace _project.Scripts.Core
         [SerializeField] private string sifterDescription = "Filters the pipeline, reducing issue size.";
         [SerializeField] private int sifterRequiredLevel = 1;
         [SerializeField] private int sifterInfraValue = 1;
-        [SerializeField] private int sifterCount = 3;
         [SerializeField] private GameObject sifterPrefab;
         [SerializeField] private Sprite sifterSprite;
 
@@ -39,7 +37,6 @@ namespace _project.Scripts.Core
 
         [SerializeField] private int pathSplitterRequiredLevel = 1;
         [SerializeField] private int pathSplitterInfraValue = 1;
-        [SerializeField] private int pathSplitterCount = 1;
         [SerializeField] private GameObject pathSplitterPrefab;
         [SerializeField] private Sprite pathSplitterSprite;
 
@@ -267,16 +264,14 @@ namespace _project.Scripts.Core
         private void GenerateShopInventory()
         {
             ClearShop();
-            var queued = CollectQueuedPlaceables();
 
             EnsureStockCreated();
             foreach (var item in _stockItems)
             {
-                // Purchased placeable stays visible only while it is waiting to be placed,
-                // allowing the player to reselect it after closing the shop. Once consumed,
-                // it is no longer part of the shop's stock.
-                if (_purchasedItems.Contains(item) && (item is not IPlaceable placeable || !queued.Contains(placeable)))
-                    continue;
+                // Placeable tools are persistent (infinite supply) and are never marked purchased.
+                // Only one-shot items (cards) enter _purchasedItems and drop out of the palette
+                // for the rest of the round.
+                if (_purchasedItems.Contains(item)) continue;
 
                 SpawnShopItem(item);
             }
@@ -293,32 +288,21 @@ namespace _project.Scripts.Core
             _stockCreated = true;
         }
 
-        private static List<IPlaceable> CollectQueuedPlaceables()
-        {
-            var queued = new List<IPlaceable>();
-            var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
-            if (!inventory) return queued;
-
-            queued.AddRange(inventory.Items.Where(item => item != null));
-
-            return queued;
-        }
-
         private IEnumerable<IShopItem> CreateShopItems()
         {
             if (towerPrefab)
                 yield return new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab,
                     towerSprite, towerInfraValue);
 
+            // Persistent, infinite-supply tools: one palette tile each. Supply is no longer gated by
+            // a per-round stock count; the infrastructure budget spent per placement is the limiter.
             if (sifterPrefab)
-                for (var i = 0; i < sifterCount; i++)
-                    yield return new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
-                        sifterPrefab, sifterSprite, sifterInfraValue);
+                yield return new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
+                    sifterPrefab, sifterSprite, sifterInfraValue);
 
             if (pathSplitterPrefab)
-                for (var i = 0; i < pathSplitterCount; i++)
-                    yield return new PathSplitterShopItem(pathSplitterDisplayName, pathSplitterDescription,
-                        pathSplitterRequiredLevel, pathSplitterPrefab, pathSplitterSprite, pathSplitterInfraValue);
+                yield return new PathSplitterShopItem(pathSplitterDisplayName, pathSplitterDescription,
+                    pathSplitterRequiredLevel, pathSplitterPrefab, pathSplitterSprite, pathSplitterInfraValue);
 
             if (cesspitPrefab)
                 yield return new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
