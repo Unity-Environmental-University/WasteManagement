@@ -12,6 +12,7 @@ namespace _project.Scripts.Core
         private readonly List<DebrisHandler> _debris = new();
         private WasteSifter _activeSifter;
         private bool _isRunning;
+        private bool _endQueued;
 
         /// <summary>True, only between StartMiniGame and EndMiniGame, while a roster is being sorted.</summary>
         public bool IsRunning => _isRunning;
@@ -43,8 +44,15 @@ namespace _project.Scripts.Core
         {
             if (!_debris.Remove(handler)) return;
 
+            // The last piece unregisters from its own OnDisable, while Unity is still deactivating it, and
+            // the panel above it can't be deactivated from inside that; finish the round in LateUpdate.
             if (_isRunning && _debris.Count is 0)
-                EndMiniGame();
+                _endQueued = true;
+        }
+
+        private void LateUpdate()
+        {
+            if (_endQueued) EndMiniGame();
         }
 
         public void StartMiniGame(WasteSifter sifter)
@@ -81,6 +89,7 @@ namespace _project.Scripts.Core
             // Drop the roster first: deactivating the panel disables every remaining piece, and each of
             // those OnDisable calls comes straight back through UnregisterHandler.
             _isRunning = false;
+            _endQueued = false;
             _debris.Clear();
 
             if (minigamePanel) minigamePanel.SetActive(false);
