@@ -33,6 +33,11 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField]
         private GameObject[] sizeVisuals = new GameObject[3];
 
+        [Tooltip(
+            "Non-waste look, same size tiers as sizeVisuals (0 = size 1, 1 = size 2, 2 = size 3 and above). Used instead of sizeVisuals whenever this issue's type is NonWaste, so junk reads as visibly different from organic/chemical waste. Leave a tier empty to fall back to sizeVisuals for that tier.")]
+        [SerializeField]
+        private GameObject[] nonWasteVisuals = new GameObject[3];
+
         [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
         [SerializeField]
         [Min(0f)]
@@ -343,6 +348,10 @@ namespace _project.Scripts.Object_Scripts
                 2 => IssueType.NonWaste,
                 _ => IssueType.Organic
             };
+
+            // Awake() already picked a model from sizeVisuals before AssignType ever ran —
+            // re-apply now that the type (and therefore which visual set) is actually known.
+            ApplySizeVisualModel();
         }
 
         /// <summary>
@@ -652,15 +661,25 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void ApplySizeVisualModel()
         {
-            if (sizeVisuals == null || sizeVisuals.Length == 0) return;
-
-            var target = sizeVisuals[Mathf.Clamp(Size - 1, 0, sizeVisuals.Length - 1)];
+            // NonWaste uses its own junk models where a tier is assigned; an empty tier falls
+            // back to the regular waste model so a half-filled nonWasteVisuals never goes invisible.
+            var tier = Mathf.Clamp(Size - 1, 0, Mathf.Max(sizeVisuals?.Length ?? 0, nonWasteVisuals?.Length ?? 0) - 1);
+            GameObject target = null;
+            if (type == IssueType.NonWaste && nonWasteVisuals != null && tier < nonWasteVisuals.Length)
+                target = nonWasteVisuals[tier];
+            if (!target && sizeVisuals != null && tier < sizeVisuals.Length)
+                target = sizeVisuals[tier];
             // An unassigned tier would otherwise hide every model and leave an invisible issue.
             if (!target) return;
 
-            foreach (var visual in sizeVisuals)
-                if (visual)
-                    visual.SetActive(visual == target);
+            if (sizeVisuals != null)
+                foreach (var visual in sizeVisuals)
+                    if (visual)
+                        visual.SetActive(visual == target);
+            if (nonWasteVisuals != null)
+                foreach (var visual in nonWasteVisuals)
+                    if (visual)
+                        visual.SetActive(visual == target);
 
             if (target == _activeVisual) return;
 
