@@ -178,7 +178,7 @@ namespace _project.Scripts.Object_Scripts
         private void Update()
         {
             // HELD: a sifter caught this NonWaste issue at its screen — it sits in place,
-            // contributing to that sifter's debris, until the debris is cleared and releases it.
+            // contributing to that sifter's debris, until the debris minigame removes it.
             if (_heldBySifter) return;
 
             // BLOCKED: the issue is too large for the pipe — it sits in place, plugging the
@@ -529,7 +529,7 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Called by a WasteSifter to physically stop a NonWaste issue at its screen (true) or
-        ///     let it move again once that sifter's debris is cleared (false).
+        ///     let it move again (false).
         /// </summary>
         public void SetHeldBySifter(bool held)
         {

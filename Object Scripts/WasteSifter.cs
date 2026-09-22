@@ -92,13 +92,15 @@ namespace _project.Scripts.Object_Scripts
         {
             debrisAccumulation = 0f;
             SetSifting(true);
-            ReleaseHeldIssues();
+            DestroyHeldIssues();
         }
 
-        private void ReleaseHeldIssues()
+        private void DestroyHeldIssues()
         {
+            // The minigame is the player sorting these out of the screen by hand, so once it's done
+            // they're gone — releasing them would only send the same solids on down the line.
             foreach (var issue in _heldIssues)
-                if (issue) issue.SetHeldBySifter(false);
+                if (issue) Destroy(issue.gameObject);
             _heldIssues.Clear();
         }
 
@@ -177,7 +179,7 @@ namespace _project.Scripts.Object_Scripts
             if (issue.GetIssueType() == IssueType.NonWaste)
             {
                 // A screen doesn't grind solids — it stops them. NonWaste sticks here, adding
-                // to the clog, until the debris minigame clears it (or a comminutor breaks it down).
+                // to the clog, until the debris minigame removes it (or a comminutor breaks it down).
                 AccumulateDebris(issue.SiftCost);
                 issue.SetHeldBySifter(true);
                 _heldIssues.Add(issue);
