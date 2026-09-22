@@ -62,6 +62,13 @@ namespace _project.Scripts.Object_Scripts
         [Min(0.1f)]
         private float blockedBurstDelay = 5f;
 
+        [Tooltip(
+            "Seconds of immunity from merging right after a player clicks a clog down to a movable size. " +
+            "Without this, the just-cleared issue tends to immediately merge with the next issue on the pipe and re-clog.")]
+        [SerializeField]
+        [Min(0f)]
+        private float postShrinkMergeImmunity = 3f;
+
         private static bool Debugging
         {
             get
@@ -96,6 +103,7 @@ namespace _project.Scripts.Object_Scripts
         private float _blockedDuration;
         private float _nextBlockedShakeTime;
         private const float BlockedShakeInterval = 1f;
+        private float _mergeImmuneUntil = -1f;
         private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
@@ -291,6 +299,12 @@ namespace _project.Scripts.Object_Scripts
 
             _blockedClickCount = 0;
             SetSize(Size - 1);
+
+            // Grant a brief merge immunity: without it, an issue just chipped down to a
+            // movable size tends to immediately re-merge with the next issue on the pipe
+            // and re-clog, undoing the click work that just cleared it.
+            if (!IsBlockingPipe)
+                _mergeImmuneUntil = Time.time + postShrinkMergeImmunity;
         }
 
         /// <summary>Short position shake for click feedback while the issue blocks the pipe.</summary>
@@ -611,6 +625,8 @@ namespace _project.Scripts.Object_Scripts
             if (!isActiveAndEnabled || !other.isActiveAndEnabled) return false;
             if (IsDirectDestination || other.IsDirectDestination) return false;
             if (!path || path != other.path) return false;
+            // Either side being freshly de-clogged skips this merge — see postShrinkMergeImmunity.
+            if (Time.time < _mergeImmuneUntil || Time.time < other._mergeImmuneUntil) return false;
             return path.CanRoutesMergeAtProgress(_routeIndex, _waypointIndex,
                 other._routeIndex, other._waypointIndex);
         }
