@@ -55,7 +55,15 @@ namespace _project.Scripts.Object_Scripts
             ResetPos();
 
             var controller = Controller;
-            if (controller) controller.RegisterHandler(this);
+            if (controller)
+            {
+                // The type is re-rolled every round, so the art has to follow it or the piece would
+                // keep showing whatever it looked like when it last went into a bucket.
+                var sprite = controller.GetDebrisSprite(type);
+                if (sprite && debrisImage) debrisImage.sprite = sprite;
+
+                controller.RegisterHandler(this);
+            }
             else Debug.LogWarning($"{name}: no SifterMiniGameController available to register with.", this);
         }
 

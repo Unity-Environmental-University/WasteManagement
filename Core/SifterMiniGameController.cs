@@ -8,6 +8,11 @@ namespace _project.Scripts.Core
     {
         [SerializeField] private GameObject minigamePanel;
 
+        [Header("Debris Sprites")]
+        [SerializeField] private Sprite[] incinerateSprites;
+        [SerializeField] private Sprite[] landfillSprites;
+        [SerializeField] private Sprite[] catchAndReleaseSprites;
+
         private readonly List<DebrisMiniBucket> _buckets = new();
         private readonly List<DebrisHandler> _debris = new();
         private WasteSifter _activeSifter;
@@ -23,6 +28,20 @@ namespace _project.Scripts.Core
             // live at runtime hands the player a minigame with no roster and no sifter behind it:
             // every piece can be sorted before StartMiniGame runs, and nothing would end the round.
             if (minigamePanel) minigamePanel.SetActive(false);
+        }
+
+        /// <summary>A random sprite for a piece of this type, or null when none are assigned.</summary>
+        public Sprite GetDebrisSprite(DebrisHandler.DebrisType type)
+        {
+            var sprites = type switch
+            {
+                DebrisHandler.DebrisType.Incinerate => incinerateSprites,
+                DebrisHandler.DebrisType.Landfill => landfillSprites,
+                DebrisHandler.DebrisType.CatchAndRelease => catchAndReleaseSprites,
+                _ => null
+            };
+
+            return sprites is { Length: > 0 } ? sprites[Random.Range(0, sprites.Length)] : null;
         }
 
         public void RegisterBucket(DebrisMiniBucket bucket)
