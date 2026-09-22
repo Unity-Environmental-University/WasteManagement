@@ -38,6 +38,12 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField]
         private GameObject[] nonWasteVisuals = new GameObject[3];
 
+        [Tooltip(
+            "Every NonWaste issue spawns at this size instead of a random one, so junk always looks and costs the same (sift cost and lake damage scale with Size).")]
+        [SerializeField]
+        [Min(1)]
+        private int nonWasteSize = 2;
+
         [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
         [SerializeField]
         [Min(0f)]
@@ -368,9 +374,13 @@ namespace _project.Scripts.Object_Scripts
                 _ => IssueType.Organic
             };
 
-            // Awake() already picked a model from sizeVisuals before AssignType ever ran —
-            // re-apply now that the type (and therefore which visual set) is actually known.
-            ApplySizeVisualModel();
+            // Awake() rolled a random size and picked a model from sizeVisuals before AssignType ever
+            // ran — re-apply now that the type (and therefore which visual set) is actually known.
+            // Junk doesn't come in sizes: pin it, which re-applies the visuals on its own.
+            if (type == IssueType.NonWaste)
+                SetSize(nonWasteSize);
+            else
+                ApplySizeVisualModel();
         }
 
         /// <summary>
