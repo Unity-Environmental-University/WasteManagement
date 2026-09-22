@@ -624,6 +624,9 @@ namespace _project.Scripts.Object_Scripts
             if (!other || other == this) return false;
             if (!isActiveAndEnabled || !other.isActiveAndEnabled) return false;
             if (IsDirectDestination || other.IsDirectDestination) return false;
+            // NonWaste is junk, not waste — it doesn't clump with turds or with other junk.
+            // Both sides simply pass through each other on collision.
+            if (type == IssueType.NonWaste || other.type == IssueType.NonWaste) return false;
             if (!path || path != other.path) return false;
             // Either side being freshly de-clogged skips this merge — see postShrinkMergeImmunity.
             if (Time.time < _mergeImmuneUntil || Time.time < other._mergeImmuneUntil) return false;
