@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
@@ -28,6 +29,7 @@ namespace _project.Scripts.Object_Scripts
         private Animator _animator;
         private bool _isSifting;
         private Coroutine _closeAnimation;
+        private readonly HashSet<IssueObject> _heldIssues = new();
 
         public float CurrentStink => -Mathf.Max(0f, stinkReduction);
 
@@ -90,6 +92,14 @@ namespace _project.Scripts.Object_Scripts
         {
             debrisAccumulation = 0f;
             SetSifting(true);
+            ReleaseHeldIssues();
+        }
+
+        private void ReleaseHeldIssues()
+        {
+            foreach (var issue in _heldIssues)
+                if (issue) issue.SetHeldBySifter(false);
+            _heldIssues.Clear();
         }
 
         private void SetSifting(bool isSifting, bool force = false)
@@ -165,7 +175,14 @@ namespace _project.Scripts.Object_Scripts
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
             if (issue.GetIssueType() == IssueType.NonWaste)
+            {
+                // A screen doesn't grind solids — it stops them. NonWaste sticks here, adding
+                // to the clog, until the debris minigame clears it (or a comminutor breaks it down).
                 AccumulateDebris(issue.SiftCost);
+                issue.SetHeldBySifter(true);
+                _heldIssues.Add(issue);
+                return;
+            }
 
             var speedMultiplier = DebrisRatio switch
             {

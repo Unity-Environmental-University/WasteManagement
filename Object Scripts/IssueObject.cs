@@ -104,6 +104,7 @@ namespace _project.Scripts.Object_Scripts
         private float _nextBlockedShakeTime;
         private const float BlockedShakeInterval = 1f;
         private float _mergeImmuneUntil = -1f;
+        private bool _heldBySifter;
         private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
@@ -176,6 +177,10 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void Update()
         {
+            // HELD: a sifter caught this NonWaste issue at its screen — it sits in place,
+            // contributing to that sifter's debris, until the debris is cleared and releases it.
+            if (_heldBySifter) return;
+
             // BLOCKED: the issue is too large for the pipe — it sits in place, plugging the
             // path, until it shrinks, grows past maxMergeSize, or its burst deadline expires.
             if (IsBlockingPipe)
@@ -520,6 +525,15 @@ namespace _project.Scripts.Object_Scripts
         public void EnableClickPop()
         {
             _canBePoppedByClick = true;
+        }
+
+        /// <summary>
+        ///     Called by a WasteSifter to physically stop a NonWaste issue at its screen (true) or
+        ///     let it move again once that sifter's debris is cleared (false).
+        /// </summary>
+        public void SetHeldBySifter(bool held)
+        {
+            _heldBySifter = held;
         }
 
         public void SetMoveSpeed(float speed)
