@@ -408,6 +408,12 @@ namespace _project.Scripts.Object_Scripts
             return _siftersProcessed.Add(sifterId);
         }
 
+        public void ReleaseFromSifter(EntityId sifterId)
+        {
+            _siftersProcessed.Remove(sifterId);
+            _heldBySifter = false;
+        }
+
         public void SetSize(int s)
         {
             Size = Mathf.Max(0, s);

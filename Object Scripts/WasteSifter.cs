@@ -56,6 +56,11 @@ namespace _project.Scripts.Object_Scripts
             UtilityHoverStatsPopup.Instance?.Hide(transform);
             StinkSourceRegistry.Unregister(this);
             LiveComponentRegistry.Unregister(this);
+
+            var sifterId = GetEntityId();
+            foreach (var issue in _heldIssues)
+                if (issue) issue.ReleaseFromSifter(sifterId);
+            _heldIssues.Clear();
         }
 
         private void Start()
