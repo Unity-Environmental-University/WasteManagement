@@ -42,7 +42,7 @@ namespace _project.Scripts.Object_Scripts
             "Every NonWaste issue spawns at this size instead of a random one, so junk always looks and costs the same (sift cost and lake damage scale with Size).")]
         [SerializeField]
         [Min(1)]
-        private int nonWasteSize = 2;
+        private int nonWasteSize = 3;
 
         [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
         [SerializeField]
