@@ -20,6 +20,9 @@ namespace _project.Scripts.Object_Scripts
         
         [SerializeField] private int siftPower = 1;
 
+        [Header("Comminutor Visual")]
+        [SerializeField] private ComminutorRotor comminutorRotor;
+
         [Header("Stink")]
         [SerializeField] private float stinkReduction = 0.5f;
 
@@ -114,6 +117,7 @@ namespace _project.Scripts.Object_Scripts
             if (!force && _isSifting == isSifting) return;
 
             _isSifting = isSifting;
+            if (comminutorRotor) comminutorRotor.SetRunning(isSifting);
             if (!_animator) return;
 
             if (_closeAnimation != null)
