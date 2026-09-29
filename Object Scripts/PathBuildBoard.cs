@@ -1507,6 +1507,15 @@ namespace _project.Scripts.Object_Scripts
                 ? transform.TransformDirection(Vector3.right)
                 : transform.TransformDirection(Vector3.forward);
 
+            // Face downstream when a live route runs through this cell, so direction-dependent
+            // art (e.g. the sifter's comminutor on its exit side) matches the water's travel.
+            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
+                if (path && path.UsesBoard(this) && path.TryGetFlowSign(worldPosition, direction, out var sign))
+                {
+                    direction *= sign;
+                    break;
+                }
+
             rotation = Quaternion.LookRotation(direction, Vector3.up);
             return true;
         }

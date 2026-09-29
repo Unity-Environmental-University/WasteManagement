@@ -16,16 +16,25 @@ namespace _project.Scripts.Object_Scripts
     ///     - The SHORTEST route from start to end (measured in cell count) is always chosen
     ///     - Disconnected pieces are simply not part of the path
     /// </summary>
+    [ExecuteAlways]
     public class WaypointPath : MonoBehaviour
     {
         // The board whose occupied cells form the graph that BFS traverses.
-        [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")] [SerializeField]
+        [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")]
+        [SerializeField]
         private PathBuildBoard pathBuildBoard;
 
         // Fixed spawn-side anchor. When set, it becomes the FIRST waypoint in the list.
         // It's nearest grid cell is the BFS START node.
-        [Tooltip("Optional start point prepended before the first placed piece.")] [SerializeField]
+        [Tooltip("Optional start point prepended before the first placed piece.")]
+        [SerializeField]
         private Transform startPoint;
+
+        [SerializeField]
+        private Transform leftOrigin;
+
+        [SerializeField]
+        private Transform rightOrigin;
 
         // Fixed goal-side anchor. When set, it becomes the LAST waypoint in the list.
         // It's nearest grid cell is the BFS GOAL node.
@@ -43,9 +52,17 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
         [SerializeField, Min(0.01f)] private float previewWidth = 0.12f;
         [SerializeField, Min(0f)] private float previewHeightOffset = 0.2f;
+        [Tooltip("Lift the source-to-start streams above surrounding geometry so the Game camera can see them.")]
+        [SerializeField, Min(0f)] private float originPreviewHeightOffset = 1.5f;
 
         private PathWaterTube _livePreview;
         private PathWaterTube _alternateLivePreview;
+        private PathWaterTube _leftOriginPreview;
+        private PathWaterTube _rightOriginPreview;
+        private Vector3 _lastLeftOriginPosition;
+        private Vector3 _lastRightOriginPosition;
+        private Vector3 _lastStartPosition;
+        private bool _hasOriginPreviewPositions;
         private PathBuildBoard _subscribedBoard;
 
         // Reused each refresh to hand the current route's world-space points to the tube builder
@@ -55,6 +72,12 @@ namespace _project.Scripts.Object_Scripts
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
         private readonly List<Vector2Int> _alternatePathCells = new();
+
+        // The route last shown by the live preview. Unlike _pathCells it stays current while the
+        // player edits the board, so placement can tell which way water flows through a cell.
+        private readonly List<Vector2Int> _livePreviewCells = new();
+        private readonly List<Vector2Int> _alternateLivePreviewCells = new();
+        private bool _livePreviewComplete;
 
         // Cells visited by BFS but NOT part of the final path. Used only for gizmo
         // visualization so the player can see which placed pieces were ignored.
@@ -89,25 +112,52 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnEnable()
         {
-            PathSplitter.AvailabilityChanged += RefreshLivePreview;
-            BindBoardEvents();
-            RefreshLivePreview();
+            if (Application.isPlaying)
+            {
+                PathSplitter.AvailabilityChanged += RefreshLivePreview;
+                BindBoardEvents();
+                RefreshLivePreview();
+            }
+            else
+            {
+                RefreshOriginPreviewsIfMoved();
+            }
         }
 
         private void Update()
         {
-            // Handles references assigned after this component is enabled.
-            BindBoardEvents();
-            RefreshAlternatePreviewIfAvailabilityChanged();
+            if (Application.isPlaying)
+            {
+                // Handles references assigned after this component is enabled.
+                BindBoardEvents();
+                RefreshAlternatePreviewIfAvailabilityChanged();
+            }
+
+            // Also runs in Edit mode so the source streams are visible while authoring the scene.
+            RefreshOriginPreviewsIfMoved();
         }
 
         // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
         // which otherwise only fires on board/splitter events — force one so Inspector tweaks during
         // Play mode are visible immediately instead of appearing to do nothing.
+        // Deferred because OnValidate may not create GameObjects, add components or reparent.
         private void OnValidate()
         {
-            if (!Application.isPlaying) return;
-            RefreshLivePreview();
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.delayCall -= RefreshAfterValidate;
+            UnityEditor.EditorApplication.delayCall += RefreshAfterValidate;
+#endif
+        }
+
+        private void RefreshAfterValidate()
+        {
+            if (!this) return;
+
+            if (Application.isPlaying)
+                RefreshLivePreview();
+
+            _hasOriginPreviewPositions = false;
+            RefreshOriginPreviewsIfMoved();
         }
 
         /// <summary>
@@ -132,7 +182,12 @@ namespace _project.Scripts.Object_Scripts
                 _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
             if (pathBuildBoard)
                 pathBuildBoard.ClearPriorityVisualPath();
+            if (_leftOriginPreview) _leftOriginPreview.Clear();
+            if (_rightOriginPreview) _rightOriginPreview.Clear();
+            _hasOriginPreviewPositions = false;
             _splitCell = null;
+            _livePreviewCells.Clear();
+            _alternateLivePreviewCells.Clear();
             _subscribedBoard = null;
         }
 
@@ -158,6 +213,9 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void OnDrawGizmos()
         {
+            DrawOriginPreview(leftOrigin, new Color(0.25f, 0.8f, 1f, 0.9f));
+            DrawOriginPreview(rightOrigin, new Color(0.35f, 1f, 0.55f, 0.9f));
+
             // Draw the actual route
             if (_waypoints.Count >= 2)
             {
@@ -178,6 +236,77 @@ namespace _project.Scripts.Object_Scripts
             Gizmos.color = Color.red;
             foreach (var cell in _unusedCells)
                 Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
+        }
+
+        private void RefreshOriginPreviewsIfMoved()
+        {
+            if (!leftOrigin && !rightOrigin) return;
+            var leftPosition = leftOrigin ? leftOrigin.position : Vector3.zero;
+            var rightPosition = rightOrigin ? rightOrigin.position : Vector3.zero;
+            var startPosition = startPoint ? startPoint.position : Vector3.zero;
+            if (_hasOriginPreviewPositions && leftPosition == _lastLeftOriginPosition &&
+                rightPosition == _lastRightOriginPosition && startPosition == _lastStartPosition) return;
+
+            _lastLeftOriginPosition = leftPosition;
+            _lastRightOriginPosition = rightPosition;
+            _lastStartPosition = startPosition;
+            _hasOriginPreviewPositions = true;
+
+            RefreshOriginPreview(leftOrigin, ref _leftOriginPreview, completePreviewColor);
+            RefreshOriginPreview(rightOrigin, ref _rightOriginPreview, completePreviewColor);
+        }
+
+        private void RefreshOriginPreview(Transform origin, ref PathWaterTube tube, Color color)
+        {
+            if (!origin || !startPoint || !isActiveAndEnabled)
+            {
+                if (tube) tube.Clear();
+                return;
+            }
+
+            var host = pathBuildBoard ? pathBuildBoard.transform : transform;
+            if (!tube)
+            {
+                var previewObject = FindOrCreateChild(host, origin.name + " Water Preview");
+                if (!previewObject.TryGetComponent(out tube))
+                    tube = previewObject.gameObject.AddComponent<PathWaterTube>();
+                tube.Configure(null, null, previewWidth);
+            }
+
+            _previewPoints.Clear();
+            _previewPoints.Add(GetOriginPreviewPosition(origin.position));
+            _previewPoints.Add(GetOriginPreviewPosition(startPoint.position));
+            tube.SetPath(_previewPoints, GetPreviewUp(), color);
+        }
+
+        /// <summary>
+        ///     Shows where water enters the route, even before a live path has been built.
+        ///     The arrow points from the origin toward the fixed start anchor (or first waypoint).
+        /// </summary>
+        private void DrawOriginPreview(Transform origin, Color color)
+        {
+            if (!origin) return;
+
+            var previewOrigin = GetOriginPreviewPosition(origin.position);
+            var target = GetOriginPreviewPosition(startPoint
+                ? startPoint.position
+                : _waypoints.Count > 0 ? _waypoints[0] : origin.position);
+            var direction = target - previewOrigin;
+            if (direction.sqrMagnitude < 0.0001f) return;
+
+            Gizmos.color = color;
+            Gizmos.DrawLine(previewOrigin, target);
+            Gizmos.DrawWireSphere(previewOrigin, 0.12f);
+
+            var arrowLength = Mathf.Min(0.45f, direction.magnitude * 0.25f);
+            var arrowDirection = direction.normalized;
+            var arrowSide = Vector3.Cross(arrowDirection, Vector3.up);
+            if (arrowSide.sqrMagnitude < 0.0001f)
+                arrowSide = Vector3.Cross(arrowDirection, Vector3.right);
+            arrowSide.Normalize();
+            var arrowBase = target - arrowDirection * arrowLength;
+            Gizmos.DrawLine(target, arrowBase + arrowSide * arrowLength * 0.45f);
+            Gizmos.DrawLine(target, arrowBase - arrowSide * arrowLength * 0.45f);
         }
 
         /// <summary>
@@ -262,6 +391,43 @@ namespace _project.Scripts.Object_Scripts
         {
             return _splitCell.HasValue && pathBuildBoard &&
                    pathBuildBoard.TryWorldToCell(worldPosition, out var cell) && cell == _splitCell.Value;
+        }
+
+        /// <summary>
+        ///     Returns +1 when water on the live route passes through the cell at
+        ///     <paramref name="worldPosition" /> travelling along <paramref name="axis" />, or -1
+        ///     when it travels against it. False when no live route crosses that cell along the axis.
+        /// </summary>
+        public bool TryGetFlowSign(Vector3 worldPosition, Vector3 axis, out float sign)
+        {
+            sign = 0f;
+            if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
+
+            return TryGetFlowSign(_livePreviewCells, _livePreviewComplete, cell, axis, out sign) ||
+                   TryGetFlowSign(_alternateLivePreviewCells, true, cell, axis, out sign);
+        }
+
+        private bool TryGetFlowSign(List<Vector2Int> route, bool complete, Vector2Int cell, Vector3 axis,
+            out float sign)
+        {
+            sign = 0f;
+            var index = route.IndexOf(cell);
+            if (index < 0) return false;
+
+            var current = pathBuildBoard.GetPathWaypointPosition(cell);
+            var previous = index > 0
+                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1])
+                : startPoint ? startPoint.position : current;
+            var next = index < route.Count - 1
+                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1])
+                : complete && endPoint ? endPoint.position : current;
+
+            // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
+            var along = Vector3.Dot(next - previous, axis);
+            if (Mathf.Abs(along) < 0.0001f) return false;
+
+            sign = Mathf.Sign(along);
+            return true;
         }
 
         public bool UsesBoard(PathBuildBoard board)
@@ -376,6 +542,9 @@ namespace _project.Scripts.Object_Scripts
         {
             // Never let placement validation retain a fork from a previous board layout.
             _splitCell = null;
+            _livePreviewCells.Clear();
+            _alternateLivePreviewCells.Clear();
+            _livePreviewComplete = false;
 
             var tube = GetLivePreviewTube();
             if (tube) tube.Clear();
@@ -407,6 +576,11 @@ namespace _project.Scripts.Object_Scripts
                 : null;
             if (!complete)
                 _splitCell = null;
+
+            _livePreviewCells.AddRange(previewCells);
+            if (alternatePreviewCells != null)
+                _alternateLivePreviewCells.AddRange(alternatePreviewCells);
+            _livePreviewComplete = complete;
 
             pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
                 complete ? endPoint.position : null, alternatePreviewCells);
@@ -482,6 +656,11 @@ namespace _project.Scripts.Object_Scripts
         private Vector3 GetPreviewPosition(Vector3 worldPosition)
         {
             return worldPosition + GetPreviewUp() * previewHeightOffset;
+        }
+
+        private Vector3 GetOriginPreviewPosition(Vector3 worldPosition)
+        {
+            return worldPosition + GetPreviewUp() * originPreviewHeightOffset;
         }
 
         private PathWaterTube GetLivePreviewTube()

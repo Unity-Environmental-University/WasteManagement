@@ -316,6 +316,25 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void TryGetPathFacingRotation_FacesDownstream_WhenLiveRouteFlowsAgainstPipeAxis()
+        {
+            // Water enters up column 3, runs right-to-left along row 2, then turns up column 1.
+            var fixture = CreatePathFixture(3);
+            PlaceVertical(fixture.Board, 3, 0, 2);
+            PlaceHorizontal(fixture.Board, 1, 2, 3);
+            PlaceVertical(fixture.Board, 1, 3, 7);
+            fixture.Path.RefreshLivePreview();
+
+            Assert.IsTrue(fixture.Board.TryGetPathFacingRotation(
+                fixture.Board.GetCellTopPosition(new Vector2Int(2, 2)), out var horizontal));
+            AssertFaces(horizontal, Vector3.left);
+
+            Assert.IsTrue(fixture.Board.TryGetPathFacingRotation(
+                fixture.Board.GetCellTopPosition(new Vector2Int(1, 5)), out var vertical));
+            AssertFaces(vertical, Vector3.forward);
+        }
+
+        [Test]
         public void TryGetPathFacingRotation_ReturnsFalse_WhenPlacedOffPipe()
         {
             var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
