@@ -111,6 +111,7 @@ namespace _project.Scripts.Object_Scripts
         private const float BlockedShakeInterval = 1f;
         private float _mergeImmuneUntil = -1f;
         private bool _heldBySifter;
+        private static int _activeUnheldCount;
         private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
         private Tween _burstPulseTween;
@@ -148,15 +149,20 @@ namespace _project.Scripts.Object_Scripts
 
         public static int ActiveCount { get; private set; }
 
+        /// <summary>Active issues that can still affect the current wave's completion.</summary>
+        public static int ActiveUnheldCount => _activeUnheldCount;
+
         private void OnEnable()
         {
             ActiveCount++;
+            if (!_heldBySifter) _activeUnheldCount++;
             LiveComponentRegistry.Register(this);
         }
 
         private void OnDisable()
         {
             ActiveCount--;
+            if (!_heldBySifter) _activeUnheldCount--;
             LiveComponentRegistry.Unregister(this);
         }
 
@@ -549,6 +555,10 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public void SetHeldBySifter(bool held)
         {
+            if (_heldBySifter == held) return;
+
+            if (isActiveAndEnabled)
+                _activeUnheldCount += held ? -1 : 1;
             _heldBySifter = held;
         }
 

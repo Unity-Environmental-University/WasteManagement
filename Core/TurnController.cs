@@ -293,7 +293,10 @@ namespace _project.Scripts.Core
 
             StopAllSpawners();
 
-            while (IssueObject.ActiveCount > 0)
+            // Issues caught by a sifter remain in the scene until the player clears its debris.
+            // They are already out of the pipeline, so an unfinished, partially filled sifter
+            // must not keep the wave open indefinitely.
+            while (IssueObject.ActiveUnheldCount > 0)
             {
                 if (_gameLost) yield break;
                 yield return null;
