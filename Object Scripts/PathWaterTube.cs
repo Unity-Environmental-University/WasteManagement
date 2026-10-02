@@ -41,6 +41,9 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>Number of path points the tube currently spans (0 while hidden).</summary>
         public int PointCount { get; private set; }
 
+        /// <summary>Tube radius where the path begins, as set by the last <see cref="Configure" />.</summary>
+        public float StartRadius => GetRadius(0f);
+
         private void OnDestroy()
         {
             if (_mesh) Destroy(_mesh);

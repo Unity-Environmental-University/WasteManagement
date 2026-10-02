@@ -263,13 +263,13 @@ namespace _project.Scripts.Core
             GameMaster.Instance.placementInventory.Add(this);
         }
 
+        // A splitter may go down before any pipe: the route divides at whichever cell it sits on
+        // once pipes are laid through it.
         public GameObject Place(Transform location)
         {
-            if (!PlacementRules.TryGetPipeBoard(location, out var board)) return null;
-            if (!board.IsPathSplitPoint(location.position)) return null;
-
+            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
             var rotation = location.rotation;
-            if (board.TryGetPathFacingRotation(location.position, out var pathRotation))
+            if (board && board.TryGetPathFacingRotation(location.position, out var pathRotation))
                 rotation = pathRotation;
 
             return Object.Instantiate(_prefab, location.position, rotation);

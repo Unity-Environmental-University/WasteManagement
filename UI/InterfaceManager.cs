@@ -39,6 +39,7 @@ namespace _project.Scripts.UI
         [SerializeField] private LossScreenPanel lossScreenPanelPrefab;
         [SerializeField] private PathToolBar pathToolBar;
         [SerializeField] private PathToolBar pathToolBarPrefab;
+        [SerializeField] private PathSplitterPanel pathSplitterPanelPrefab;
         private PostRoundSummaryPanel _postRoundSummaryPanel;
         private LossScreenPanel _lossScreenPanel;
 
@@ -55,6 +56,7 @@ namespace _project.Scripts.UI
 
             if (quitButton) quitButton.onClick.AddListener(WasteBoardReplayRecorder.RequestApplicationQuit);
             EnsurePathToolBar();
+            EnsurePathSplitterPanel();
         }
 
         public void PopulateHand(IReadOnlyList<ICard> hand)
@@ -228,6 +230,20 @@ namespace _project.Scripts.UI
             }
 
             pathToolBar.EnsureBuilt();
+        }
+
+        // The panel has to exist before any splitter is clicked: it is what watches for the click.
+        private void EnsurePathSplitterPanel()
+        {
+            if (GetComponentInChildren<PathSplitterPanel>(true)) return;
+
+            if (!pathSplitterPanelPrefab)
+            {
+                Debug.LogWarning($"{nameof(InterfaceManager)} is missing a path splitter panel prefab.", this);
+                return;
+            }
+
+            Instantiate(pathSplitterPanelPrefab, transform);
         }
 
         private static void SetActive(Component component, bool active)

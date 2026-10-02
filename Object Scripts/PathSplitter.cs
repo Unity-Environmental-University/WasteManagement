@@ -5,9 +5,24 @@ using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
 {
+    /// <summary>How a <see cref="PathSplitter" /> treats one issue type.</summary>
+    public enum SplitterRule
+    {
+        /// <summary>Shared between both lanes by the splitter's percentage.</summary>
+        Split,
+
+        /// <summary>Always kept on the main route.</summary>
+        MainOnly,
+
+        /// <summary>Always diverted down the branch.</summary>
+        BranchOnly
+    }
+
     /// <summary>
-    ///     Sends successive issues down the normal and alternate path routes in strict rotation:
-    ///     0, 1, 0, 1. This guarantees a 50/50 split for every pair and avoids random streaks.
+    ///     Divides issues between the normal (main) route and the alternate (branch) route. Each
+    ///     issue type is either pinned to one lane or shared by <see cref="MainSharePercent" />;
+    ///     shared issues are dealt out in a fixed rotation rather than at random, so the split is
+    ///     exact and free of streaks (50% runs 0, 1, 0, 1).
     /// </summary>
     public class PathSplitter : MonoBehaviour
     {
@@ -22,8 +37,24 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>All currently enabled splitters.</summary>
         public static IReadOnlyList<PathSplitter> Live => LiveSplitters;
 
+        [Tooltip("Share of split issues kept on the main route; the rest take the branch.")]
+        [SerializeField] [Range(0, 100)] private int mainSharePercent = 50;
+
         private readonly HashSet<EntityId> _routedIssueIds = new();
-        private int _nextRouteIndex;
+
+        // Indexed by IssueType.
+        private readonly SplitterRule[] _typeRules = new SplitterRule[Enum.GetValues(typeof(IssueType)).Length];
+
+        // Branch share accumulated by split issues; each full 100 sends one down the branch.
+        private int _branchCredit;
+        private Renderer[] _modelRenderers;
+
+        /// <summary>Share (0–100) of split issues kept on the main route; the rest take the branch.</summary>
+        public int MainSharePercent
+        {
+            get => mainSharePercent;
+            set => mainSharePercent = Mathf.Clamp(value, 0, 100);
+        }
 
         private static bool Debugging
         {
@@ -45,6 +76,14 @@ namespace _project.Scripts.Object_Scripts
             }
 
             trigger.isTrigger = true;
+
+            // A splitter can sit on a bare cell, so its trigger must not swallow the clicks that
+            // lay pipe through that cell.
+            var ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+            foreach (var child in GetComponentsInChildren<Transform>(true))
+                child.gameObject.layer = ignoreRaycastLayer;
+
+            _modelRenderers = GetComponentsInChildren<Renderer>(true);
         }
 
         private void OnEnable()
@@ -52,6 +91,13 @@ namespace _project.Scripts.Object_Scripts
             LiveSplitters.Add(this);
             LiveComponentRegistry.Register(this);
             TurnController.OnTowerPhaseEntered += ResetSplit;
+            AvailabilityChanged?.Invoke();
+        }
+
+        // Placement code may finish positioning the splitter after OnEnable; announce again once
+        // its frame settles so the fork reflects the cell it actually landed on.
+        private void Start()
+        {
             AvailabilityChanged?.Invoke();
         }
 
@@ -77,10 +123,8 @@ namespace _project.Scripts.Object_Scripts
             if (!path || !path.HasAlternateRoute || !path.IsSplitPoint(transform.position)) return false;
             if (!_routedIssueIds.Add(issue.GetEntityId())) return false;
 
-            var routeIndex = _nextRouteIndex;
+            var routeIndex = ChooseRoute(issue.GetIssueType());
             if (!issue.TrySetRoute(routeIndex)) return false;
-
-            _nextRouteIndex = 1 - _nextRouteIndex;
 
             if (Debugging)
                 Debug.Log($"[PathSplitter] Routed issue to option {routeIndex + 1}.");
@@ -88,10 +132,63 @@ namespace _project.Scripts.Object_Scripts
             return true;
         }
 
+        public SplitterRule GetRule(IssueType issueType)
+        {
+            return _typeRules[(int)issueType];
+        }
+
+        public void SetRule(IssueType issueType, SplitterRule rule)
+        {
+            _typeRules[(int)issueType] = rule;
+        }
+
+        /// <summary>
+        ///     Distance along <paramref name="ray" /> to this splitter's model, for click picking.
+        ///     The splitter sits on the Ignore Raycast layer, so physics queries can't find it;
+        ///     the combined bounds of its renderers stand in as the click target.
+        /// </summary>
+        public bool TryGetPointerDistance(Ray ray, out float distance)
+        {
+            distance = 0f;
+            Bounds? modelBounds = null;
+            foreach (var modelRenderer in _modelRenderers)
+            {
+                if (!modelRenderer || !modelRenderer.enabled) continue;
+
+                if (modelBounds.HasValue)
+                {
+                    var combined = modelBounds.Value;
+                    combined.Encapsulate(modelRenderer.bounds);
+                    modelBounds = combined;
+                }
+                else
+                {
+                    modelBounds = modelRenderer.bounds;
+                }
+            }
+
+            return modelBounds.HasValue && modelBounds.Value.IntersectRay(ray, out distance);
+        }
+
+        private int ChooseRoute(IssueType issueType)
+        {
+            switch (GetRule(issueType))
+            {
+                case SplitterRule.MainOnly: return 0;
+                case SplitterRule.BranchOnly: return 1;
+            }
+
+            _branchCredit += 100 - mainSharePercent;
+            if (_branchCredit < 100) return 0;
+
+            _branchCredit -= 100;
+            return 1;
+        }
+
         private void ResetSplit()
         {
             _routedIssueIds.Clear();
-            _nextRouteIndex = 0;
+            _branchCredit = 0;
         }
     }
 }
