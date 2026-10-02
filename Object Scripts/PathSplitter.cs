@@ -120,7 +120,8 @@ namespace _project.Scripts.Object_Scripts
             if (!issue || issue.IsDirectDestination) return false;
 
             var path = issue.GetPath();
-            if (!path || !path.HasAlternateRoute || !path.IsSplitPoint(transform.position)) return false;
+            if (!path || path.PathKind != PathKind.Pipe || !path.HasAlternateRoute ||
+                !path.IsSplitPoint(transform.position)) return false;
             if (!_routedIssueIds.Add(issue.GetEntityId())) return false;
 
             var routeIndex = ChooseRoute(issue.GetIssueType());

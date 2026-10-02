@@ -23,6 +23,13 @@ namespace _project.Scripts.Core
         
     }
 
+    public enum PathKind { Pipe, RecyclingBelt }
+
+    public interface ITypedPathPiece : IPathPiecePlaceable
+    {
+        PathKind PathKind { get; }
+    }
+
     public interface IPathPiecePlaceable : IPlaceable
     {
         int Length { get; }
@@ -455,11 +462,12 @@ namespace _project.Scripts.Core
         }
     }
 
-    public class PathPiecePlaceable : IPathPiecePlaceable
+    public class PathPiecePlaceable : ITypedPathPiece
     {
         public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length,
-            Sprite displaySprite, int infraValue)
+            Sprite displaySprite, int infraValue, PathKind pathKind = PathKind.Pipe)
         {
+            PathKind = pathKind;
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
@@ -474,6 +482,7 @@ namespace _project.Scripts.Core
         public int InfraValue { get; }
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
+        public PathKind PathKind { get; }
         public int Length { get; }
         public PathPieceOrientation Orientation { get; private set; } = PathPieceOrientation.Horizontal;
         public PlaceableType PlaceableType => PlaceableType.Path;

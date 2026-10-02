@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using _project.Scripts.Core;
 using UnityEngine;
 
 namespace _project.Scripts.Object_Scripts
@@ -26,6 +27,8 @@ namespace _project.Scripts.Object_Scripts
             Vector2Int.up,
             Vector2Int.down
         };
+
+        [SerializeField] private bool recyclingDestination;
 
         // The board whose occupied cells form the graph that BFS traverses.
         [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")] [SerializeField]
@@ -111,6 +114,11 @@ namespace _project.Scripts.Object_Scripts
         // The fork the cached alternate waypoints leave from. Only Rebuild() changes it, so it
         // always matches _alternateWaypoints while issues are travelling.
         private Vector2Int? _splitCell;
+        public bool RecyclingDestination => recyclingDestination;
+
+        public PathKind PathKind => recyclingDestination
+            ? PathKind.RecyclingBelt
+            : PathKind.Pipe;
 
         /// <summary>
         ///     The total number of waypoints in the current path. Used by IssueObject
@@ -146,7 +154,7 @@ namespace _project.Scripts.Object_Scripts
 #if UNITY_EDITOR
             UnityEditor.ObjectChangeEvents.changesPublished -= HandleEditorObjectChanges;
 #endif
-            if (pathBuildBoard)
+            if (pathBuildBoard && !recyclingDestination)
                 pathBuildBoard.ClearPriorityVisualPath();
             if (_leftOriginPreview) _leftOriginPreview.Clear();
             if (_rightOriginPreview) _rightOriginPreview.Clear();
@@ -182,13 +190,13 @@ namespace _project.Scripts.Object_Scripts
             // Path cells — green markers confirm these cells are traversed
             Gizmos.color = Color.green;
             foreach (var cell in _pathCells)
-                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
+                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell, PathKind), Vector3.one * 0.3f);
 
             // Unused cells — red markers indicate placed pieces that were ignored
             // (either unreachable from the start or off the shortest route)
             Gizmos.color = Color.red;
             foreach (var cell in _unusedCells)
-                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
+                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell, PathKind), Vector3.one * 0.3f);
         }
 
         // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
@@ -217,7 +225,7 @@ namespace _project.Scripts.Object_Scripts
         private void CollectSplitterCells(List<Vector2Int> cells)
         {
             cells.Clear();
-            if (!pathBuildBoard) return;
+            if (!pathBuildBoard || PathKind != PathKind.Pipe) return;
 
             foreach (var splitter in PathSplitter.Live)
                 if (splitter && splitter.isActiveAndEnabled &&
@@ -411,14 +419,14 @@ namespace _project.Scripts.Object_Scripts
             var index = route.IndexOf(cell);
             if (index < 0) return false;
 
-            var current = pathBuildBoard.GetPathWaypointPosition(cell);
+            var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
             var previous = index > 0
-                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1])
+                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1], PathKind)
                 : startPoint
                     ? startPoint.position
                     : current;
             var next = index < route.Count - 1
-                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1])
+                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1], PathKind)
                 : complete && endPoint
                     ? endPoint.position
                     : current;
@@ -507,7 +515,7 @@ namespace _project.Scripts.Object_Scripts
             foreach (var cell in cellPath)
             {
                 _pathCells.Add(cell);
-                _waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+                _waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
             }
 
             // Bucket remaining occupied cells as "unused" for the gizmo
@@ -524,7 +532,7 @@ namespace _project.Scripts.Object_Scripts
                 foreach (var cell in alternateCellPath)
                 {
                     _alternatePathCells.Add(cell);
-                    _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
+                    _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
                 }
 
                 _alternateWaypoints.Add(endPoint.position);
@@ -557,14 +565,14 @@ namespace _project.Scripts.Object_Scripts
 
             if (!pathBuildBoard || !startPoint || !endPoint)
             {
-                if (pathBuildBoard) pathBuildBoard.ClearPriorityVisualPath();
+                if (pathBuildBoard && !recyclingDestination) pathBuildBoard.ClearPriorityVisualPath();
                 return;
             }
 
             var starts = GetOccupiedEndpointNeighbors(startPoint);
             if (starts.Count == 0)
             {
-                pathBuildBoard.ClearPriorityVisualPath();
+                if (!recyclingDestination) pathBuildBoard.ClearPriorityVisualPath();
                 return;
             }
 
@@ -572,7 +580,7 @@ namespace _project.Scripts.Object_Scripts
             var previewCells = FindPreviewPath(starts, goals, out var complete);
             if (previewCells == null || previewCells.Count == 0)
             {
-                pathBuildBoard.ClearPriorityVisualPath();
+                if (!recyclingDestination) pathBuildBoard.ClearPriorityVisualPath();
                 return;
             }
 
@@ -587,7 +595,8 @@ namespace _project.Scripts.Object_Scripts
 
             _livePreviewComplete = complete;
 
-            pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
+            if (!recyclingDestination)
+                pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
                     complete ? endPoint.position : null, alternatePreviewCells);
 
             if (!showLivePreview || !tube) return;
@@ -595,7 +604,7 @@ namespace _project.Scripts.Object_Scripts
             _previewPoints.Clear();
             _previewPoints.Add(GetPreviewPosition(startPoint.position));
             foreach (var cell in previewCells)
-                _previewPoints.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(cell)));
+                _previewPoints.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(cell, PathKind)));
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
@@ -645,7 +654,7 @@ namespace _project.Scripts.Object_Scripts
             for (var i = 0; i < pointCount; i++)
                 points.Add(
                     GetPreviewPosition(
-                        pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i])));
+                        pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i], PathKind)));
         }
 
         private Vector3 GetPreviewUp()
@@ -686,7 +695,7 @@ namespace _project.Scripts.Object_Scripts
             if (!showLivePreview || !pathBuildBoard) return null;
 
             var previewObject = FindOrCreateChild(pathBuildBoard.transform,
-                objectName);
+                recyclingDestination ? "Recycling " + objectName : objectName);
             var authoredLine = previewObject.GetComponent<LineRenderer>();
             if (authoredLine) authoredLine.enabled = false;
             var host = authoredLine ? FindOrCreateChild(previewObject, "Water Tube") : previewObject;
@@ -752,7 +761,7 @@ namespace _project.Scripts.Object_Scripts
                 foreach (var direction in Directions)
                 {
                     var next = current + direction;
-                    if (cameFrom.ContainsKey(next) || !pathBuildBoard.IsOccupied(next)) continue;
+                    if (cameFrom.ContainsKey(next) || !pathBuildBoard.IsOccupied(next, PathKind)) continue;
                     cameFrom[next] = current;
                     frontier.Enqueue(next);
                 }
@@ -811,7 +820,7 @@ namespace _project.Scripts.Object_Scripts
             foreach (var start in starts)
             {
                 if (blocked != null && blocked.Contains(start)) continue;
-                if (!pathBuildBoard.IsOccupied(start) || cameFrom.ContainsKey(start)) continue;
+                if (!pathBuildBoard.IsOccupied(start, PathKind) || cameFrom.ContainsKey(start)) continue;
                 frontier.Enqueue(start);
                 cameFrom[start] = start;
             }
@@ -842,7 +851,7 @@ namespace _project.Scripts.Object_Scripts
                     // Skip if: already visited, out of bounds, or not occupied
                     if (blocked != null && blocked.Contains(next)) continue;
                     if (cameFrom.ContainsKey(next)) continue;
-                    if (!pathBuildBoard.IsOccupied(next)) continue;
+                    if (!pathBuildBoard.IsOccupied(next, PathKind)) continue;
 
                     cameFrom[next] = current;
                     frontier.Enqueue(next);
@@ -882,6 +891,9 @@ namespace _project.Scripts.Object_Scripts
             bool allowUnfinishedSplitterBranch,
             out Vector2Int? splitCell)
         {
+            splitCell = null;
+            if (PathKind != PathKind.Pipe) return null;
+
             for (var forkIndex = 0; forkIndex < defaultRoute.Count; forkIndex++)
             {
                 if (!_splitterCells.Contains(defaultRoute[forkIndex])) continue;
@@ -904,7 +916,6 @@ namespace _project.Scripts.Object_Scripts
                 return alternate;
             }
 
-            splitCell = null;
             return null;
         }
 
@@ -932,7 +943,7 @@ namespace _project.Scripts.Object_Scripts
                 if ((defaultExit.HasValue && alternateExit == defaultExit.Value) ||
                     (previous.HasValue && alternateExit == previous.Value))
                     continue;
-                if (!pathBuildBoard.IsOccupied(alternateExit)) continue;
+                if (!pathBuildBoard.IsOccupied(alternateExit, PathKind)) continue;
 
                 var blocked = new HashSet<Vector2Int>();
                 for (var i = 0; i <= forkIndex; i++)
@@ -970,7 +981,7 @@ namespace _project.Scripts.Object_Scripts
             {
                 var candidate = anchorCell + direction;
                 if (!pathBuildBoard.IsCellInBounds(candidate)) continue;
-                if (!pathBuildBoard.IsOccupied(candidate)) continue;
+                if (!pathBuildBoard.IsOccupied(candidate, PathKind)) continue;
                 candidates.Add(candidate);
             }
 
@@ -989,9 +1000,10 @@ namespace _project.Scripts.Object_Scripts
         {
             var onPath = new HashSet<Vector2Int>(pathCells);
             foreach (var piece in pathBuildBoard.PlacedPieces)
-            foreach (var cell in piece.cells)
-                if (!onPath.Contains(cell))
-                    _unusedCells.Add(cell);
+                if (piece.pathKind == PathKind)
+                    foreach (var cell in piece.cells)
+                        if (!onPath.Contains(cell))
+                            _unusedCells.Add(cell);
         }
 
         /// <summary>
@@ -1002,8 +1014,9 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!pathBuildBoard) return;
             foreach (var piece in pathBuildBoard.PlacedPieces)
-            foreach (var cell in piece.cells)
-                _unusedCells.Add(cell);
+                if (piece.pathKind == PathKind)
+                    foreach (var cell in piece.cells)
+                        _unusedCells.Add(cell);
         }
 
         private bool FailRebuild()

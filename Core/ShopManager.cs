@@ -130,6 +130,7 @@ namespace _project.Scripts.Core
             GameMaster.Instance && GameMaster.Instance.turnController ? 
                 GameMaster.Instance.turnController.currentLevel : 1;
 
+        public bool CanSelectConveyorTool => CurrentLevel >= 1;
         public bool CanSelectShortPipeTool => CurrentLevel >= shortPipeRequiredLevel;
         public bool CanSelectLongPipeTool => CurrentLevel >= longPipeRequiredLevel;
         public bool CanSelectBreakPipeTool => CurrentLevel >= breakPipeRequiredLevel;
@@ -208,6 +209,20 @@ namespace _project.Scripts.Core
         public void SelectLongPipeTool()
         {
             SelectPathPieceTool(longPipeDisplayName, longPipeDescription, longPipeRequiredLevel, 3, longPipeSprite);
+        }
+
+        public void SelectConveyorTool()
+        {
+            SelectPathPieceTool("Recycling Conveyor", "Two-cell recycling conveyor. R rotates.", 1, 2,
+                shortPipeSprite, _project.Scripts.Core.PathKind.RecyclingBelt);
+        }
+
+        public void SelectBreakConveyorTool()
+        {
+            if (!HasPathToolAccess("Remove Conveyor", "Removes a conveyor segment.", 1)) return;
+            var gm = GameMaster.Instance;
+            gm.placementInventory?.ClearSelection();
+            gm.pathBuildBoard?.SetActiveBreakTool(PathKind.RecyclingBelt);
         }
 
         public void SelectBreakPipeTool()
@@ -353,7 +368,7 @@ namespace _project.Scripts.Core
         }
 
         private void SelectPathPieceTool(string displayName, string description, int requiredLevel, int length,
-            Sprite displaySprite)
+            Sprite displaySprite, PathKind pathKind = PathKind.Pipe)
         {
             if (!HasPathToolAccess(displayName, description, requiredLevel)) return;
 
@@ -367,7 +382,7 @@ namespace _project.Scripts.Core
 
             gm.placementInventory?.ClearSelection();
             board.SetActivePiece(new PathPiecePlaceable(displayName, description, requiredLevel, length, displaySprite,
-                pipeInfraValue));
+                pipeInfraValue, pathKind));
         }
 
         private static bool HasPathToolAccess(string displayName, string description, int requiredLevel)
