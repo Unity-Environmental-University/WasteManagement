@@ -94,6 +94,13 @@ namespace _project.Scripts.Object_Scripts
             AvailabilityChanged?.Invoke();
         }
 
+        // Placement code may finish positioning the splitter after OnEnable; announce again once
+        // its frame settles so the fork reflects the cell it actually landed on.
+        private void Start()
+        {
+            AvailabilityChanged?.Invoke();
+        }
+
         private void OnDisable()
         {
             LiveSplitters.Remove(this);

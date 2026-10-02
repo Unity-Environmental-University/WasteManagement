@@ -157,8 +157,8 @@ namespace _project.Scripts.Tests
             Assert.IsNull(fixture.Board.transform.Find("Alternate Path Preview"));
         }
 
-        [Test]
-        public void LivePreview_RefreshesAfterPlacedSplitterMovesOntoFork()
+        [UnityTest]
+        public IEnumerator LivePreview_RefreshesAfterPlacedSplitterMovesOntoFork()
         {
             var fixture = CreateSplitPathFixture();
             Assert.IsTrue(fixture.Path.Rebuild());
@@ -170,7 +170,8 @@ namespace _project.Scripts.Tests
             splitterObject.AddComponent<PathSplitter>();
             splitterObject.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 2));
 
-            fixture.Path.SendMessage("Update");
+            // The splitter re-announces itself from Start once its placement frame settles.
+            yield return null;
 
             var alternatePreview = fixture.Board.transform.Find("Alternate Path Preview")
                 ?.GetComponentInChildren<PathWaterTube>();
