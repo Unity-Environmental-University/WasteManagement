@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -5,12 +6,20 @@ using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.UI;
+using UnityEngine.TestTools;
+using Pointer = UnityEngine.InputSystem.Pointer;
 
 namespace _project.Scripts.Tests
 {
     public class GameMasterTests
     {
         private readonly List<GameObject> _created = new();
+        private Mouse _panTestMouse;
+        private Pointer _previousPointer;
 
         [TearDown]
         public void TearDown()
@@ -19,6 +28,12 @@ namespace _project.Scripts.Tests
                 Object.DestroyImmediate(go);
 
             _created.Clear();
+            if (_panTestMouse != null && _panTestMouse.added)
+                InputSystem.RemoveDevice(_panTestMouse);
+            if (_previousPointer != null && _previousPointer.added)
+                _previousPointer.MakeCurrent();
+            _panTestMouse = null;
+            _previousPointer = null;
         }
 
         [Test]
@@ -266,6 +281,126 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void CameraController_PanInput_MovesOnlyDuringAnArmedPress()
+        {
+            var fixture = CreatePanInputFixture();
+            var home = fixture.Camera.transform.position;
+            SendPanMouse(new Vector2(400, 300), true);
+            SendPanMouse(new Vector2(450, 300), true);
+            Assert.AreEqual(home, fixture.Camera.transform.position);
+            SendPanMouse(new Vector2(400, 300), false);
+
+            fixture.Board.SetActivePanTool();
+            SendPanMouse(new Vector2(400, 300), true);
+            SendPanMouse(new Vector2(450, 300), true);
+            Assert.IsTrue(fixture.Controller.IsPanned);
+            SendPanMouse(new Vector2(450, 300), false);
+            var releasedPosition = fixture.Camera.transform.position;
+            SendPanMouse(new Vector2(500, 300), false);
+            Assert.AreEqual(releasedPosition, fixture.Camera.transform.position);
+        }
+
+        [TestCase("Disable")]
+        [TestCase("Recenter")]
+        [TestCase("MainCamera")]
+        [TestCase("ToolChange")]
+        [TestCase("DeviceRemoved")]
+        [TestCase("FocusLost")]
+        public void CameraController_PanInput_CleansUpInterruptedGestures(string interruption)
+        {
+            var fixture = CreatePanInputFixture();
+            fixture.Board.SetActivePanTool();
+            SendPanMouse(new Vector2(400, 300), true);
+            SendPanMouse(new Vector2(450, 300), true);
+            Assert.IsTrue(fixture.Controller.IsPanned);
+
+            switch (interruption)
+            {
+                case "Disable": fixture.Controller.enabled = false; break;
+                case "Recenter": fixture.Controller.Recenter(); break;
+                case "MainCamera": fixture.Controller.SwitchTo(CameraView.Main); break;
+                case "ToolChange": fixture.Board.ClearActivePiece(); break;
+                case "DeviceRemoved": InputSystem.RemoveDevice(_panTestMouse); break;
+                case "FocusLost": fixture.Controller.SendMessage("OnApplicationFocus", false); break;
+            }
+
+            InputSystem.Update();
+            var stoppedPosition = fixture.Camera.transform.position;
+            if (_panTestMouse.added) SendPanMouse(new Vector2(500, 300), true);
+            Assert.AreEqual(stoppedPosition, fixture.Camera.transform.position);
+            Assert.IsFalse(GetPrivateField<bool>(fixture.Controller, "_isPanning"));
+        }
+
+        [Test]
+        public void CameraController_PanInput_ReenableAllowsAFreshGesture()
+        {
+            var fixture = CreatePanInputFixture();
+            fixture.Board.SetActivePanTool();
+            SendPanMouse(new Vector2(400, 300), true);
+            fixture.Controller.enabled = false;
+            fixture.Controller.enabled = true;
+            SendPanMouse(new Vector2(400, 300), false);
+            SendPanMouse(new Vector2(400, 300), true);
+            SendPanMouse(new Vector2(450, 300), true);
+            Assert.IsTrue(fixture.Controller.IsPanned);
+        }
+
+        [Test]
+        public void CameraController_PanInput_KeepsThePointerThatBeganTheGesture()
+        {
+            var fixture = CreatePanInputFixture();
+            fixture.Board.SetActivePanTool();
+            SendPanMouse(new Vector2(400, 300), true);
+            SendPanMouse(new Vector2(450, 300), true);
+            var draggedPosition = fixture.Camera.transform.position;
+            var otherMouse = InputSystem.AddDevice<Mouse>();
+            try
+            {
+                InputSystem.QueueStateEvent(otherMouse, new MouseState { position = new Vector2(200, 200) });
+                InputSystem.Update();
+                Assert.Less((draggedPosition - fixture.Camera.transform.position).sqrMagnitude, 0.0001f);
+                SendPanMouse(new Vector2(500, 300), true);
+                Assert.Greater((draggedPosition - fixture.Camera.transform.position).sqrMagnitude, 0.0001f,
+                    "Another pointer becoming current must not interrupt the original drag.");
+            }
+            finally
+            {
+                InputSystem.RemoveDevice(otherMouse);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CameraController_PanInput_IgnoresInteractiveUiPresses()
+        {
+            var fixture = CreatePanInputFixture();
+            fixture.Board.SetActivePanTool();
+            CreateGameObject("Event System").AddComponent<EventSystem>();
+            var canvasHost = new GameObject("Input Canvas", typeof(RectTransform), typeof(Canvas),
+                typeof(GraphicRaycaster));
+            _created.Add(canvasHost);
+            canvasHost.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var buttonHost = new GameObject("Input Button", typeof(RectTransform), typeof(Image), typeof(Button));
+            _created.Add(buttonHost);
+            var buttonRect = (RectTransform)buttonHost.transform;
+            buttonRect.SetParent(canvasHost.transform, false);
+            buttonRect.anchorMin = Vector2.zero;
+            buttonRect.anchorMax = Vector2.one;
+            buttonRect.offsetMin = buttonRect.offsetMax = Vector2.zero;
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            var home = fixture.Camera.transform.position;
+            var uiPosition = RectTransformUtility.WorldToScreenPoint(null, buttonRect.position);
+
+            SendPanMouse(uiPosition, true);
+            Assert.IsTrue(PointerUi.IsPointerOverInteractiveUi(),
+                $"The test press must hit the button at {uiPosition}, rect {buttonRect.rect}.");
+            SendPanMouse(uiPosition + new Vector2(10, 0), true);
+
+            Assert.AreEqual(home, fixture.Camera.transform.position);
+            Assert.IsFalse(GetPrivateField<bool>(fixture.Controller, "_isPanning"));
+        }
+
+        [Test]
         public void ShopManager_SelectPanTool_ArmsPanOnlyWhileThePlanningCameraIsActive()
         {
             var gameMasterGo = CreateGameObject("Game Master");
@@ -357,6 +492,35 @@ namespace _project.Scripts.Tests
             cesspit.OnPointerClick(null);
 
             Assert.IsNull(gameMaster.PendingPlacement);
+        }
+
+        private (CameraController Controller, PathBuildBoard Board, Camera Camera) CreatePanInputFixture()
+        {
+            var gmHost = CreateGameObject("Game Master");
+            var boardHost = CreateGameObject("Path Board");
+            boardHost.transform.SetParent(gmHost.transform);
+            var board = boardHost.AddComponent<PathBuildBoard>();
+            var gm = gmHost.AddComponent<GameMaster>();
+            gm.turnController.enabled = false;
+            var controller = gmHost.AddComponent<CameraController>();
+            var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
+            var camera = CreateGameObject("Planning Camera").AddComponent<Camera>();
+            camera.transform.position = new Vector3(0, 10, 0);
+            camera.transform.rotation = Quaternion.Euler(90, 0, 0);
+            camera.pixelRect = new Rect(0, 0, 800, 600);
+            SetPrivateField(controller, "mainCamera", mainCamera);
+            SetPrivateField(controller, "secondaryCamera", camera);
+            SetPrivateField(controller, "recenterDuration", 0f);
+            _previousPointer = Pointer.current;
+            _panTestMouse = InputSystem.AddDevice<Mouse>();
+            return (controller, board, camera);
+        }
+
+        private void SendPanMouse(Vector2 position, bool pressed)
+        {
+            InputSystem.QueueStateEvent(_panTestMouse,
+                new MouseState { position = position }.WithButton(MouseButton.Left, pressed));
+            InputSystem.Update();
         }
 
         private GameObject CreateGameObject(string name)
