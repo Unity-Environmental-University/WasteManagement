@@ -74,7 +74,6 @@ namespace _project.Scripts.Object_Scripts
         private readonly List<Vector2Int> _alternateLivePreviewCells = new();
         private readonly List<Vector2Int> _alternatePathCells = new();
         private readonly List<Vector3> _alternateWaypoints = new();
-        private readonly List<Vector2Int> _currentSplitterCells = new();
 
         // The route last shown by the live preview. Unlike _pathCells it stays current while the
         // player edits the board, so placement can tell which way water flows through a cell.
@@ -115,7 +114,6 @@ namespace _project.Scripts.Object_Scripts
         // The fork the cached alternate waypoints leave from. Only Rebuild() changes it, so it
         // always matches _alternateWaypoints while issues are travelling.
         private Vector2Int? _splitCell;
-        private PathBuildBoard _subscribedBoard;
         public bool RecyclingDestination => recyclingDestination;
 
         public PathKind PathKind => recyclingDestination
@@ -136,38 +134,26 @@ namespace _project.Scripts.Object_Scripts
         public bool IsValid { get; private set; }
         public string InvalidReason { get; private set; }
 
-        private void Update()
-        {
-            if (Application.isPlaying)
-            {
-                // Handles references assigned after this component is enabled.
-                BindBoardEvents();
-                RefreshLivePreviewIfSplittersMoved();
-            }
-
-            // Also runs in Edit mode so the source streams are visible while authoring the scene.
-            RefreshOriginPreviewsIfMoved();
-        }
-
+        // Live-preview refreshes are driven by the board (pipe edits and splitter changes), which
+        // also reaches the intentionally inactive waypoint containers, so nothing is polled here.
         private void OnEnable()
         {
             if (Application.isPlaying)
-            {
-                PathSplitter.AvailabilityChanged += RefreshLivePreview;
-                BindBoardEvents();
                 RefreshLivePreview();
-            }
-            else
-            {
-                RefreshOriginPreviewsIfMoved();
-            }
+
+            // Also runs in Edit mode so the source streams are visible while authoring the scene.
+            RefreshOriginPreviewsIfMoved();
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+                UnityEditor.ObjectChangeEvents.changesPublished += HandleEditorObjectChanges;
+#endif
         }
 
         private void OnDisable()
         {
-            PathSplitter.AvailabilityChanged -= RefreshLivePreview;
-            if (_subscribedBoard)
-                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
+#if UNITY_EDITOR
+            UnityEditor.ObjectChangeEvents.changesPublished -= HandleEditorObjectChanges;
+#endif
             if (pathBuildBoard && !recyclingDestination)
                 pathBuildBoard.ClearPriorityVisualPath();
             if (_leftOriginPreview) _leftOriginPreview.Clear();
@@ -178,7 +164,6 @@ namespace _project.Scripts.Object_Scripts
             _splitterCells.Clear();
             _livePreviewCells.Clear();
             _alternateLivePreviewCells.Clear();
-            _subscribedBoard = null;
         }
 
         /// <summary>
@@ -237,23 +222,6 @@ namespace _project.Scripts.Object_Scripts
             RefreshOriginPreviewsIfMoved();
         }
 
-        /// <summary>
-        ///     Utility prefabs can become enabled before their final board transform has settled.
-        ///     Detect a splitter changing cells so the alternate route cannot remain stale until
-        ///     another pipe is edited or the wave begins.
-        /// </summary>
-        private void RefreshLivePreviewIfSplittersMoved()
-        {
-            if (!showLivePreview || !pathBuildBoard) return;
-
-            CollectSplitterCells(_currentSplitterCells);
-            var moved = _currentSplitterCells.Count != _splitterCells.Count;
-            for (var i = 0; i < _splitterCells.Count && !moved; i++)
-                moved = _currentSplitterCells[i] != _splitterCells[i];
-
-            if (moved) RefreshLivePreview();
-        }
-
         private void CollectSplitterCells(List<Vector2Int> cells)
         {
             cells.Clear();
@@ -265,19 +233,13 @@ namespace _project.Scripts.Object_Scripts
                     cells.Add(cell);
         }
 
-        private void BindBoardEvents()
+#if UNITY_EDITOR
+        // Edit mode: redraw the source streams after an origin or the start point is moved.
+        private void HandleEditorObjectChanges(ref UnityEditor.ObjectChangeEventStream stream)
         {
-            if (_subscribedBoard == pathBuildBoard) return;
-
-            if (_subscribedBoard)
-                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
-
-            _subscribedBoard = pathBuildBoard;
-            if (_subscribedBoard)
-                _subscribedBoard.PathLayoutChanged += RefreshLivePreview;
-
-            RefreshLivePreview();
+            if (this) RefreshOriginPreviewsIfMoved();
         }
+#endif
 
         private void RefreshOriginPreviewsIfMoved()
         {

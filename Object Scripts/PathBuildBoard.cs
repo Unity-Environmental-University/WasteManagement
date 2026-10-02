@@ -191,6 +191,7 @@ namespace _project.Scripts.Object_Scripts
                 BuildGridIfNeeded();
 
             RefreshVisuals();
+            PathSplitter.AvailabilityChanged += RefreshWaypointPaths;
             NotifyPathLayoutChanged();
         }
 
@@ -308,6 +309,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDestroy()
         {
+            PathSplitter.AvailabilityChanged -= RefreshWaypointPaths;
             if (_placementInventory is not null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
         }
@@ -538,7 +540,11 @@ namespace _project.Scripts.Object_Scripts
         private void NotifyPathLayoutChanged()
         {
             PathLayoutChanged?.Invoke();
+            RefreshWaypointPaths();
+        }
 
+        private void RefreshWaypointPaths()
+        {
             // Waypoint containers in existing scenes are intentionally inactive. Unity does
             // not invoke OnEnable on those components, but their paths are still used by the
             // spawners. Refresh them explicitly so their board-hosted preview remains live.
