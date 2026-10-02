@@ -595,7 +595,13 @@ namespace _project.Scripts.Object_Scripts
                     if (_waypointIndex >= path.GetWaypointCount(_routeIndex) ||
                         Vector3.SqrMagnitude(path.GetPosition(_routeIndex, _waypointIndex) -
                                              _heldWaypointPosition) > 0.0001f)
+                    {
+                        var previousWaypointIndex = _waypointIndex;
                         _waypointIndex = path.FindClosestWaypointIndex(_routeIndex, transform.position);
+                        // Keep the effect's remaining travel duration when route indices shift.
+                        if (_temporaryMoveSpeedEndWaypoint >= 0)
+                            _temporaryMoveSpeedEndWaypoint += _waypointIndex - previousWaypointIndex;
+                    }
                 }
 
                 _hasHeldWaypoint = false;
