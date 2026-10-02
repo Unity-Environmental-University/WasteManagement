@@ -89,6 +89,7 @@ namespace _project.Scripts.Object_Scripts
             var obj = Instantiate(spawnableObject, spawnPoint.position, spawnPoint.rotation);
             if (!obj.TryGetComponent<IssueObject>(out var issue)) return;
             issue.AssignType();
+            // Temp Setup for Recycle Demo --> NonWasteOnly Spawner
             if (nonWasteOnly)
             {
                 issue.SetType(IssueType.NonWaste);
