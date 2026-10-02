@@ -32,6 +32,8 @@ namespace _project.Scripts.Core
         private Vector3 _panGrabPoint;
         private bool _hasPanHome;
         private bool _isPanning;
+        private InputAction _panPress;
+        private Pointer _panPointer;
 
         private CameraView ActiveView =>
             secondaryCamera && secondaryCamera.gameObject.activeSelf ? CameraView.Secondary : CameraView.Main;
@@ -73,29 +75,64 @@ namespace _project.Scripts.Core
             }
         }
 
-        private void Update()
+        private void Awake()
         {
-            var pointer = Pointer.current;
+            _panPress = new InputAction("Pan Press", InputActionType.Button, "<Pointer>/press");
+            _panPress.performed += BeginPan;
+            _panPress.canceled += EndPan;
+        }
+
+        private void OnEnable() => _panPress.Enable();
+
+        private void OnDisable()
+        {
+            StopPan();
+            _panPress.Disable();
+        }
+
+        private void BeginPan(InputAction.CallbackContext context)
+        {
+            if (_isPanning || !IsPanArmed) return;
+            var pointer = context.control.device as Pointer;
             if (pointer == null) return;
-
-            if (_isPanning)
-            {
-                if (pointer.press.isPressed && IsPanArmed)
-                    DragPan(pointer.position.ReadValue());
-                else
-                    _isPanning = false;
-                return;
-            }
-
-            if (!pointer.press.wasPressedThisFrame || !IsPanArmed) return;
             if (PointerUi.IsPointerOverInteractiveUi()) return;
             if (!TryGetGroundPoint(pointer.position.ReadValue(), out _panGrabPoint)) return;
 
+            _panPointer = pointer;
             _isPanning = true;
+            InputSystem.onAfterUpdate += UpdatePan;
+        }
+
+        private void EndPan(InputAction.CallbackContext context) => StopPan();
+
+        private void UpdatePan()
+        {
+            if (_panPointer == null || !_panPointer.added || !_panPointer.press.isPressed || !IsPanArmed)
+            {
+                StopPan();
+                return;
+            }
+
+            DragPan(_panPointer.position.ReadValue());
+        }
+
+        private void StopPan()
+        {
+            if (!_isPanning) return;
+            InputSystem.onAfterUpdate -= UpdatePan;
+            _isPanning = false;
+            _panPointer = null;
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused) StopPan();
         }
 
         private void OnDestroy()
         {
+            StopPan();
+            _panPress?.Dispose();
             StopShake();
             StopRecenter();
         }
@@ -122,7 +159,7 @@ namespace _project.Scripts.Core
         /// <summary>Returns the planning view to its centered home position.</summary>
         public void Recenter()
         {
-            _isPanning = false;
+            StopPan();
             if (!IsPanned) return;
 
             StopRecenter();
@@ -219,6 +256,7 @@ namespace _project.Scripts.Core
 
             // A shake leaves the main camera offset; settle it before it is hidden or revealed.
             StopShake();
+            StopPan();
 
             mainCamera.gameObject.SetActive(view == CameraView.Main);
             secondaryCamera.gameObject.SetActive(view == CameraView.Secondary);
