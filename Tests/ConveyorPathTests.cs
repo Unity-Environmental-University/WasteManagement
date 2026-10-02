@@ -90,6 +90,78 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(_board.IsOccupied(new Vector2Int(1, 0), PathKind.RecyclingBelt));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void RecyclingFork_DoesNotUsePipeAlternateRoutes(bool hasSplitter)
+        {
+            PlaceForkedRoute(PathKind.RecyclingBelt);
+            if (hasSplitter) MakeSplitter();
+
+            Assert.IsTrue(_belt.Rebuild());
+
+            Assert.AreEqual(6, _belt.Count);
+            Assert.IsFalse(_belt.HasAlternateRoute);
+            Assert.IsEmpty(_belt.AlternatePathCells);
+            Assert.IsFalse(_belt.IsSplitPoint(_board.GetCellTopPosition(new Vector2Int(0, 1))));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void RecyclingPreview_IgnoresOverlappingPipeSplitter(bool completeBranch)
+        {
+            PlaceForkedRoute(PathKind.Pipe, completeBranch);
+            PlaceForkedRoute(PathKind.RecyclingBelt, completeBranch);
+            var pipe = MakePath("Forked pipe route", new Vector2Int(-1, 1), new Vector2Int(4, 1), false);
+            Set(pipe, "showLivePreview", true);
+            Set(_belt, "showLivePreview", true);
+            MakeSplitter();
+
+            Assert.IsTrue(pipe.Rebuild());
+            Assert.IsTrue(_belt.Rebuild());
+
+            var pipeBranch = _board.transform.Find("Alternate Path Preview")?.GetComponent<PathWaterTube>();
+            Assert.IsNotNull(pipeBranch);
+            Assert.IsTrue(pipeBranch.IsShowing, "The pipe splitter must still show its branch.");
+            var beltPreview = _board.transform.Find("Recycling Live Path Preview")?.GetComponent<PathWaterTube>();
+            Assert.IsNotNull(beltPreview);
+            Assert.IsTrue(beltPreview.IsShowing);
+            Assert.IsNull(_board.transform.Find("Recycling Alternate Path Preview"),
+                "A pipe splitter must not reveal either a finished or unfinished conveyor branch.");
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void PipeSplitter_IgnoresRecyclingIssuesWithoutConsumingPipeTurns(bool enterTrigger)
+        {
+            PlaceForkedRoute(PathKind.Pipe);
+            PlaceForkedRoute(PathKind.RecyclingBelt);
+            var pipe = MakePath("Forked pipe route", new Vector2Int(-1, 1), new Vector2Int(4, 1), false);
+            var splitter = MakeSplitter();
+            Assert.IsTrue(pipe.Rebuild());
+            Assert.IsTrue(pipe.HasAlternateRoute);
+            Assert.IsTrue(_belt.Rebuild());
+            var recyclingHost = Make("Recycling issue");
+            recyclingHost.AddComponent<SphereCollider>();
+            var recyclingIssue = recyclingHost.AddComponent<IssueObject>();
+            recyclingIssue.SetPath(_belt);
+
+            if (enterTrigger)
+                splitter.SendMessage("OnTriggerEnter", recyclingIssue.GetComponent<Collider>(),
+                    SendMessageOptions.RequireReceiver);
+            else
+                Assert.IsFalse(splitter.RouteIssue(recyclingIssue));
+
+            Assert.AreEqual(0, recyclingIssue.GetRouteIndex());
+            for (var route = 0; route <= 1; route++)
+            {
+                var pipeIssue = Make("Pipe issue").AddComponent<IssueObject>();
+                pipeIssue.SetPath(pipe);
+                Assert.IsTrue(splitter.RouteIssue(pipeIssue));
+                Assert.AreEqual(route, pipeIssue.GetRouteIndex(),
+                    "An ignored recycling issue must not consume a turn in the pipe's 50/50 split.");
+            }
+        }
+
         [UnityTest]
         public IEnumerator MovingConveyorPreviewDoesNotRetainDestroyedVisuals()
         {
@@ -126,6 +198,23 @@ namespace _project.Scripts.Tests
             Place(1, 2, PathKind.Pipe, true);
             Place(0, 1, PathKind.RecyclingBelt, false);
             Place(2, 1, PathKind.RecyclingBelt, false);
+        }
+
+        private void PlaceForkedRoute(PathKind kind, bool completeBranch = true)
+        {
+            Place(0, 1, kind, false);
+            Place(2, 1, kind, false);
+            Place(0, 2, kind, true);
+            if (!completeBranch) return;
+            Place(1, 3, kind, false);
+            Place(3, 2, kind, true);
+        }
+
+        private PathSplitter MakeSplitter()
+        {
+            var host = Make("Pipe splitter");
+            host.transform.position = _board.GetCellTopPosition(new Vector2Int(0, 1));
+            return host.AddComponent<PathSplitter>();
         }
 
         private void Place(int x, int y, PathKind kind, bool vertical) =>

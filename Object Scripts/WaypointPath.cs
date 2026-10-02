@@ -257,7 +257,7 @@ namespace _project.Scripts.Object_Scripts
         private void CollectSplitterCells(List<Vector2Int> cells)
         {
             cells.Clear();
-            if (!pathBuildBoard) return;
+            if (!pathBuildBoard || PathKind != PathKind.Pipe) return;
 
             foreach (var splitter in PathSplitter.Live)
                 if (splitter && splitter.isActiveAndEnabled &&
@@ -929,6 +929,9 @@ namespace _project.Scripts.Object_Scripts
             bool allowUnfinishedSplitterBranch,
             out Vector2Int? splitCell)
         {
+            splitCell = null;
+            if (PathKind != PathKind.Pipe) return null;
+
             for (var forkIndex = 0; forkIndex < defaultRoute.Count; forkIndex++)
             {
                 if (!_splitterCells.Contains(defaultRoute[forkIndex])) continue;
@@ -951,7 +954,6 @@ namespace _project.Scripts.Object_Scripts
                 return alternate;
             }
 
-            splitCell = null;
             return null;
         }
 
