@@ -231,6 +231,93 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void CameraController_PanStopsAtBoardScaledLimit_AndRecenterReturnsHome()
+        {
+            var gameMasterGo = CreateGameObject("Game Master");
+            var boardGo = CreateGameObject("Path Board");
+            boardGo.transform.SetParent(gameMasterGo.transform);
+            var board = boardGo.AddComponent<PathBuildBoard>();
+            gameMasterGo.AddComponent<GameMaster>();
+            var controller = gameMasterGo.AddComponent<CameraController>();
+            var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
+            var home = new Vector3(1f, 20f, -3f);
+            secondaryCamera.transform.position = home;
+            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
+            SetPrivateField(controller, "panRange", 0.5f);
+            SetPrivateField(controller, "recenterDuration", 0f);
+
+            var pitch = board.CellWorldPitch;
+            var limit = new Vector2(board.Columns * pitch.x, board.Rows * pitch.y) * 0.25f;
+
+            Assert.IsFalse(controller.IsPanned);
+
+            controller.PanBy(new Vector2(1000f, -1000f));
+
+            var offset = secondaryCamera.transform.position - home;
+            Assert.IsTrue(controller.IsPanned);
+            Assert.AreEqual(limit.x, offset.x, 0.001f);
+            Assert.AreEqual(0f, offset.y, 0.001f);
+            Assert.AreEqual(-limit.y, offset.z, 0.001f);
+
+            controller.Recenter();
+
+            Assert.IsFalse(controller.IsPanned);
+            Assert.AreEqual(home, secondaryCamera.transform.position);
+        }
+
+        [Test]
+        public void ShopManager_SelectPanTool_ArmsPanOnlyWhileThePlanningCameraIsActive()
+        {
+            var gameMasterGo = CreateGameObject("Game Master");
+            var boardGo = CreateGameObject("Path Board");
+            boardGo.transform.SetParent(gameMasterGo.transform);
+            var board = boardGo.AddComponent<PathBuildBoard>();
+            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var controller = gameMasterGo.AddComponent<CameraController>();
+            var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
+            var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
+            SetPrivateField(controller, "mainCamera", mainCamera);
+            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
+            var shopManager = CreateGameObject("Shop UI").AddComponent<ShopManager>();
+
+            gameMaster.placementInventory.Add(new TestPlaceable());
+            board.SetActivePiece(new PathPiecePlaceable("Short Pipe", "", 1, 2, null, 4));
+            Assert.IsFalse(controller.IsPanArmed);
+
+            shopManager.SelectPanTool();
+
+            Assert.IsNull(gameMaster.PendingPlacement);
+            Assert.AreEqual(PathBuildTool.Pan, board.ActiveTool);
+            Assert.IsNull(board.ActivePiece);
+            Assert.IsTrue(controller.IsPanArmed);
+
+            controller.SwitchTo(CameraView.Main);
+            Assert.IsFalse(controller.IsPanArmed);
+        }
+
+        [Test]
+        public void PathBuildBoard_RotateActivePiece_FlipsOnlyAnArmedPiece()
+        {
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            var pipe = new PathPiecePlaceable("Short Pipe", "", 1, 2, null, 4);
+            var startOrientation = pipe.Orientation;
+
+            Assert.IsFalse(board.CanRotateActivePiece);
+
+            board.SetActivePiece(pipe);
+            Assert.IsTrue(board.CanRotateActivePiece);
+
+            board.RotateActivePiece();
+            Assert.AreNotEqual(startOrientation, pipe.Orientation);
+
+            board.RotateActivePiece();
+            Assert.AreEqual(startOrientation, pipe.Orientation);
+
+            board.SetActiveBreakTool();
+            Assert.IsFalse(board.CanRotateActivePiece);
+        }
+
+        [Test]
         public void CesspitCap_PurchaseThenClickSealsOnlySelectedCesspit()
         {
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();

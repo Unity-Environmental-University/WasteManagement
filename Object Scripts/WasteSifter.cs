@@ -251,6 +251,11 @@ namespace _project.Scripts.Object_Scripts
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            // A pan-drag that starts on the sifter carries it along under the pointer, so the
+            // release lands back on it and would read as a click.
+            var cameraController = GameMaster.Instance.cameraController;
+            if (cameraController && cameraController.IsPanArmed) return;
+
             if (debrisAccumulation > 0)
                 GameMaster.Instance.sifterMiniController.StartMiniGame(this);
         }
