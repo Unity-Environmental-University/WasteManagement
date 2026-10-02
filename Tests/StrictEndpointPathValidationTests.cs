@@ -291,6 +291,88 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, fixture.Path.Count);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void HeldIssue_ResumesAtItsCell_AfterRouteIsShortened(bool flush)
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 2);
+            PlaceHorizontal(fixture.Board, 2, 1, 2);
+            PlaceVertical(fixture.Board, 3, 2, 4);
+            PlaceHorizontal(fixture.Board, 1, 5, 2);
+            PlaceVertical(fixture.Board, 1, 6, 4);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(16, fixture.Path.Count);
+
+            var issue = CreatePrimitive("Held Junk").AddComponent<IssueObject>();
+            issue.SetType(IssueType.NonWaste);
+            issue.SetPath(fixture.Path);
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 7));
+            SetField(issue, "_waypointIndex", fixture.Path.FindClosestWaypointIndex(0, issue.transform.position));
+            issue.SetHeldBySifter(true);
+            var unheldCount = IssueObject.ActiveUnheldCount;
+
+            PlaceVertical(fixture.Board, 1, 2, 3);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(12, fixture.Path.Count);
+            Assert.GreaterOrEqual(issue.GetWaypointIndex(), fixture.Path.Count);
+
+            if (flush) issue.FlushFromSifter();
+            else issue.ReleaseFromSifter(default);
+
+            Assert.AreEqual(8, issue.GetWaypointIndex());
+            Assert.Less(Vector3.SqrMagnitude(issue.transform.position -
+                fixture.Path.GetPosition(issue.GetWaypointIndex())), 0.0001f);
+            Assert.Less(Vector3.SqrMagnitude(fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 8)) -
+                fixture.Path.GetPosition(issue.GetWaypointIndex() + 1)), 0.0001f);
+            Assert.AreEqual(unheldCount + 1, IssueObject.ActiveUnheldCount);
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void HeldIssue_ResumesOnMainRoute_WhenAlternateRouteIsRemoved(bool flush)
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var issue = CreatePrimitive("Held Branch Junk").AddComponent<IssueObject>();
+            issue.SetType(IssueType.NonWaste);
+            issue.SetPath(fixture.Path);
+            Assert.IsTrue(issue.TrySetRoute(1));
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 8));
+            SetField(issue, "_waypointIndex", fixture.Path.FindClosestWaypointIndex(1, issue.transform.position));
+            issue.SetHeldBySifter(true);
+
+            Assert.IsTrue(fixture.Board.TryBreak(GetCell(fixture.Board, 3, 3), out _));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.HasAlternateRoute);
+
+            if (flush) issue.FlushFromSifter();
+            else issue.ReleaseFromSifter(default);
+
+            Assert.AreEqual(0, issue.GetRouteIndex());
+            Assert.AreEqual(9, issue.GetWaypointIndex());
+            Assert.Less(Vector3.SqrMagnitude(issue.transform.position -
+                fixture.Path.GetPosition(issue.GetWaypointIndex())), 0.0001f);
+        }
+
+        [Test]
+        public void HeldIssue_PreservesItsNextTarget_WhenRouteIsRebuiltWithoutChanges()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var issue = CreatePrimitive("Held Junk").AddComponent<IssueObject>();
+            issue.SetPath(fixture.Path);
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 7));
+            SetField(issue, "_waypointIndex", 9);
+            issue.SetHeldBySifter(true);
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            issue.FlushFromSifter();
+
+            Assert.AreEqual(9, issue.GetWaypointIndex(), "Releasing should not send it backward to the nearest cell.");
+        }
+
         [Test]
         public void TryGetPathFacingRotation_FacesAlongHorizontalPipe_WhenPlacedOnPipe()
         {

@@ -11,6 +11,13 @@ namespace _project.Scripts.Object_Scripts
     public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
     { 
         [SerializeField] private int processPower = 3;
+
+        [Tooltip(
+            "Junk that a clogged sifter flushed down the line fills this pit by its normal deposit times this. The pit is built for waste, not solids, so unscreened junk does far more damage than anything else that lands in it.")]
+        [SerializeField]
+        [Min(1f)]
+        private float flushedJunkDamageMultiplier = 10f;
+
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 10f;
@@ -190,7 +197,11 @@ namespace _project.Scripts.Object_Scripts
 
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
-            SetFullness(fullness + issue.SiftCost);
+            var deposit = issue.SiftCost;
+            if (issue.WasFlushedFromSifter)
+                deposit *= flushedJunkDamageMultiplier;
+
+            SetFullness(fullness + deposit);
             issue.Process(processPower, "Deposited into Cesspit");
         }
 

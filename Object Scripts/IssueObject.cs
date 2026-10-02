@@ -111,6 +111,8 @@ namespace _project.Scripts.Object_Scripts
         private const float BlockedShakeInterval = 1f;
         private float _mergeImmuneUntil = -1f;
         private bool _heldBySifter;
+        private bool _hasHeldWaypoint;
+        private Vector3 _heldWaypointPosition;
         private static int _activeUnheldCount;
         private MaterialPropertyBlock _visualOverridePropertyBlock;
         private Tween _trembleTween;
@@ -138,6 +140,12 @@ namespace _project.Scripts.Object_Scripts
         public float SiftCost => BaseSiftCost * Size;
         public float ProcessCost => BaseProcessCost * Size;
         public bool IsDirectDestination { get; private set; }
+
+        /// <summary>
+        ///     True once a debris-blocked sifter has let this NonWaste issue through its open gates
+        ///     instead of screening it out. Unscreened junk wrecks a cesspit — see Cesspit.OnTriggerEnter.
+        /// </summary>
+        public bool WasFlushedFromSifter { get; private set; }
 
         /// <summary>
         ///     True when this issue has grown to <see cref="pipeBlockSize" /> or beyond:
@@ -417,7 +425,18 @@ namespace _project.Scripts.Object_Scripts
         public void ReleaseFromSifter(EntityId sifterId)
         {
             _siftersProcessed.Remove(sifterId);
-            _heldBySifter = false;
+            SetHeldBySifter(false);
+        }
+
+        /// <summary>
+        ///     Called by a debris-blocked WasteSifter whose gates have opened: the issue is let go
+        ///     (if it was held) and carries on down the line as unscreened junk. It stays registered
+        ///     with that sifter, so the sifter it just left can't catch it again.
+        /// </summary>
+        public void FlushFromSifter()
+        {
+            SetHeldBySifter(false);
+            WasFlushedFromSifter = true;
         }
 
         public void SetSize(int s)
@@ -556,6 +575,31 @@ namespace _project.Scripts.Object_Scripts
         public void SetHeldBySifter(bool held)
         {
             if (_heldBySifter == held) return;
+
+            if (held)
+            {
+                // Routes can be rebuilt between waves while junk stays in the screen.
+                _hasHeldWaypoint = path && !IsDirectDestination &&
+                                   _waypointIndex < path.GetWaypointCount(_routeIndex);
+                if (_hasHeldWaypoint)
+                    _heldWaypointPosition = path.GetPosition(_routeIndex, _waypointIndex);
+            }
+            else
+            {
+                if (_hasHeldWaypoint && path && !IsDirectDestination && path.Count > 0)
+                {
+                    if (_routeIndex == 1 && !path.HasAlternateRoute) _routeIndex = 0;
+
+                    // Preserve progress when the target survived the rebuild; otherwise resume
+                    // at the held position rather than trusting an index from the old route.
+                    if (_waypointIndex >= path.GetWaypointCount(_routeIndex) ||
+                        Vector3.SqrMagnitude(path.GetPosition(_routeIndex, _waypointIndex) -
+                                             _heldWaypointPosition) > 0.0001f)
+                        _waypointIndex = path.FindClosestWaypointIndex(_routeIndex, transform.position);
+                }
+
+                _hasHeldWaypoint = false;
+            }
 
             if (isActiveAndEnabled)
                 _activeUnheldCount += held ? -1 : 1;
