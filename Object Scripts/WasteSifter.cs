@@ -92,8 +92,19 @@ namespace _project.Scripts.Object_Scripts
                 0f,
                 maxDebrisAccumulation);
 
-            if (!wasBlocked && IsBlocked)
-                SetSifting(false);
+            if (wasBlocked || !IsBlocked) return;
+            SetSifting(false);
+            FlushHeldIssues();
+        }
+
+        private void FlushHeldIssues()
+        {
+            // The clog has forced the gates open: everything the screen was holding goes on down
+            // the line at once. The debris itself stays, so the sifter remains open until the
+            // minigame clears it.
+            foreach (var issue in _heldIssues)
+                if (issue) issue.FlushFromSifter();
+            _heldIssues.Clear();
         }
 
         public void ClearDebris()
@@ -185,13 +196,16 @@ namespace _project.Scripts.Object_Scripts
             var issue = other.GetComponent<IssueObject>();
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
-            if (issue.GetIssueType() == IssueType.NonWaste)
+            var isNonWaste = issue.GetIssueType() == IssueType.NonWaste;
+            if (isNonWaste && !IsBlocked)
             {
                 // A screen doesn't grind solids — it stops them. NonWaste sticks here, adding
                 // to the clog, until the debris minigame removes it (or a comminutor breaks it down).
-                AccumulateDebris(issue.SiftCost);
+                // Held before accumulating: if this piece is the one that clogs the screen, it gets
+                // flushed along with the rest.
                 issue.SetHeldBySifter(true);
                 _heldIssues.Add(issue);
+                AccumulateDebris(issue.SiftCost);
                 return;
             }
 
@@ -207,7 +221,12 @@ namespace _project.Scripts.Object_Scripts
                 issue.SetTemporaryMoveSpeedMultiplier(speedMultiplier, 2);
 
             // A debris-blocked sifter opens its gates: issues keep moving but remain slowed.
-            if (IsBlocked) return;
+            // Junk arriving now is no longer stopped either — it rides through unscreened.
+            if (IsBlocked)
+            {
+                if (isNonWaste) issue.FlushFromSifter();
+                return;
+            }
 
             issue.Process(siftPower, "Sifted");
         }

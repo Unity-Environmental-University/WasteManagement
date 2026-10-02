@@ -291,6 +291,142 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, fixture.Path.Count);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void HeldIssue_ResumesAtItsCell_AfterRouteIsShortened(bool flush)
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 2);
+            PlaceHorizontal(fixture.Board, 2, 1, 2);
+            PlaceVertical(fixture.Board, 3, 2, 4);
+            PlaceHorizontal(fixture.Board, 1, 5, 2);
+            PlaceVertical(fixture.Board, 1, 6, 4);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(16, fixture.Path.Count);
+
+            var issue = CreatePrimitive("Held Junk").AddComponent<IssueObject>();
+            issue.SetType(IssueType.NonWaste);
+            issue.SetPath(fixture.Path);
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 7));
+            SetField(issue, "_waypointIndex", fixture.Path.FindClosestWaypointIndex(0, issue.transform.position));
+            issue.SetHeldBySifter(true);
+            var unheldCount = IssueObject.ActiveUnheldCount;
+
+            PlaceVertical(fixture.Board, 1, 2, 3);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(12, fixture.Path.Count);
+            Assert.GreaterOrEqual(issue.GetWaypointIndex(), fixture.Path.Count);
+
+            if (flush) issue.FlushFromSifter();
+            else issue.ReleaseFromSifter(default);
+
+            Assert.AreEqual(8, issue.GetWaypointIndex());
+            Assert.Less(Vector3.SqrMagnitude(issue.transform.position -
+                fixture.Path.GetPosition(issue.GetWaypointIndex())), 0.0001f);
+            Assert.Less(Vector3.SqrMagnitude(fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 8)) -
+                fixture.Path.GetPosition(issue.GetWaypointIndex() + 1)), 0.0001f);
+            Assert.AreEqual(unheldCount + 1, IssueObject.ActiveUnheldCount);
+        }
+
+        [TestCase(true, true, 1f)]
+        [TestCase(true, true, 4f)]
+        [TestCase(true, false, 1f)]
+        [TestCase(true, false, 4f)]
+        [TestCase(false, true, 1f)]
+        [TestCase(false, true, 4f)]
+        [TestCase(false, false, 1f)]
+        [TestCase(false, false, 4f)]
+        public void HeldIssue_RebasesTemporarySpeedDuration_WhenRouteChanges(bool shorten, bool flush, float speed)
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 2);
+            PlaceHorizontal(fixture.Board, 2, 1, 2);
+            PlaceVertical(fixture.Board, 3, 2, 4);
+            PlaceHorizontal(fixture.Board, 1, 5, 2);
+            PlaceVertical(fixture.Board, 1, 6, 4);
+            if (!shorten) PlaceVertical(fixture.Board, 1, 2, 3);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(shorten ? 16 : 12, fixture.Path.Count);
+
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+            var issue = CreatePrimitive("Held Junk").AddComponent<IssueObject>();
+            issue.SetType(IssueType.NonWaste);
+            issue.SetSize(2);
+            issue.SetPath(fixture.Path);
+            issue.SetMoveSpeed(2f);
+            var heldPosition = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 7));
+            var heldIndex = fixture.Path.FindClosestWaypointIndex(0, heldPosition);
+            SetField(issue, "_waypointIndex", heldIndex - 1);
+            issue.SetTemporaryMoveSpeed(speed, 3);
+            AdvanceIssueOneWaypoint(issue, fixture.Board);
+            issue.transform.position = heldPosition;
+            issue.SetHeldBySifter(true);
+
+            if (shorten) PlaceVertical(fixture.Board, 1, 2, 3);
+            else Assert.IsTrue(fixture.Board.TryBreak(GetCell(fixture.Board, 1, 3), out _));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(shorten ? 12 : 16, fixture.Path.Count);
+
+            if (flush) issue.FlushFromSifter();
+            else issue.ReleaseFromSifter(default);
+
+            Assert.AreEqual(shorten ? 8 : 12, issue.GetWaypointIndex());
+            Assert.AreEqual(speed, GetField<float>(issue, "moveSpeed"),
+                "Releasing must preserve the speed effect that still has two waypoints left.");
+            AdvanceIssueOneWaypoint(issue, fixture.Board);
+            Assert.AreEqual(speed, GetField<float>(issue, "moveSpeed"),
+                "The effect must stay active until both remaining waypoints have been traversed.");
+            AdvanceIssueOneWaypoint(issue, fixture.Board);
+            Assert.AreEqual(2f, GetField<float>(issue, "moveSpeed"),
+                "The effect must restore the original speed after its two remaining waypoints.");
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void HeldIssue_ResumesOnMainRoute_WhenAlternateRouteIsRemoved(bool flush)
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var issue = CreatePrimitive("Held Branch Junk").AddComponent<IssueObject>();
+            issue.SetType(IssueType.NonWaste);
+            issue.SetPath(fixture.Path);
+            Assert.IsTrue(issue.TrySetRoute(1));
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 8));
+            SetField(issue, "_waypointIndex", fixture.Path.FindClosestWaypointIndex(1, issue.transform.position));
+            issue.SetHeldBySifter(true);
+
+            Assert.IsTrue(fixture.Board.TryBreak(GetCell(fixture.Board, 3, 3), out _));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.HasAlternateRoute);
+
+            if (flush) issue.FlushFromSifter();
+            else issue.ReleaseFromSifter(default);
+
+            Assert.AreEqual(0, issue.GetRouteIndex());
+            Assert.AreEqual(9, issue.GetWaypointIndex());
+            Assert.Less(Vector3.SqrMagnitude(issue.transform.position -
+                fixture.Path.GetPosition(issue.GetWaypointIndex())), 0.0001f);
+        }
+
+        [Test]
+        public void HeldIssue_PreservesItsNextTarget_WhenRouteIsRebuiltWithoutChanges()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var issue = CreatePrimitive("Held Junk").AddComponent<IssueObject>();
+            issue.SetPath(fixture.Path);
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 7));
+            SetField(issue, "_waypointIndex", 9);
+            issue.SetHeldBySifter(true);
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            issue.FlushFromSifter();
+
+            Assert.AreEqual(9, issue.GetWaypointIndex(), "Releasing should not send it backward to the nearest cell.");
+        }
+
         [Test]
         public void TryGetPathFacingRotation_FacesAlongHorizontalPipe_WhenPlacedOnPipe()
         {
@@ -886,6 +1022,16 @@ namespace _project.Scripts.Tests
             go.name = name;
             _created.Add(go);
             return go;
+        }
+
+        private static void AdvanceIssueOneWaypoint(IssueObject issue, PathBuildBoard board)
+        {
+            var index = issue.GetWaypointIndex();
+            var target = issue.GetPath().GetPosition(issue.GetRouteIndex(), index);
+            target.y += issue.transform.localScale.y * board.entityOnBoardHeight;
+            issue.transform.position = target;
+            issue.SendMessage("Update", SendMessageOptions.RequireReceiver);
+            Assert.AreEqual(index + 1, issue.GetWaypointIndex());
         }
 
         private static void SetField<T>(object target, string fieldName, T value)
