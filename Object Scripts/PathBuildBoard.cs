@@ -1546,19 +1546,6 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Returns true when this position is the currently discovered fork for a path using
-        ///     this board. Live path previews keep the split point current as pieces are edited.
-        /// </summary>
-        public bool IsPathSplitPoint(Vector3 worldPosition)
-        {
-            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
-                if (path && path.UsesBoard(this) && path.IsSplitPoint(worldPosition))
-                    return true;
-
-            return false;
-        }
-
-        /// <summary>
         ///     Converts a world-space position into the nearest grid cell coordinate.
         ///     Used to map fixed anchor Transforms (e.g., WaypointPath.startPoint/endPoint)
         ///     onto the grid so we can test piece adjacency against them.

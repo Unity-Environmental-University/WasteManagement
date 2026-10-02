@@ -180,6 +180,66 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void LivePreview_ShowsUnfinishedSplitterBranch_BeforeTheRouteIsComplete()
+        {
+            var fixture = CreatePathFixture();
+
+            // The splitter goes down first, on a bare cell; pipes are laid through it afterward.
+            var splitterObject = CreateGameObject("Path Splitter");
+            splitterObject.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 2));
+            splitterObject.AddComponent<PathSplitter>();
+
+            PlaceVertical(fixture.Board, 1, 0, 4);
+            Assert.IsNull(fixture.Board.transform.Find("Alternate Path Preview"));
+
+            PlaceHorizontal(fixture.Board, 2, 2, 2);
+
+            var alternatePreview = fixture.Board.transform.Find("Alternate Path Preview")
+                ?.GetComponentInChildren<PathWaterTube>();
+            Assert.IsNotNull(alternatePreview);
+            Assert.IsTrue(alternatePreview.IsShowing);
+            // Fork cell plus both cells of the branch built so far.
+            Assert.AreEqual(3, alternatePreview.PointCount);
+            Assert.IsFalse(fixture.Path.Rebuild());
+        }
+
+        [Test]
+        public void Rebuild_ForksAtTheSplitterCell_WhenAnEarlierForkExists()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            // Two side loops: one leaving the route at (1,1), a later one at (1,5).
+            PlaceVertical(fixture.Board, 0, 1, 3);
+            PlaceVertical(fixture.Board, 2, 5, 3);
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.IsSplitPoint(fixture.Board.GetCellTopPosition(new Vector2Int(1, 1))));
+
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            splitter.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 5));
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.HasAlternateRoute);
+            Assert.IsTrue(fixture.Path.IsSplitPoint(splitter.transform.position));
+            Assert.IsFalse(fixture.Path.IsSplitPoint(fixture.Board.GetCellTopPosition(new Vector2Int(1, 1))));
+        }
+
+        [Test]
+        public void PathSplitter_Awake_IgnoresPointerRaycastsWhileKeepingTrigger()
+        {
+            var instance = CreateGameObject("Path Splitter");
+            var child = CreateGameObject("Path Splitter Child");
+            var ignoreRaycastLayer = LayerMask.NameToLayer("Ignore Raycast");
+            child.transform.SetParent(instance.transform);
+
+            instance.AddComponent<PathSplitter>();
+
+            Assert.AreEqual(ignoreRaycastLayer, instance.layer);
+            Assert.AreEqual(ignoreRaycastLayer, child.layer);
+            Assert.IsTrue(instance.GetComponent<Collider>().isTrigger);
+        }
+
+        [Test]
         public void PathSplitter_Awake_DoesNotGenerateVisualHierarchy()
         {
             var instance = CreateGameObject("Path Splitter");
@@ -205,22 +265,23 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathSplitterShopItem_OnlyPlacesOnTheDiscoveredSplitCell()
+        public void PathSplitterShopItem_PlacesOnCellWithoutPipe()
         {
-            var fixture = CreateSplitPathFixture();
-            Assert.IsTrue(fixture.Path.Rebuild());
+            var fixture = CreatePathFixture();
 
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
             gameMaster.pathBuildBoard = fixture.Board;
             var prefab = CreateGameObject("Path Splitter Prefab");
             prefab.AddComponent<PathSplitter>();
             var item = new PathSplitterShopItem("Path Splitter", string.Empty, 1, prefab, null, 1);
+            var slot = GetCell(fixture.Board, 1, 2).transform;
 
-            Assert.IsNull(item.Place(GetCell(fixture.Board, 1, 1).transform));
-
-            var placed = item.Place(GetCell(fixture.Board, 1, 2).transform);
-            Assert.IsNotNull(placed);
+            Assert.IsFalse(fixture.Board.IsOccupied(new Vector2Int(1, 2)));
+            var placed = item.Place(slot);
             _created.Add(placed);
+
+            Assert.IsNotNull(placed);
+            Assert.AreEqual(slot.position, placed.transform.position);
         }
 
         [Test]
@@ -244,6 +305,97 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, issues[2].GetRouteIndex());
             Assert.AreEqual(1, issues[3].GetRouteIndex());
         }
+
+        [Test]
+        public void PathSplitter_SharesSplitIssuesByMainSharePercent()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            splitter.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 2));
+            splitter.MainSharePercent = 75;
+
+            var branchCount = 0;
+            for (var i = 0; i < 8; i++)
+            {
+                var issue = CreatePrimitive($"Issue {i}").AddComponent<IssueObject>();
+                issue.SetPath(fixture.Path);
+                Assert.IsTrue(splitter.RouteIssue(issue));
+                branchCount += issue.GetRouteIndex();
+            }
+
+            Assert.AreEqual(2, branchCount);
+        }
+
+        [Test]
+        public void PathSplitter_PinsIssueTypesToTheirChosenLane()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            splitter.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 2));
+            splitter.SetRule(IssueType.NonWaste, SplitterRule.BranchOnly);
+            splitter.SetRule(IssueType.Organic, SplitterRule.MainOnly);
+
+            IssueType[] arrivals =
+            {
+                IssueType.NonWaste, IssueType.Organic, IssueType.Chemical,
+                IssueType.NonWaste, IssueType.Organic, IssueType.Chemical
+            };
+            // Chemical is still split, and pinned types don't disturb its 50/50 rotation.
+            int[] expectedRoutes = { 1, 0, 0, 1, 0, 1 };
+
+            for (var i = 0; i < arrivals.Length; i++)
+            {
+                var issue = CreatePrimitive($"Issue {i}").AddComponent<IssueObject>();
+                issue.SetPath(fixture.Path);
+                issue.SetType(arrivals[i]);
+                Assert.IsTrue(splitter.RouteIssue(issue));
+                Assert.AreEqual(expectedRoutes[i], issue.GetRouteIndex(), $"{arrivals[i]} issue {i}");
+            }
+        }
+
+#if UNITY_EDITOR
+        [Test]
+        public void PathSplitterPanel_Prefab_TunesTheSplitterItIsShownFor()
+        {
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<PathSplitterPanel>(
+                "Assets/_project/Prefabs/UI/PathSplitterPanel.prefab");
+            Assert.IsNotNull(prefab);
+
+            var canvas = CreateGameObject("Canvas").AddComponent<Canvas>();
+            var panel = Object.Instantiate(prefab, canvas.transform);
+            var window = panel.transform.Find("Window").gameObject;
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+            Assert.IsFalse(window.activeSelf);
+
+            panel.Show(splitter);
+
+            Assert.IsTrue(panel.IsOpen);
+            Assert.IsTrue(window.activeSelf);
+            var slider = panel.GetComponentInChildren<Slider>();
+            Assert.AreEqual(10f, slider.value);
+
+            slider.value = 15f;
+            Assert.AreEqual(75, splitter.MainSharePercent);
+
+            window.transform.Find("NON-WASTE Row/BRANCH Button").GetComponent<Button>().onClick.Invoke();
+            Assert.AreEqual(SplitterRule.BranchOnly, splitter.GetRule(IssueType.NonWaste));
+            Assert.AreEqual(SplitterRule.Split, splitter.GetRule(IssueType.Organic));
+
+            window.transform.Find("Header/CLOSE Button").GetComponent<Button>().onClick.Invoke();
+            Assert.IsFalse(panel.IsOpen);
+            Assert.IsFalse(window.activeSelf);
+
+            // A splitter that goes away takes its window with it.
+            panel.Show(splitter);
+            splitter.gameObject.SetActive(false);
+            panel.SendMessage("Update");
+            Assert.IsFalse(window.activeSelf);
+        }
+#endif
 
         [Test]
         public void PathSplitter_DoesNothing_WhenThereIsOnlyOneCompleteRoute()

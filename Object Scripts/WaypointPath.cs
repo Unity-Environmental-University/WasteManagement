@@ -19,76 +19,6 @@ namespace _project.Scripts.Object_Scripts
     [ExecuteAlways]
     public class WaypointPath : MonoBehaviour
     {
-        // The board whose occupied cells form the graph that BFS traverses.
-        [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")]
-        [SerializeField]
-        private PathBuildBoard pathBuildBoard;
-
-        // Fixed spawn-side anchor. When set, it becomes the FIRST waypoint in the list.
-        // It's nearest grid cell is the BFS START node.
-        [Tooltip("Optional start point prepended before the first placed piece.")]
-        [SerializeField]
-        private Transform startPoint;
-
-        [SerializeField]
-        private Transform leftOrigin;
-
-        [SerializeField]
-        private Transform rightOrigin;
-
-        // Fixed goal-side anchor. When set, it becomes the LAST waypoint in the list.
-        // It's nearest grid cell is the BFS GOAL node.
-        [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
-        private Transform endPoint;
-
-        [Header("Live Build Preview")]
-        [Tooltip("Draw the route the pathfinder can currently follow while the player builds.")]
-        [SerializeField] private bool showLivePreview = true;
-
-        [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
-        [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
-        [Tooltip("Color used for the fork-to-rejoin branch while a path splitter is installed.")]
-        [SerializeField] private Color alternatePreviewColor = new(1f, 0.52f, 0.08f, 0.95f);
-        [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
-        [SerializeField, Min(0.01f)] private float previewWidth = 0.12f;
-        [SerializeField, Min(0f)] private float previewHeightOffset = 0.2f;
-        [Tooltip("Lift the source-to-start streams above surrounding geometry so the Game camera can see them.")]
-        [SerializeField, Min(0f)] private float originPreviewHeightOffset = 1.5f;
-
-        private PathWaterTube _livePreview;
-        private PathWaterTube _alternateLivePreview;
-        private PathWaterTube _leftOriginPreview;
-        private PathWaterTube _rightOriginPreview;
-        private Vector3 _lastLeftOriginPosition;
-        private Vector3 _lastRightOriginPosition;
-        private Vector3 _lastStartPosition;
-        private bool _hasOriginPreviewPositions;
-        private PathBuildBoard _subscribedBoard;
-
-        // Reused each refresh to hand the current route's world-space points to the tube builder
-        // without allocating a fresh list every frame the preview updates.
-        private readonly List<Vector3> _previewPoints = new();
-
-        // Cells that ARE part of the final path. Cached for gizmo color-coding.
-        private readonly List<Vector2Int> _pathCells = new();
-        private readonly List<Vector2Int> _alternatePathCells = new();
-
-        // The route last shown by the live preview. Unlike _pathCells it stays current while the
-        // player edits the board, so placement can tell which way water flows through a cell.
-        private readonly List<Vector2Int> _livePreviewCells = new();
-        private readonly List<Vector2Int> _alternateLivePreviewCells = new();
-        private bool _livePreviewComplete;
-
-        // Cells visited by BFS but NOT part of the final path. Used only for gizmo
-        // visualization so the player can see which placed pieces were ignored.
-        private readonly List<Vector2Int> _unusedCells = new();
-
-        // The final ordered list of world-space positions enemies traverse.
-        // Built by Rebuild() — do not modify directly.
-        private readonly List<Vector3> _waypoints = new();
-        private readonly List<Vector3> _alternateWaypoints = new();
-        private Vector2Int? _splitCell;
-
         private static readonly Vector2Int[] Directions =
         {
             Vector2Int.right,
@@ -97,11 +27,99 @@ namespace _project.Scripts.Object_Scripts
             Vector2Int.down
         };
 
+        // The board whose occupied cells form the graph that BFS traverses.
+        [Tooltip("Source of placed path pieces. The path is rebuilt from these at wave start.")] [SerializeField]
+        private PathBuildBoard pathBuildBoard;
+
+        // Fixed spawn-side anchor. When set, it becomes the FIRST waypoint in the list.
+        // It's nearest grid cell is the BFS START node.
+        [Tooltip("Optional start point prepended before the first placed piece.")] [SerializeField]
+        private Transform startPoint;
+
+        [SerializeField] private Transform leftOrigin;
+
+        [SerializeField] private Transform rightOrigin;
+
+        // Fixed goal-side anchor. When set, it becomes the LAST waypoint in the list.
+        // It's nearest grid cell is the BFS GOAL node.
+        [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
+        private Transform endPoint;
+
+        [Header("Live Build Preview")]
+        [Tooltip("Draw the route the pathfinder can currently follow while the player builds.")]
+        [SerializeField]
+        private bool showLivePreview = true;
+
+        [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
+        [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
+
+        [Tooltip("Color used for the fork-to-rejoin branch while a path splitter is installed.")] [SerializeField]
+        private Color alternatePreviewColor = new(1f, 0.52f, 0.08f, 0.95f);
+
+        [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
+        [SerializeField]
+        [Min(0.01f)]
+        private float previewWidth = 0.12f;
+
+        [SerializeField] [Min(0f)] private float previewHeightOffset = 0.2f;
+
+        [Tooltip("Lift the source-to-start streams above surrounding geometry so the Game camera can see them.")]
+        [SerializeField]
+        [Min(0f)]
+        private float originPreviewHeightOffset = 1.5f;
+
+        private readonly List<Vector2Int> _alternateLivePreviewCells = new();
+        private readonly List<Vector2Int> _alternatePathCells = new();
+        private readonly List<Vector3> _alternateWaypoints = new();
+        private readonly List<Vector2Int> _currentSplitterCells = new();
+
+        // The route last shown by the live preview. Unlike _pathCells it stays current while the
+        // player edits the board, so placement can tell which way water flows through a cell.
+        private readonly List<Vector2Int> _livePreviewCells = new();
+
+        // Cells that ARE part of the final path. Cached for gizmo color-coding.
+        private readonly List<Vector2Int> _pathCells = new();
+
+        // Reused each refresh to hand the current route's world-space points to the tube builder
+        // without allocating a fresh list every frame the preview updates.
+        private readonly List<Vector3> _previewPoints = new();
+
+        // Board cells holding an enabled splitter, as seen by the last route search.
+        private readonly List<Vector2Int> _splitterCells = new();
+
+        // Cells visited by BFS but NOT part of the final path. Used only for gizmo
+        // visualization so the player can see which placed pieces were ignored.
+        private readonly List<Vector2Int> _unusedCells = new();
+
+        // The final ordered list of world-space positions enemies traverse.
+        // Built by Rebuild() — do not modify directly.
+        private readonly List<Vector3> _waypoints = new();
+        private PathWaterTube _alternateLivePreview;
+        private bool _alternateLivePreviewComplete;
+        private bool _hasOriginPreviewPositions;
+        private Vector3 _lastLeftOriginPosition;
+        private Vector3 _lastRightOriginPosition;
+        private Vector3 _lastStartPosition;
+        private PathWaterTube _leftOriginPreview;
+
+        private PathWaterTube _livePreview;
+        private bool _livePreviewComplete;
+
+        // The fork last shown by the live preview, which follows board edits between rebuilds.
+        private Vector2Int? _livePreviewSplitCell;
+        private PathWaterTube _rightOriginPreview;
+
+        // The fork the cached alternate waypoints leave from. Only Rebuild() changes it, so it
+        // always matches _alternateWaypoints while issues are travelling.
+        private Vector2Int? _splitCell;
+        private PathBuildBoard _subscribedBoard;
+
         /// <summary>
         ///     The total number of waypoints in the current path. Used by IssueObject
         ///     to detect when it has reached the end of the route.
         /// </summary>
         public int Count => _waypoints.Count;
+
         public bool HasAlternateRoute => _alternateWaypoints.Count > 0;
         public IReadOnlyList<Vector2Int> PathCells => _pathCells;
         public IReadOnlyList<Vector2Int> AlternatePathCells => _alternatePathCells;
@@ -109,6 +127,19 @@ namespace _project.Scripts.Object_Scripts
 
         public bool IsValid { get; private set; }
         public string InvalidReason { get; private set; }
+
+        private void Update()
+        {
+            if (Application.isPlaying)
+            {
+                // Handles references assigned after this component is enabled.
+                BindBoardEvents();
+                RefreshLivePreviewIfSplittersMoved();
+            }
+
+            // Also runs in Edit mode so the source streams are visible while authoring the scene.
+            RefreshOriginPreviewsIfMoved();
+        }
 
         private void OnEnable()
         {
@@ -124,57 +155,6 @@ namespace _project.Scripts.Object_Scripts
             }
         }
 
-        private void Update()
-        {
-            if (Application.isPlaying)
-            {
-                // Handles references assigned after this component is enabled.
-                BindBoardEvents();
-                RefreshAlternatePreviewIfAvailabilityChanged();
-            }
-
-            // Also runs in Edit mode so the source streams are visible while authoring the scene.
-            RefreshOriginPreviewsIfMoved();
-        }
-
-        // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
-        // which otherwise only fires on board/splitter events — force one so Inspector tweaks during
-        // Play mode are visible immediately instead of appearing to do nothing.
-        // Deferred because OnValidate may not create GameObjects, add components or reparent.
-        private void OnValidate()
-        {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.delayCall -= RefreshAfterValidate;
-            UnityEditor.EditorApplication.delayCall += RefreshAfterValidate;
-#endif
-        }
-
-        private void RefreshAfterValidate()
-        {
-            if (!this) return;
-
-            if (Application.isPlaying)
-                RefreshLivePreview();
-
-            _hasOriginPreviewPositions = false;
-            RefreshOriginPreviewsIfMoved();
-        }
-
-        /// <summary>
-        ///     Utility prefabs can become enabled before their final board transform has settled.
-        ///     Detect that one-frame placement transition so the alternate route cannot remain
-        ///     stale until another pipe is edited or the wave begins.
-        /// </summary>
-        private void RefreshAlternatePreviewIfAvailabilityChanged()
-        {
-            if (!showLivePreview || !_splitCell.HasValue || !pathBuildBoard) return;
-
-            var shouldShowAlternate = HasActiveSplitterAtSplitCell();
-            var isShowingAlternate = _alternateLivePreview && _alternateLivePreview.IsShowing;
-            if (shouldShowAlternate != isShowingAlternate)
-                RefreshLivePreview();
-        }
-
         private void OnDisable()
         {
             PathSplitter.AvailabilityChanged -= RefreshLivePreview;
@@ -186,23 +166,11 @@ namespace _project.Scripts.Object_Scripts
             if (_rightOriginPreview) _rightOriginPreview.Clear();
             _hasOriginPreviewPositions = false;
             _splitCell = null;
+            _livePreviewSplitCell = null;
+            _splitterCells.Clear();
             _livePreviewCells.Clear();
             _alternateLivePreviewCells.Clear();
             _subscribedBoard = null;
-        }
-
-        private void BindBoardEvents()
-        {
-            if (_subscribedBoard == pathBuildBoard) return;
-
-            if (_subscribedBoard)
-                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
-
-            _subscribedBoard = pathBuildBoard;
-            if (_subscribedBoard)
-                _subscribedBoard.PathLayoutChanged += RefreshLivePreview;
-
-            RefreshLivePreview();
         }
 
         /// <summary>
@@ -236,6 +204,71 @@ namespace _project.Scripts.Object_Scripts
             Gizmos.color = Color.red;
             foreach (var cell in _unusedCells)
                 Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell), Vector3.one * 0.3f);
+        }
+
+        // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
+        // which otherwise only fires on board/splitter events — force one so Inspector tweaks during
+        // Play mode are visible immediately instead of appearing to do nothing.
+        // Deferred because OnValidate may not create GameObjects, add components or reparent.
+        private void OnValidate()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.delayCall -= RefreshAfterValidate;
+            UnityEditor.EditorApplication.delayCall += RefreshAfterValidate;
+#endif
+        }
+
+        private void RefreshAfterValidate()
+        {
+            if (!this) return;
+
+            if (Application.isPlaying)
+                RefreshLivePreview();
+
+            _hasOriginPreviewPositions = false;
+            RefreshOriginPreviewsIfMoved();
+        }
+
+        /// <summary>
+        ///     Utility prefabs can become enabled before their final board transform has settled.
+        ///     Detect a splitter changing cells so the alternate route cannot remain stale until
+        ///     another pipe is edited or the wave begins.
+        /// </summary>
+        private void RefreshLivePreviewIfSplittersMoved()
+        {
+            if (!showLivePreview || !pathBuildBoard) return;
+
+            CollectSplitterCells(_currentSplitterCells);
+            var moved = _currentSplitterCells.Count != _splitterCells.Count;
+            for (var i = 0; i < _splitterCells.Count && !moved; i++)
+                moved = _currentSplitterCells[i] != _splitterCells[i];
+
+            if (moved) RefreshLivePreview();
+        }
+
+        private void CollectSplitterCells(List<Vector2Int> cells)
+        {
+            cells.Clear();
+            if (!pathBuildBoard) return;
+
+            foreach (var splitter in PathSplitter.Live)
+                if (splitter && splitter.isActiveAndEnabled &&
+                    pathBuildBoard.TryWorldToCell(splitter.transform.position, out var cell))
+                    cells.Add(cell);
+        }
+
+        private void BindBoardEvents()
+        {
+            if (_subscribedBoard == pathBuildBoard) return;
+
+            if (_subscribedBoard)
+                _subscribedBoard.PathLayoutChanged -= RefreshLivePreview;
+
+            _subscribedBoard = pathBuildBoard;
+            if (_subscribedBoard)
+                _subscribedBoard.PathLayoutChanged += RefreshLivePreview;
+
+            RefreshLivePreview();
         }
 
         private void RefreshOriginPreviewsIfMoved()
@@ -290,7 +323,9 @@ namespace _project.Scripts.Object_Scripts
             var previewOrigin = GetOriginPreviewPosition(origin.position);
             var target = GetOriginPreviewPosition(startPoint
                 ? startPoint.position
-                : _waypoints.Count > 0 ? _waypoints[0] : origin.position);
+                : _waypoints.Count > 0
+                    ? _waypoints[0]
+                    : origin.position);
             var direction = target - previewOrigin;
             if (direction.sqrMagnitude < 0.0001f) return;
 
@@ -404,7 +439,7 @@ namespace _project.Scripts.Object_Scripts
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
 
             return TryGetFlowSign(_livePreviewCells, _livePreviewComplete, cell, axis, out sign) ||
-                   TryGetFlowSign(_alternateLivePreviewCells, true, cell, axis, out sign);
+                   TryGetFlowSign(_alternateLivePreviewCells, _alternateLivePreviewComplete, cell, axis, out sign);
         }
 
         private bool TryGetFlowSign(List<Vector2Int> route, bool complete, Vector2Int cell, Vector3 axis,
@@ -417,10 +452,14 @@ namespace _project.Scripts.Object_Scripts
             var current = pathBuildBoard.GetPathWaypointPosition(cell);
             var previous = index > 0
                 ? pathBuildBoard.GetPathWaypointPosition(route[index - 1])
-                : startPoint ? startPoint.position : current;
+                : startPoint
+                    ? startPoint.position
+                    : current;
             var next = index < route.Count - 1
                 ? pathBuildBoard.GetPathWaypointPosition(route[index + 1])
-                : complete && endPoint ? endPoint.position : current;
+                : complete && endPoint
+                    ? endPoint.position
+                    : current;
 
             // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
             var along = Vector3.Dot(next - previous, axis);
@@ -515,7 +554,8 @@ namespace _project.Scripts.Object_Scripts
             // Bookend with endPoint
             _waypoints.Add(endPoint.position);
 
-            var alternateCellPath = FindAlternateRoute(cellPath, goals, out _splitCell);
+            CollectSplitterCells(_splitterCells);
+            var alternateCellPath = FindAlternateRoute(cellPath, goals, false, out _splitCell);
             if (alternateCellPath != null)
             {
                 _alternateWaypoints.Add(startPoint.position);
@@ -524,6 +564,7 @@ namespace _project.Scripts.Object_Scripts
                     _alternatePathCells.Add(cell);
                     _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell));
                 }
+
                 _alternateWaypoints.Add(endPoint.position);
             }
 
@@ -536,15 +577,17 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Draws the route available right now in the Game view. A complete route uses
         ///     the normal BFS result. An incomplete route uses the same search and ends at
-        ///     the reachable cell with the smallest grid distance to the goal.
+        ///     the reachable cell with the smallest grid distance to the goal. A splitter on the
+        ///     route also shows the branch leaving its cell, however far that branch has been built.
         /// </summary>
         public void RefreshLivePreview()
         {
-            // Never let placement validation retain a fork from a previous board layout.
-            _splitCell = null;
+            _livePreviewSplitCell = null;
+            CollectSplitterCells(_splitterCells);
             _livePreviewCells.Clear();
             _alternateLivePreviewCells.Clear();
             _livePreviewComplete = false;
+            _alternateLivePreviewComplete = false;
 
             var tube = GetLivePreviewTube();
             if (tube) tube.Clear();
@@ -571,19 +614,19 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var alternatePreviewCells = complete
-                ? FindAlternateRoute(previewCells, goals, out _splitCell)
-                : null;
-            if (!complete)
-                _splitCell = null;
+            var alternatePreviewCells = FindAlternateRoute(previewCells, goals, true, out _livePreviewSplitCell);
 
             _livePreviewCells.AddRange(previewCells);
             if (alternatePreviewCells != null)
+            {
                 _alternateLivePreviewCells.AddRange(alternatePreviewCells);
+                _alternateLivePreviewComplete = goals.Contains(alternatePreviewCells[^1]);
+            }
+
             _livePreviewComplete = complete;
 
             pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
-                complete ? endPoint.position : null, alternatePreviewCells);
+                    complete ? endPoint.position : null, alternatePreviewCells);
 
             if (!showLivePreview || !tube) return;
 
@@ -595,27 +638,21 @@ namespace _project.Scripts.Object_Scripts
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
 
-            if (alternatePreviewCells == null || !HasActiveSplitterAtSplitCell()) return;
+            if (alternatePreviewCells == null || !_splitterCells.Contains(_livePreviewSplitCell.Value)) return;
 
             var alternateTube = GetAlternateLivePreviewTube();
             if (!alternateTube) return;
 
             // SetPath hides the tube itself when the distinct branch has fewer than two points.
             CollectAlternateBranchPoints(previewCells, alternatePreviewCells, _previewPoints);
+
+            // The thinner branch stream would sink below the pipe floor the main stream still
+            // breaks through, so raise it until both water surfaces are level.
+            var surfaceLift = GetPreviewUp() * Mathf.Max(0f, tube.StartRadius - alternateTube.StartRadius);
+            for (var i = 0; i < _previewPoints.Count; i++)
+                _previewPoints[i] += surfaceLift;
+
             alternateTube.SetPath(_previewPoints, GetPreviewUp(), alternatePreviewColor);
-        }
-
-        private bool HasActiveSplitterAtSplitCell()
-        {
-            if (!_splitCell.HasValue || !pathBuildBoard) return false;
-
-            foreach (var splitter in PathSplitter.Live)
-                if (splitter && splitter.isActiveAndEnabled &&
-                    pathBuildBoard.TryWorldToCell(splitter.transform.position, out var cell) &&
-                    cell == _splitCell.Value)
-                    return true;
-
-            return false;
         }
 
         /// <summary>
@@ -645,7 +682,8 @@ namespace _project.Scripts.Object_Scripts
             points.Clear();
             for (var i = 0; i < pointCount; i++)
                 points.Add(
-                    GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i])));
+                    GetPreviewPosition(
+                        pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i])));
         }
 
         private Vector3 GetPreviewUp()
@@ -685,7 +723,8 @@ namespace _project.Scripts.Object_Scripts
             if (cachedTube) return cachedTube;
             if (!showLivePreview || !pathBuildBoard) return null;
 
-            var previewObject = FindOrCreateChild(pathBuildBoard.transform, objectName);
+            var previewObject = FindOrCreateChild(pathBuildBoard.transform,
+                objectName);
             var authoredLine = previewObject.GetComponent<LineRenderer>();
             if (authoredLine) authoredLine.enabled = false;
             var host = authoredLine ? FindOrCreateChild(previewObject, "Water Tube") : previewObject;
@@ -694,7 +733,8 @@ namespace _project.Scripts.Object_Scripts
                 cachedTube = host.gameObject.AddComponent<PathWaterTube>();
 
             if (authoredLine)
-                cachedTube.Configure(authoredLine.sharedMaterial, authoredLine.widthCurve, authoredLine.widthMultiplier);
+                cachedTube.Configure(authoredLine.sharedMaterial, authoredLine.widthCurve,
+                    authoredLine.widthMultiplier);
             else
                 cachedTube.Configure(null, null, width);
             return cachedTube;
@@ -763,6 +803,7 @@ namespace _project.Scripts.Object_Scripts
                 path.Add(node);
                 node = cameFrom[node];
             }
+
             path.Add(node);
             path.Reverse();
             return path;
@@ -780,15 +821,20 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Runs breadth-first search over occupied cells. Returns the cell sequence
         ///     from any start to any goal (inclusive) along the shortest orthogonally-connected
-        ///     route, or null if every goal is unreachable.
+        ///     route, or null if every goal is unreachable. With <paramref name="allowPartial" />
+        ///     an unreachable goal instead yields the route to the farthest cell reached, so an
+        ///     unfinished branch can still be drawn.
         /// </summary>
         private List<Vector2Int> BreadthFirstSearch(
             IReadOnlyList<Vector2Int> starts,
             IReadOnlyCollection<Vector2Int> goals,
-            ISet<Vector2Int> blocked = null
+            ISet<Vector2Int> blocked = null,
+            bool allowPartial = false
         )
         {
-            if (starts == null || starts.Count == 0 || goals == null || goals.Count == 0)
+            if (starts == null || starts.Count == 0 || goals == null)
+                return null;
+            if (goals.Count == 0 && !allowPartial)
                 return null;
 
             var goalSet = goals as HashSet<Vector2Int> ?? new HashSet<Vector2Int>(goals);
@@ -809,11 +855,15 @@ namespace _project.Scripts.Object_Scripts
             }
 
             Vector2Int? foundGoal = null;
+            Vector2Int? farthest = null;
 
             // MAIN BFS LOOP: expand outward layer by layer
             while (frontier.Count > 0)
             {
                 var current = frontier.Dequeue();
+
+                // BFS dequeues in distance order, so the last cell visited is the farthest one.
+                farthest = current;
 
                 // Early exit: we reached any goal — no need to explore further
                 if (goalSet.Contains(current))
@@ -837,6 +887,8 @@ namespace _project.Scripts.Object_Scripts
                 }
             }
 
+            if (!foundGoal.HasValue && allowPartial)
+                foundGoal = farthest;
             if (!foundGoal.HasValue) return null;
 
             // RECONSTRUCT PATH: walk the parent chain from goal back to its start
@@ -856,44 +908,82 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Finds one genuine second branch without enumerating every possible route. At the
-        ///     first fork on the normal shortest path, try each unused exit and keep the first one
-        ///     that can still reach the goal. The shared prefix is retained, and the fork cell is
-        ///     blocked during the second BFS, so the alternate cannot immediately turn around.
+        ///     Finds one genuine second branch without enumerating every possible route. A cell
+        ///     holding a splitter is the preferred fork, so a splitter decides where the route
+        ///     divides; otherwise the first fork on the normal shortest path is used.
+        ///     With <paramref name="allowUnfinishedSplitterBranch" /> a splitter whose branch does
+        ///     not reach the goal yet still returns that branch as far as it has been built.
         /// </summary>
         private List<Vector2Int> FindAlternateRoute(
             IReadOnlyList<Vector2Int> defaultRoute,
             IReadOnlyCollection<Vector2Int> goals,
+            bool allowUnfinishedSplitterBranch,
             out Vector2Int? splitCell)
         {
-            splitCell = null;
+            for (var forkIndex = 0; forkIndex < defaultRoute.Count; forkIndex++)
+            {
+                if (!_splitterCells.Contains(defaultRoute[forkIndex])) continue;
+
+                var alternate = FindBranchFrom(defaultRoute, forkIndex, goals, false);
+                if (alternate == null && allowUnfinishedSplitterBranch)
+                    alternate = FindBranchFrom(defaultRoute, forkIndex, goals, true);
+                if (alternate == null) continue;
+
+                splitCell = defaultRoute[forkIndex];
+                return alternate;
+            }
+
             for (var forkIndex = 0; forkIndex < defaultRoute.Count - 1; forkIndex++)
             {
-                var fork = defaultRoute[forkIndex];
-                var defaultExit = defaultRoute[forkIndex + 1];
-                var previous = forkIndex > 0 ? defaultRoute[forkIndex - 1] : (Vector2Int?)null;
+                var alternate = FindBranchFrom(defaultRoute, forkIndex, goals, false);
+                if (alternate == null) continue;
 
-                foreach (var direction in Directions)
-                {
-                    var alternateExit = fork + direction;
-                    if (alternateExit == defaultExit || previous.HasValue && alternateExit == previous.Value)
-                        continue;
-                    if (!pathBuildBoard.IsOccupied(alternateExit)) continue;
+                splitCell = defaultRoute[forkIndex];
+                return alternate;
+            }
 
-                    var blocked = new HashSet<Vector2Int>();
-                    for (var i = 0; i <= forkIndex; i++)
-                        blocked.Add(defaultRoute[i]);
+            splitCell = null;
+            return null;
+        }
 
-                    var continuation = BreadthFirstSearch(new[] { alternateExit }, goals, blocked);
-                    if (continuation == null) continue;
+        /// <summary>
+        ///     Tries each unused exit of one route cell and keeps the first that leads onward. The
+        ///     shared prefix is retained, and it is blocked during the second BFS, so the alternate
+        ///     cannot immediately turn around.
+        /// </summary>
+        private List<Vector2Int> FindBranchFrom(
+            IReadOnlyList<Vector2Int> defaultRoute,
+            int forkIndex,
+            IReadOnlyCollection<Vector2Int> goals,
+            bool allowPartial)
+        {
+            var fork = defaultRoute[forkIndex];
+            var defaultExit = forkIndex < defaultRoute.Count - 1 ? defaultRoute[forkIndex + 1] : (Vector2Int?)null;
+            var previous = forkIndex > 0 ? defaultRoute[forkIndex - 1] : (Vector2Int?)null;
 
-                    var alternate = new List<Vector2Int>(forkIndex + 1 + continuation.Count);
-                    for (var i = 0; i <= forkIndex; i++)
-                        alternate.Add(defaultRoute[i]);
-                    alternate.AddRange(continuation);
-                    splitCell = fork;
-                    return alternate;
-                }
+            // Only an unfinished route can still be growing out of its last cell.
+            if (!defaultExit.HasValue && !allowPartial) return null;
+
+            foreach (var direction in Directions)
+            {
+                var alternateExit = fork + direction;
+                if ((defaultExit.HasValue && alternateExit == defaultExit.Value) ||
+                    (previous.HasValue && alternateExit == previous.Value))
+                    continue;
+                if (!pathBuildBoard.IsOccupied(alternateExit)) continue;
+
+                var blocked = new HashSet<Vector2Int>();
+                for (var i = 0; i <= forkIndex; i++)
+                    blocked.Add(defaultRoute[i]);
+
+                var continuation = BreadthFirstSearch(new[] { alternateExit }, goals, blocked, allowPartial);
+                if (continuation == null) continue;
+
+                var alternate = new List<Vector2Int>(forkIndex + 1 + continuation.Count);
+                for (var i = 0; i <= forkIndex; i++)
+                    alternate.Add(defaultRoute[i]);
+                alternate.AddRange(continuation);
+                return alternate;
             }
 
             return null;
