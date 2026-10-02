@@ -10,6 +10,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private WaypointPath path;
         private Coroutine _spawnCoroutine;
         
+        [SerializeField] private bool nonWasteOnly;
         public float spawnInterval;
         public GameObject SpawnPrefab => spawnerObject;
         public WaypointPath Path => path;
@@ -88,6 +89,12 @@ namespace _project.Scripts.Object_Scripts
             var obj = Instantiate(spawnableObject, spawnPoint.position, spawnPoint.rotation);
             if (!obj.TryGetComponent<IssueObject>(out var issue)) return;
             issue.AssignType();
+            if (nonWasteOnly)
+            {
+                issue.SetType(IssueType.NonWaste);
+                issue.SetSize(1);
+                issue.SetVisualOverride(new Color(.25f, 1f, .4f));
+            }
             issue.SetPath(path);
         }
     }

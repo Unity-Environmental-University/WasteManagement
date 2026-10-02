@@ -38,6 +38,17 @@ namespace _project.Scripts.Object_Scripts
         ///     subscribe to this instead of rebuilding every frame.
         /// </summary>
         public event Action PathLayoutChanged;
+        [SerializeField] private Material conveyorMaterial;
+        public Material ConveyorMaterial => conveyorMaterial ? conveyorMaterial : pipeMaterial;
+        private readonly Dictionary<Vector2Int, int> _beltPieceIds = new();
+        private GameObject _beltPreviewVisual;
+        private Vector2Int? _beltPreviewAnchor;
+        private int _beltPreviewLength;
+        private PathPieceOrientation _beltPreviewOrientation;
+        public PathKind ActivePathKind { get; private set; }
+
+        private static PathKind KindOf(IPathPiecePlaceable piece) =>
+            piece is ITypedPathPiece typed ? typed.PathKind : PathKind.Pipe;
 
         [Header("Grid")] [SerializeField] private int columns = 10;
 
@@ -223,6 +234,7 @@ namespace _project.Scripts.Object_Scripts
                 piece.ToggleOrientation();
 
             ActivePiece = piece;
+            if (piece != null) ActivePathKind = KindOf(piece);
             ActiveTool = piece == null ? PathBuildTool.None : PathBuildTool.Place;
             _lastPreviewedPiece = ActivePiece;
             RefreshVisuals();
@@ -230,8 +242,9 @@ namespace _project.Scripts.Object_Scripts
 
         public void ClearActivePiece() => SetActivePiece(null);
 
-        public void SetActiveBreakTool()
+        public void SetActiveBreakTool(PathKind pathKind = PathKind.Pipe)
         {
+            ActivePathKind = pathKind;
             ActivePiece = null;
             ActiveTool = PathBuildTool.Break;
             _lastPreviewedPiece = null;
@@ -309,6 +322,7 @@ namespace _project.Scripts.Object_Scripts
             ClearGeneratedCells();
             _hoveredCell = null;
             _placedPieces.Clear();
+            _beltPieceIds.Clear();
             _placedVisuals.Clear();
             _priorityVisualConnections.Clear();
             _nextPieceId = 1;
@@ -336,6 +350,8 @@ namespace _project.Scripts.Object_Scripts
 
                 var pieceId = _pieceIds[column, row];
                 var cellColor = emptyColor;
+                if (_beltPieceIds.TryGetValue(new Vector2Int(column, row), out var beltId))
+                    cellColor = beltId == breakPreviewPieceId ? breakPreviewColor : new Color(.15f,.4f,.22f);
                 if (pieceId > 0)
                     cellColor = pieceId == breakPreviewPieceId ? breakPreviewColor : occupiedColor;
                 cell.SetColor(cellColor);
@@ -364,8 +380,34 @@ namespace _project.Scripts.Object_Scripts
 
             var footprint = GetFootprint(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), selectedPiece.Length,
                 selectedPiece.Orientation);
-            var previewColor = CanPlaceFootprint(footprint) ? validPreviewColor : invalidPreviewColor;
-            UpdatePipeVisual(GetPreviewVisual(), footprint, selectedPiece.Orientation, previewColor);
+            var kind = KindOf(selectedPiece);
+            var previewColor = CanPlaceFootprint(footprint, kind) ? validPreviewColor : invalidPreviewColor;
+            if (kind == PathKind.RecyclingBelt)
+            {
+                if (_previewVisual) _previewVisual.SetActive(false);
+                var anchor = new Vector2Int(_hoveredCell.Column, _hoveredCell.Row);
+                if (!_beltPreviewVisual || _beltPreviewAnchor != anchor || _beltPreviewLength != selectedPiece.Length ||
+                    _beltPreviewOrientation != selectedPiece.Orientation)
+                {
+                    if (_beltPreviewVisual)
+                    {
+                        ReleaseVisualTiles(_beltPreviewVisual);
+                        DestroyVisual(_beltPreviewVisual);
+                    }
+                    _beltPreviewVisual = CreatePipeVisual("Conveyor Preview");
+                    ConveyorVisual.Build(_beltPreviewVisual.transform, this, footprint, selectedPiece.Orientation);
+                    _beltPreviewAnchor = anchor;
+                    _beltPreviewLength = selectedPiece.Length;
+                    _beltPreviewOrientation = selectedPiece.Orientation;
+                }
+                _beltPreviewVisual.SetActive(true);
+                SetVisualColor(_beltPreviewVisual, previewColor);
+            }
+            else
+            {
+                if (_beltPreviewVisual) _beltPreviewVisual.SetActive(false);
+                UpdatePipeVisual(GetPreviewVisual(), footprint, selectedPiece.Orientation, previewColor);
+            }
         }
 
         /// <summary>
@@ -405,12 +447,14 @@ namespace _project.Scripts.Object_Scripts
 
             var footprint = GetFootprint(new Vector2Int(anchorCell.Column, anchorCell.Row), piece.Length,
                 piece.Orientation);
-            if (!CanPlaceFootprint(footprint))
+            var kind = KindOf(piece);
+            if (!CanPlaceFootprint(footprint, kind))
                 return null;
 
             var placedPiece = new PlacedPathPiece
             {
                 id = _nextPieceId++,
+                pathKind = kind,
                 length = piece.Length,
                 orientation = piece.Orientation,
                 infraValue = piece.InfraValue
@@ -418,15 +462,24 @@ namespace _project.Scripts.Object_Scripts
 
             foreach (var cell in footprint)
             {
-                _pieceIds[cell.x, cell.y] = placedPiece.id;
+                if (kind == PathKind.RecyclingBelt) _beltPieceIds[cell] = placedPiece.id;
+                else _pieceIds[cell.x, cell.y] = placedPiece.id;
                 placedPiece.cells.Add(cell);
             }
 
             _placedPieces.Add(placedPiece);
-            var placedVisual = CreatePipeVisual($"Placed Pipe {placedPiece.id}");
+            var placedVisual = CreatePipeVisual($"Placed {kind} {placedPiece.id}");
             _placedVisuals[placedPiece.id] = placedVisual;
-            UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, placedPipeColor);
-            RefreshNeighborPipeGeometry(placedPiece.cells);
+            if (kind == PathKind.RecyclingBelt)
+            {
+                ConveyorVisual.Build(placedVisual.transform, this, placedPiece.cells, placedPiece.orientation);
+                placedVisual.SetActive(true);
+            }
+            else
+            {
+                UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, placedPipeColor);
+                RefreshNeighborPipeGeometry(placedPiece.cells);
+            }
             HidePreviewVisual();
             RefreshVisuals();
             NotifyPathLayoutChanged();
@@ -439,13 +492,18 @@ namespace _project.Scripts.Object_Scripts
         /// <param name="cell">Any cell occupied by the piece to remove.</param>
         /// <param name="infraValue">The infrastructure value that should be removed from the turn total.</param>
         /// <returns>True if a placed piece was removed, otherwise false.</returns>
-        public bool TryBreak(PathBuildCell cell, out int infraValue)
+        public bool TryBreak(PathBuildCell cell, out int infraValue) => TryBreak(cell, ActivePathKind, out infraValue);
+
+        public bool TryBreak(PathBuildCell cell, PathKind kind, out int infraValue)
         {
             infraValue = 0;
             if (cell == null || _pieceIds == null || !IsInBounds(cell.Column, cell.Row))
                 return false;
 
-            var pieceId = _pieceIds[cell.Column, cell.Row];
+            var coordinate = new Vector2Int(cell.Column, cell.Row);
+            var pieceId = kind == PathKind.RecyclingBelt
+                ? (_beltPieceIds.TryGetValue(coordinate, out var beltId) ? beltId : 0)
+                : _pieceIds[cell.Column, cell.Row];
             if (pieceId <= 0) return false;
 
             var pieceIndex = _placedPieces.FindIndex(piece => piece.id == pieceId);
@@ -456,7 +514,8 @@ namespace _project.Scripts.Object_Scripts
             infraValue = piece.infraValue;
 
             foreach (var occupied in piece.cells)
-                if (IsInBounds(occupied.x, occupied.y) && _pieceIds[occupied.x, occupied.y] == piece.id)
+                if (kind == PathKind.RecyclingBelt) _beltPieceIds.Remove(occupied);
+                else if (IsInBounds(occupied.x, occupied.y) && _pieceIds[occupied.x, occupied.y] == piece.id)
                     _pieceIds[occupied.x, occupied.y] = 0;
 
             if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
@@ -520,10 +579,10 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Convenience overload — checks if a cell is occupied using a Vector2Int.
         /// </summary>
-        public bool IsOccupied(Vector2Int cell)
-        {
-            return IsOccupied(cell.x, cell.y);
-        }
+        public bool IsOccupied(Vector2Int cell) => IsOccupied(cell, PathKind.Pipe);
+
+        public bool IsOccupied(Vector2Int cell, PathKind kind) =>
+            kind == PathKind.RecyclingBelt ? _beltPieceIds.ContainsKey(cell) : IsOccupied(cell.x, cell.y);
 
         /// <summary>
         ///     Returns true if the given cell is within the grid bounds (public accessor
@@ -635,6 +694,9 @@ namespace _project.Scripts.Object_Scripts
             _pieceIds = null;
             _visualRoot = null;
             _previewVisual = null;
+            _beltPreviewVisual = null;
+            _beltPreviewAnchor = null;
+            _beltPieceIds.Clear();
             _poolRoot = null;
             _visualTiles.Clear();
             _tileModels.Clear();
@@ -674,9 +736,16 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Hides the preview visual by deactivating it.
         /// </summary>
+        private static void DestroyVisual(GameObject visual)
+        {
+            visual.SetActive(false);
+            if (Application.isPlaying) Destroy(visual); else DestroyImmediate(visual);
+        }
+
         private void HidePreviewVisual()
         {
             if (_previewVisual) _previewVisual.SetActive(false);
+            if (_beltPreviewVisual) _beltPreviewVisual.SetActive(false);
         }
 
         /// <summary>
@@ -1400,10 +1469,10 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         /// <param name="footprint">The list of grid cells to check.</param>
         /// <returns>True if all cells are available for placement, otherwise false.</returns>
-        private bool CanPlaceFootprint(List<Vector2Int> footprint)
+        private bool CanPlaceFootprint(List<Vector2Int> footprint, PathKind kind = PathKind.Pipe)
         {
             foreach (var cell in footprint)
-                if (!IsInBounds(cell.x, cell.y) || _pieceIds[cell.x, cell.y] > 0)
+                if (!IsInBounds(cell.x, cell.y) || IsOccupied(cell, kind))
                     return false;
 
             return true;
@@ -1415,6 +1484,8 @@ namespace _project.Scripts.Object_Scripts
                 !IsInBounds(_hoveredCell.Column, _hoveredCell.Row))
                 return 0;
 
+            if (ActivePathKind == PathKind.RecyclingBelt)
+                return _beltPieceIds.TryGetValue(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), out var id) ? id : 0;
             return _pieceIds[_hoveredCell.Column, _hoveredCell.Row];
         }
 
@@ -1422,7 +1493,9 @@ namespace _project.Scripts.Object_Scripts
         {
             if (breakPreviewPieceId == _highlightedPieceId) return;
 
-            SetPlacedVisualColor(_highlightedPieceId, placedPipeColor);
+            var oldPiece = _placedPieces.Find(p => p.id == _highlightedPieceId);
+            SetPlacedVisualColor(_highlightedPieceId, oldPiece?.pathKind == PathKind.RecyclingBelt
+                ? ConveyorVisual.BeltColor : placedPipeColor);
             SetPlacedVisualColor(breakPreviewPieceId, breakPreviewColor);
             _highlightedPieceId = breakPreviewPieceId;
         }
@@ -1488,8 +1561,10 @@ namespace _project.Scripts.Object_Scripts
         ///     Returns a world-space waypoint position for the given cell — centered on the pipe's
         ///     top surface so entities travel along the pipe rather than inside the grid.
         /// </summary>
-        public Vector3 GetPathWaypointPosition(Vector2Int position)
+        public Vector3 GetPathWaypointPosition(Vector2Int position, PathKind kind = PathKind.Pipe)
         {
+            if (kind == PathKind.RecyclingBelt)
+                return GetCellTopPosition(position) + transform.up * CellWorldPitch.x * .24f;
             var basePos = GetCellWorldPosition(position);
             // The kit's pipes are open-topped channels, so issues sit part-way up the walls
             // rather than on top of them.
@@ -1617,6 +1692,7 @@ namespace _project.Scripts.Object_Scripts
         {
             /// <summary>Unique identifier for this placed piece.</summary>
             public int id;
+            public PathKind pathKind;
 
             /// <summary>The number of cells this piece spans.</summary>
             public int length;

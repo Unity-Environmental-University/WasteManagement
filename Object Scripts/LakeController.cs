@@ -40,6 +40,10 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnIssueReachedEnd(IssueObject issue)
         {
+            // Completed recycling deliveries do not enter the lake; bursts still spill.
+            if (issue.GetPath() && issue.GetPath().RecyclingDestination &&
+                !issue.IsDirectDestination && !issue.IsBlockingPipe) return;
+
             var damage = issue.ProcessCost * 5;
             health -= damage;
             UpdateLakeColor();
@@ -48,7 +52,7 @@ namespace _project.Scripts.Object_Scripts
             if (popManager) popManager.RecordLakePollution(issue.ProcessCost);
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
             
-            if (health <= 0) GameMaster.Instance.turnController.GameLost();
+            if (health <= 0) GameMaster.Instance?.turnController.GameLost();
         }
         
         private void Awake()

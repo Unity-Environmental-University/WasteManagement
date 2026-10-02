@@ -22,6 +22,8 @@ namespace _project.Scripts.UI
         [SerializeField] private Button longPipeButton;
         [SerializeField] private Button breakPipeButton;
         [SerializeField] private Button clearToolButton;
+        [SerializeField] private Button conveyorButton;
+        [SerializeField] private Button breakConveyorButton;
         [SerializeField] private Button panButton;
         [SerializeField] private Button recenterButton;
 
@@ -96,6 +98,8 @@ namespace _project.Scripts.UI
             RegisterAssignedStyle(longPipeButton, flowColor);
             RegisterAssignedStyle(breakPipeButton, cautionColor);
             RegisterAssignedStyle(clearToolButton, neutralColor);
+            RegisterAssignedStyle(conveyorButton, new Color(.22f,.85f,.38f));
+            RegisterAssignedStyle(breakConveyorButton, cautionColor);
             RegisterAssignedStyle(panButton, neutralColor);
             RegisterAssignedStyle(recenterButton, neutralColor);
             RegisterAssignedStyle(rotateButton, flowColor);
@@ -111,6 +115,8 @@ namespace _project.Scripts.UI
         {
             if (_isBound) return;
 
+            if (conveyorButton) conveyorButton.onClick.AddListener(SelectConveyor);
+            if (breakConveyorButton) breakConveyorButton.onClick.AddListener(SelectBreakConveyor);
             if (shortPipeButton) shortPipeButton.onClick.AddListener(SelectShortPipe);
             if (longPipeButton) longPipeButton.onClick.AddListener(SelectLongPipe);
             if (breakPipeButton) breakPipeButton.onClick.AddListener(SelectBreakPipe);
@@ -125,6 +131,8 @@ namespace _project.Scripts.UI
         {
             if (!_isBound) return;
 
+            if (conveyorButton) conveyorButton.onClick.RemoveListener(SelectConveyor);
+            if (breakConveyorButton) breakConveyorButton.onClick.RemoveListener(SelectBreakConveyor);
             if (shortPipeButton) shortPipeButton.onClick.RemoveListener(SelectShortPipe);
             if (longPipeButton) longPipeButton.onClick.RemoveListener(SelectLongPipe);
             if (breakPipeButton) breakPipeButton.onClick.RemoveListener(SelectBreakPipe);
@@ -133,6 +141,18 @@ namespace _project.Scripts.UI
             if (recenterButton) recenterButton.onClick.RemoveListener(RecenterView);
             if (rotateButton) rotateButton.onClick.RemoveListener(RotatePiece);
             _isBound = false;
+        }
+
+        private void SelectConveyor()
+        {
+            ShopManager.Instance?.SelectConveyorTool();
+            RefreshState();
+        }
+
+        private void SelectBreakConveyor()
+        {
+            ShopManager.Instance?.SelectBreakConveyorTool();
+            RefreshState();
         }
 
         private void SelectShortPipe()
@@ -190,14 +210,22 @@ namespace _project.Scripts.UI
             var activeTool = board ? board.ActiveTool : PathBuildTool.None;
             var activePiece = board ? board.ActivePiece : null;
 
+            var kind = board ? board.ActivePathKind : PathKind.Pipe;
+            ApplyButtonIfChanged(conveyorButton,
+                activeTool == PathBuildTool.Place && kind == PathKind.RecyclingBelt,
+                shop && shop.CanSelectConveyorTool);
+            ApplyButtonIfChanged(breakConveyorButton,
+                activeTool == PathBuildTool.Break && kind == PathKind.RecyclingBelt,
+                shop && shop.CanSelectConveyorTool);
+
             ApplyButtonIfChanged(shortPipeButton,
-                activeTool == PathBuildTool.Place && activePiece is { Length: 2 },
+                activeTool == PathBuildTool.Place && kind == PathKind.Pipe && activePiece is { Length: 2 },
                 shop && shop.CanSelectShortPipeTool);
             ApplyButtonIfChanged(longPipeButton,
-                activeTool == PathBuildTool.Place && activePiece is { Length: 3 },
+                activeTool == PathBuildTool.Place && kind == PathKind.Pipe && activePiece is { Length: 3 },
                 shop && shop.CanSelectLongPipeTool);
             ApplyButtonIfChanged(breakPipeButton,
-                activeTool == PathBuildTool.Break,
+                activeTool == PathBuildTool.Break && kind == PathKind.Pipe,
                 shop && shop.CanSelectBreakPipeTool);
             ApplyButtonIfChanged(clearToolButton,
                 activeTool == PathBuildTool.None,
