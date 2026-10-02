@@ -231,6 +231,16 @@ namespace _project.Scripts.Core
             GameMaster.Instance?.pathBuildBoard?.ClearActivePiece();
         }
 
+        public void SelectPanTool()
+        {
+            var gm = GameMaster.Instance;
+            if (!gm) return;
+
+            // Drop any queued placement so a pan-drag can't land it on a slot.
+            gm.placementInventory?.ClearSelection();
+            gm.pathBuildBoard?.SetActivePanTool();
+        }
+
         public static bool HasAccess(IShopItem item)
         {
             return item != null && CurrentLevel >= item.RequiredLevel;

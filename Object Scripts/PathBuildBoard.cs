@@ -22,7 +22,8 @@ namespace _project.Scripts.Object_Scripts
     {
         None,
         Place,
-        Break
+        Break,
+        Pan
     }
 
     /// <summary>
@@ -197,10 +198,22 @@ namespace _project.Scripts.Object_Scripts
                 RefreshVisuals();
             }
 
-            if (Keyboard.current == null || selectedPiece == null || ActiveTool != PathBuildTool.Place) return;
+            if (Keyboard.current != null && Keyboard.current[Key.R].wasPressedThisFrame)
+                RotateActivePiece();
+        }
 
-            if (!Keyboard.current[Key.R].wasPressedThisFrame) return;
-            selectedPiece.ToggleOrientation();
+        /// <summary>True while a piece is armed for placement, so rotating it has an effect.</summary>
+        public bool CanRotateActivePiece => ActivePiece != null && ActiveTool == PathBuildTool.Place;
+
+        /// <summary>
+        ///     Flips the armed piece between horizontal and vertical. Shared by the R key and the
+        ///     toolbar's ROTATE switch; does nothing unless a piece is armed.
+        /// </summary>
+        public void RotateActivePiece()
+        {
+            if (!CanRotateActivePiece) return;
+
+            ActivePiece.ToggleOrientation();
             RefreshVisuals();
         }
 
@@ -221,6 +234,18 @@ namespace _project.Scripts.Object_Scripts
         {
             ActivePiece = null;
             ActiveTool = PathBuildTool.Break;
+            _lastPreviewedPiece = null;
+            RefreshVisuals();
+        }
+
+        /// <summary>
+        ///     Arms the view-pan tool. Nothing is placed or broken while it is active; world
+        ///     drags are left to the CameraController.
+        /// </summary>
+        public void SetActivePanTool()
+        {
+            ActivePiece = null;
+            ActiveTool = PathBuildTool.Pan;
             _lastPreviewedPiece = null;
             RefreshVisuals();
         }

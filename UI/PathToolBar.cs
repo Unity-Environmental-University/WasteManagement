@@ -10,7 +10,9 @@ namespace _project.Scripts.UI
     /// <summary>
     /// Pipe-routing tool palette, styled as an industrial "PIPELINE" control panel.
     /// Each tool is a backlit switch: dark steel at rest, lit when armed
-    /// (cyan = lay pipe, amber = remove, pale = cursor). Exactly one switch is lit.
+    /// (cyan = lay pipe, amber = remove, pale = cursor or pan). Exactly one switch is lit.
+    /// ROTATE and RECENTER are momentary buttons rather than tools: each wakes only while it
+    /// has something to act on (a pipe is armed / the view is off center).
     /// The panel itself lives in the PathToolBar prefab; this component binds the
     /// switches to the build tools and drives their lit/idle state.
     /// </summary>
@@ -20,14 +22,16 @@ namespace _project.Scripts.UI
         [SerializeField] private Button longPipeButton;
         [SerializeField] private Button breakPipeButton;
         [SerializeField] private Button clearToolButton;
+        [SerializeField] private Button panButton;
+        [SerializeField] private Button recenterButton;
 
-        [Tooltip("Hint label telling the player R rotates the armed pipe. Dimmed when no pipe is armed.")]
-        [SerializeField] private TMP_Text rotateHintLabel;
+        [Tooltip("Rotates the armed pipe, same as the R key. Dimmed when no pipe is armed.")]
+        [SerializeField] private Button rotateButton;
 
         [Header("Palette")]
         [SerializeField] private Color flowColor = new(0.169f, 0.769f, 0.839f, 1f);    // armed: lay pipe
         [SerializeField] private Color cautionColor = new(0.914f, 0.635f, 0.235f, 1f); // armed/idle: remove
-        [SerializeField] private Color neutralColor = new(0.792f, 0.831f, 0.847f, 1f); // armed: cursor
+        [SerializeField] private Color neutralColor = new(0.792f, 0.831f, 0.847f, 1f); // armed: cursor, pan
         [SerializeField] private Color inkColor = new(0.055f, 0.078f, 0.094f, 1f);     // text on a lit switch
         [SerializeField] private Color textColor = new(0.914f, 0.945f, 0.953f, 1f);    // text on an idle switch
 
@@ -47,8 +51,6 @@ namespace _project.Scripts.UI
 
         private readonly Dictionary<Button, ButtonStyle> _styles = new();
         private readonly Dictionary<Button, (bool Selected, bool Interactable)> _appliedStates = new();
-        private bool _hintApplied;
-        private bool _hintLit;
         private bool _isBound;
         private bool _warnedMissingButtons;
 
@@ -94,6 +96,9 @@ namespace _project.Scripts.UI
             RegisterAssignedStyle(longPipeButton, flowColor);
             RegisterAssignedStyle(breakPipeButton, cautionColor);
             RegisterAssignedStyle(clearToolButton, neutralColor);
+            RegisterAssignedStyle(panButton, neutralColor);
+            RegisterAssignedStyle(recenterButton, neutralColor);
+            RegisterAssignedStyle(rotateButton, flowColor);
         }
 
         public void SetVisible(bool visible)
@@ -110,6 +115,9 @@ namespace _project.Scripts.UI
             if (longPipeButton) longPipeButton.onClick.AddListener(SelectLongPipe);
             if (breakPipeButton) breakPipeButton.onClick.AddListener(SelectBreakPipe);
             if (clearToolButton) clearToolButton.onClick.AddListener(ClearTool);
+            if (panButton) panButton.onClick.AddListener(SelectPan);
+            if (recenterButton) recenterButton.onClick.AddListener(RecenterView);
+            if (rotateButton) rotateButton.onClick.AddListener(RotatePiece);
             _isBound = true;
         }
 
@@ -121,6 +129,9 @@ namespace _project.Scripts.UI
             if (longPipeButton) longPipeButton.onClick.RemoveListener(SelectLongPipe);
             if (breakPipeButton) breakPipeButton.onClick.RemoveListener(SelectBreakPipe);
             if (clearToolButton) clearToolButton.onClick.RemoveListener(ClearTool);
+            if (panButton) panButton.onClick.RemoveListener(SelectPan);
+            if (recenterButton) recenterButton.onClick.RemoveListener(RecenterView);
+            if (rotateButton) rotateButton.onClick.RemoveListener(RotatePiece);
             _isBound = false;
         }
 
@@ -148,10 +159,34 @@ namespace _project.Scripts.UI
             RefreshState();
         }
 
+        private void SelectPan()
+        {
+            ShopManager.Instance?.SelectPanTool();
+            RefreshState();
+        }
+
+        private void RotatePiece()
+        {
+            var gm = GameMaster.Instance;
+            if (gm && gm.pathBuildBoard) gm.pathBuildBoard.RotateActivePiece();
+        }
+
+        private void RecenterView()
+        {
+            var gm = GameMaster.Instance;
+            if (gm && gm.cameraController) gm.cameraController.Recenter();
+
+            // Recentering locks the view again, so the pan tool hands back to the cursor.
+            var board = gm ? gm.pathBuildBoard : null;
+            if (board && board.ActiveTool == PathBuildTool.Pan) ShopManager.Instance?.ClearPathTool();
+            RefreshState();
+        }
+
         private void RefreshState()
         {
             var shop = ShopManager.Instance;
-            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            var gm = GameMaster.Instance;
+            var board = gm ? gm.pathBuildBoard : null;
             var activeTool = board ? board.ActiveTool : PathBuildTool.None;
             var activePiece = board ? board.ActivePiece : null;
 
@@ -167,17 +202,15 @@ namespace _project.Scripts.UI
             ApplyButtonIfChanged(clearToolButton,
                 activeTool == PathBuildTool.None,
                 true);
-
-            // R only rotates while a pipe piece is armed, so dim the hint otherwise.
-            if (!rotateHintLabel) return;
-            var hintLit = activeTool == PathBuildTool.Place && activePiece != null;
-            if (_hintApplied && hintLit == _hintLit) return;
-            _hintApplied = true;
-            _hintLit = hintLit;
-
-            var hintColor = rotateHintLabel.color;
-            hintColor.a = hintLit ? 1f : 0.35f;
-            rotateHintLabel.color = hintColor;
+            ApplyButtonIfChanged(panButton,
+                activeTool == PathBuildTool.Pan,
+                true);
+            ApplyButtonIfChanged(recenterButton,
+                false,
+                gm && gm.cameraController && gm.cameraController.IsPanned);
+            ApplyButtonIfChanged(rotateButton,
+                false,
+                board && board.CanRotateActivePiece);
         }
 
         /// <summary>

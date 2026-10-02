@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Looping background music (`MusicPlayer`): a quiet, fade-in music bed that persists across scene loads so the track runs unbroken from the menu into gameplay
 - Prefab-driven `MusicToggleButton` HUD switch that mutes the music without stopping it, remembering the choice across sessions
+- Planning-view panning: a `PAN VIEW` tool on the `PathToolBar` drags the card-phase camera across the board within a board-scaled limit, and `RECENTER` glides it home and hands the pointer back to the cursor
+- `ROTATE` switch on the `PathToolBar`, replacing the rotate hint label: turns the armed pipe like the R key, so touch players can rotate too
 
 ## [0.1.2] - 2026-08-06
 
