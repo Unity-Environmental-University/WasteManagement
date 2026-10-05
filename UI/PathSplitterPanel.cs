@@ -49,6 +49,9 @@ namespace _project.Scripts.UI
         [SerializeField] private Color inkColor = new(0.055f, 0.078f, 0.094f, 1f);     // text on a lit switch
         [SerializeField] private Color textColor = new(0.914f, 0.945f, 0.953f, 1f);    // text on an idle switch
 
+        [Tooltip("Tint on the splitter the open window is tuning, so it stands out from the others.")]
+        [SerializeField] private Color targetTint = new(0.85f, 0.60f, 0.22f, 1f);
+
         public static PathSplitterPanel Instance { get; private set; }
 
         /// <summary>The splitter being tuned, or null while the window is closed.</summary>
@@ -85,6 +88,16 @@ namespace _project.Scripts.UI
             // The splitter was destroyed or disabled while its window was open.
             if (window && window.activeSelf && (!Target || !Target.isActiveAndEnabled))
                 Hide();
+
+            var gm = GameMaster.Instance;
+            if (IsOpen && gm)
+            {
+                // Tuning is a setup-phase job; close the window when the tower phase begins.
+                var setupOver = gm.turnController && gm.turnController.currentPhase != GamePhase.Card;
+                // The Remove tool's hover tint would fight the target tint; it can't tune anyway.
+                var removing = gm.pathBuildBoard && gm.pathBuildBoard.ActiveTool == PathBuildTool.Break;
+                if (setupOver || removing) Hide();
+            }
 
             if (IsOpen && Keyboard.current != null && Keyboard.current[Key.Escape].wasPressedThisFrame)
                 Hide();
@@ -125,27 +138,33 @@ namespace _project.Scripts.UI
         {
             if (!splitter) return;
 
+            if (Target && Target != splitter) Target.SetHighlight(null);
             Target = splitter;
+            Target.SetHighlight(targetTint);
             if (window) window.SetActive(true);
             Refresh();
         }
 
         public void Hide()
         {
+            if (Target) Target.SetHighlight(null);
             Target = null;
             if (window) window.SetActive(false);
         }
 
         /// <summary>
-        ///     A press only selects a splitter while the pointer is free: not while it is laying or
-        ///     breaking pipe, dragging the view, or carrying a purchase to place.
+        ///     Splitters are tuned during setup (the Card phase), never during the tower phase. A press
+        ///     only selects one while the pointer isn't removing pipe or utilities or dragging the view.
+        ///     An armed palette tool doesn't block it: palette tools stay armed after every placement,
+        ///     and a splitter's slot is occupied, so the press can't place anything there anyway.
         /// </summary>
         private static bool CanPickSplitters()
         {
             var gm = GameMaster.Instance;
             if (!gm) return true;
-            if (gm.PendingPlacement != null) return false;
-            if (gm.pathBuildBoard && gm.pathBuildBoard.ActiveTool != PathBuildTool.None) return false;
+            if (!gm.turnController || gm.turnController.currentPhase != GamePhase.Card) return false;
+            var tool = gm.pathBuildBoard ? gm.pathBuildBoard.ActiveTool : PathBuildTool.None;
+            if (tool == PathBuildTool.Break || tool == PathBuildTool.Pan) return false;
             return !gm.cameraController || !gm.cameraController.IsPanArmed;
         }
 
