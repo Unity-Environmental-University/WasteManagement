@@ -103,20 +103,8 @@ namespace _project.Scripts.Object_Scripts
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedStatusBar);
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
-                placed.TryGetComponent<WasteSifter>(out var sifter))
-                sifter.SetSlot(this, pending.InfraValue);
-
-            if (pending.PlaceableType == PlaceableType.Utility && placed &&
-                placed.TryGetComponent<Cesspit>(out var cesspit))
-                cesspit.SetSlot(this, pending.InfraValue);
-
-            if (pending.PlaceableType == PlaceableType.Utility && placed &&
-                placed.TryGetComponent<TreatmentTank>(out var tank))
-                tank.SetSlot(this, pending.InfraValue);
-
-            if (pending.PlaceableType == PlaceableType.Utility && placed &&
-                placed.TryGetComponent<LimeSprinkler>(out var limeSprinkler))
-                limeSprinkler.SetSlot(this, pending.InfraValue);
+                placed.TryGetComponent<IRemovableUtility>(out var utility))
+                utility.SetSlot(this, pending.InfraValue);
 
             IsOccupied = true;
             _isHovered = false;

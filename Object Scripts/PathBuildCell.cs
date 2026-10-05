@@ -49,6 +49,10 @@ namespace _project.Scripts.Object_Scripts
 
             if (_board && _board.ActiveTool == PathBuildTool.Break)
             {
+                // Splitters ignore raycasts so pipes can be laid through them; the cell click reaches them here.
+                var splitter = UtilityRemoval.FindSplitterAt(_board, new Vector2Int(Column, Row));
+                if (splitter && UtilityRemoval.TryRemove(splitter)) return;
+
                 if (!_board.TryBreak(this, out var removedInfraValue)) return;
 
                 turnController.RegisterMove();

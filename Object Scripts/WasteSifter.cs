@@ -7,7 +7,8 @@ using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
+    public class WasteSifter : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler,
+        IRemovableUtility
     {
         private static readonly int OpeningAnimation = Animator.StringToHash(
             "Base Layer.sifterOpening");
@@ -184,6 +185,16 @@ namespace _project.Scripts.Object_Scripts
             _animator.Update(0f);
         }
 
+        /// <summary>A sifter that is damaged or holding debris stays put.</summary>
+        public bool CanRemove => health >= maxHealth && debrisAccumulation <= 0f;
+
+        public void Remove()
+        {
+            if (_slot) _slot.ClearOccupied(_infraValue);
+            StinkSourceRegistry.Unregister(this);
+            Destroy(gameObject);
+        }
+
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {
             _slot = slot;
@@ -255,6 +266,8 @@ namespace _project.Scripts.Object_Scripts
             // release lands back on it and would read as a click.
             var cameraController = GameMaster.Instance.cameraController;
             if (cameraController && cameraController.IsPanArmed) return;
+
+            if (UtilityRemoval.TryRemove(this)) return;
 
             if (debrisAccumulation > 0)
                 GameMaster.Instance.sifterMiniController.StartMiniGame(this);

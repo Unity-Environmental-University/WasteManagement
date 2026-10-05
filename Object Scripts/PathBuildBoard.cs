@@ -342,6 +342,7 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_cells == null) return;
 
+            RefreshSplitterHighlight();
             var breakPreviewPieceId = GetBreakPreviewPieceId();
 
             for (var column = 0; column < columns; column++)
@@ -1486,10 +1487,33 @@ namespace _project.Scripts.Object_Scripts
             return true;
         }
 
+        private PathSplitter _highlightedSplitter;
+
+        // A splitter sits on top of the path, so it claims the hover (and the click) over the piece below it.
+        private PathSplitter GetBreakPreviewSplitter()
+        {
+            if (ActiveTool != PathBuildTool.Break || !_hoveredCell ||
+                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row))
+                return null;
+
+            var splitter = UtilityRemoval.FindSplitterAt(this, new Vector2Int(_hoveredCell.Column, _hoveredCell.Row));
+            return splitter && splitter.CanRemove ? splitter : null;
+        }
+
+        private void RefreshSplitterHighlight()
+        {
+            var splitter = GetBreakPreviewSplitter();
+            if (splitter == _highlightedSplitter) return;
+
+            if (_highlightedSplitter) _highlightedSplitter.SetHighlight(null);
+            _highlightedSplitter = splitter;
+            if (splitter) splitter.SetHighlight(breakPreviewColor);
+        }
+
         private int GetBreakPreviewPieceId()
         {
             if (ActiveTool != PathBuildTool.Break || !_hoveredCell || _pieceIds == null ||
-                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row))
+                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row) || _highlightedSplitter)
                 return 0;
 
             if (ActivePathKind == PathKind.RecyclingBelt)

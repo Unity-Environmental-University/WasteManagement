@@ -1,10 +1,11 @@
 using _project.Scripts.Core;
 using _project.Scripts.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class TreatmentTank : MonoBehaviour, IStinkSource
+    public class TreatmentTank : MonoBehaviour, IStinkSource, IPointerClickHandler, IRemovableUtility
     {
         [Header("Throughput")]
         [SerializeField] private float sludgePerIssue = 1f;
@@ -41,6 +42,17 @@ namespace _project.Scripts.Object_Scripts
             StinkSourceRegistry.Unregister(this);
             LiveComponentRegistry.Unregister(this);
         }
+
+        public bool CanRemove => fullness <= 0f;
+
+        public void Remove()
+        {
+            if (_slot) _slot.ClearOccupied(_infraValue);
+            StinkSourceRegistry.Unregister(this);
+            Destroy(gameObject);
+        }
+
+        public void OnPointerClick(PointerEventData eventData) => UtilityRemoval.TryRemove(this);
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
         {

@@ -24,7 +24,7 @@ namespace _project.Scripts.Object_Scripts
     ///     shared issues are dealt out in a fixed rotation rather than at random, so the split is
     ///     exact and free of streaks (50% runs 0, 1, 0, 1).
     /// </summary>
-    public class PathSplitter : MonoBehaviour
+    public class PathSplitter : MonoBehaviour, IRemovableUtility
     {
         /// <summary>
         ///     Raised when a splitter enters or leaves the active scene, so live route previews can
@@ -63,6 +63,37 @@ namespace _project.Scripts.Object_Scripts
                 var gm = GameMaster.Instance;
                 return gm && gm.debugging;
             }
+        }
+
+        private SpecialInteractController _slot;
+        private int _infraValue;
+
+        public bool CanRemove => true;
+
+        /// <summary>Tints the model with <paramref name="color" />, or restores it when null.</summary>
+        public void SetHighlight(Color? color)
+        {
+            if (_modelRenderers == null) return;
+            MaterialPropertyBlock block = null;
+            foreach (var modelRenderer in _modelRenderers)
+            {
+                if (!modelRenderer) continue;
+                if (color.HasValue) RendererColorUtility.SetColor(modelRenderer, color.Value, ref block);
+                else modelRenderer.SetPropertyBlock(null);
+            }
+        }
+
+        public void Remove()
+        {
+            if (_slot) _slot.ClearOccupied(_infraValue);
+            Destroy(gameObject);
+        }
+
+        /// <summary>Called by <see cref="SpecialInteractController" /> when this utility is placed.</summary>
+        public void SetSlot(SpecialInteractController slot, int infraValue = 0)
+        {
+            _slot = slot;
+            _infraValue = infraValue;
         }
 
         private void Awake()

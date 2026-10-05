@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using _project.Scripts.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
@@ -11,7 +12,7 @@ namespace _project.Scripts.Object_Scripts
     ///     wiring plus the stink effect, following the same shape as <see cref="WasteSifter" /> and
     ///     <see cref="TreatmentTank" />.
     /// </summary>
-    public class LimeSprinkler : MonoBehaviour
+    public class LimeSprinkler : MonoBehaviour, IPointerClickHandler, IRemovableUtility
     {
         [Header("Stink")]
         [SerializeField] private float limeStinkReduction = 0.5f;
@@ -63,6 +64,21 @@ namespace _project.Scripts.Object_Scripts
             ApplyToNearbyCesspits();
             ShowPlacedArea();
         }
+
+        public bool CanRemove => true;
+
+        public void Remove()
+        {
+            // Lift the reduction this sprinkler applied to the cesspits in its block.
+            foreach (var pit in FindObjectsByType<Cesspit>())
+                if (Covers(pit))
+                    pit.ApplyStinkReduction(-limeStinkReduction);
+
+            if (_slot) _slot.ClearOccupied(_infraValue);
+            Destroy(gameObject);
+        }
+
+        public void OnPointerClick(PointerEventData eventData) => UtilityRemoval.TryRemove(this);
 
         #endregion
 
@@ -147,18 +163,19 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public bool TryApplyTo(Cesspit pit)
         {
-            if (!pit) return false;
-
-            // Empty when the board is unresolved or this sprinkler sits off-board; returning here
-            // also keeps the board dereference below safe.
-            var cells = GetSurroundingCells();
-            if (cells.Count == 0) return false;
-
-            if (!board.TryWorldToCell(pit.transform.position, out var pitCell) ||
-                !cells.Contains(pitCell)) return false;
+            if (!pit || !Covers(pit)) return false;
 
             pit.ApplyStinkReduction(limeStinkReduction);
             return true;
+        }
+
+        private bool Covers(Cesspit pit)
+        {
+            // Empty when the board is unresolved or this sprinkler sits off-board; checking the
+            // count first also keeps the board dereference safe.
+            var cells = GetSurroundingCells();
+            return cells.Count > 0 && board.TryWorldToCell(pit.transform.position, out var pitCell) &&
+                   cells.Contains(pitCell);
         }
 
         #endregion

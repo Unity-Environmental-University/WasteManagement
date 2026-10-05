@@ -8,7 +8,8 @@ using UnityEngine.Serialization;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler
+    public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler,
+        IRemovableUtility
     { 
         [SerializeField] private int processPower = 3;
 
@@ -117,6 +118,8 @@ namespace _project.Scripts.Object_Scripts
             var gm = GameMaster.Instance;
             if (!gm) return;
 
+            if (UtilityRemoval.TryRemove(this)) return;
+
             switch (gm.PendingPlacement)
             {
                 case CesspitCapShopItem when !IsSealed:
@@ -148,6 +151,20 @@ namespace _project.Scripts.Object_Scripts
             UtilityHoverStatsPopup.Instance?.Hide(transform);
         }
 
+        /// <summary>Only an empty cesspit can be taken back; one holding waste stays.</summary>
+        public bool CanRemove => fullness <= 0f;
+
+        public void Remove()
+        {
+            PauseRunaways();
+            _spawningRunaways = false;
+            if (_slot) _slot.ClearOccupied(_infraValue);
+
+            // Destroy() defers OnDisable to end of frame; unregister now so the refresh excludes this pit's stink
+            StinkSourceRegistry.Unregister(this);
+            Destroy(gameObject);
+        }
+
         private void Seal()
         {
             PauseRunaways();
@@ -159,10 +176,7 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>Demolishes this cesspit: frees its slot, leaves a debuff tile on the cell, and destroys the object.</summary>
         private void Bury()
         {
-            PauseRunaways();
-            _spawningRunaways = false;
-
-            if (_slot) _slot.ClearOccupied(_infraValue);
+            Remove();
 
             var tileSpawner = FindAnyObjectByType<SpecialTileSpawner>();
             if (tileSpawner)
@@ -170,10 +184,7 @@ namespace _project.Scripts.Object_Scripts
             else
                 Debug.LogWarning("[Cesspit] No SpecialTileSpawner in scene; buried cesspit left no debuff tile.");
 
-            // Destroy() defers OnDisable to end of frame; unregister now so the refresh excludes this pit's stink
-            StinkSourceRegistry.Unregister(this);
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
-            Destroy(gameObject);
         }
 
         public void SetSlot(SpecialInteractController slot, int infraValue = 0)
