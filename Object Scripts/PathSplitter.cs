@@ -119,16 +119,19 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!issue || issue.IsDirectDestination) return false;
 
+            // The branch depends on the route the issue arrived on: a splitter on a branch splits
+            // that branch, and one past a rejoin splits every route that flows through it.
             var path = issue.GetPath();
-            if (!path || path.PathKind != PathKind.Pipe || !path.HasAlternateRoute ||
-                !path.IsSplitPoint(transform.position)) return false;
+            if (!path || path.PathKind != PathKind.Pipe ||
+                !path.TryGetBranchRoute(issue.GetRouteIndex(), transform.position, out var branchRoute)) return false;
             if (!_routedIssueIds.Add(issue.GetEntityId())) return false;
 
-            var routeIndex = ChooseRoute(issue.GetIssueType());
-            if (!issue.TrySetRoute(routeIndex)) return false;
+            // The main lane keeps the issue on the route it is already following.
+            var takeBranch = ChooseBranch(issue.GetIssueType());
+            if (takeBranch && !issue.TrySetRoute(branchRoute)) return false;
 
             if (Debugging)
-                Debug.Log($"[PathSplitter] Routed issue to option {routeIndex + 1}.");
+                Debug.Log($"[PathSplitter] Routed issue to {(takeBranch ? $"branch route {branchRoute}" : "main lane")}.");
 
             return true;
         }
@@ -171,19 +174,19 @@ namespace _project.Scripts.Object_Scripts
             return modelBounds.HasValue && modelBounds.Value.IntersectRay(ray, out distance);
         }
 
-        private int ChooseRoute(IssueType issueType)
+        private bool ChooseBranch(IssueType issueType)
         {
             switch (GetRule(issueType))
             {
-                case SplitterRule.MainOnly: return 0;
-                case SplitterRule.BranchOnly: return 1;
+                case SplitterRule.MainOnly: return false;
+                case SplitterRule.BranchOnly: return true;
             }
 
             _branchCredit += 100 - mainSharePercent;
-            if (_branchCredit < 100) return 0;
+            if (_branchCredit < 100) return false;
 
             _branchCredit -= 100;
-            return 1;
+            return true;
         }
 
         private void ResetSplit()

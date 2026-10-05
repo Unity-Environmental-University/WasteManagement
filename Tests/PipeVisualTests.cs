@@ -211,7 +211,7 @@ namespace _project.Scripts.Tests
                 new Vector2Int(1, 8), new Vector2Int(1, 9)
             };
 
-            board.SetPriorityVisualPath(primary, alternateRouteCells: alternate);
+            board.SetPriorityVisualPath(primary, branchRouteCells: new[] { alternate });
 
             var fork = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 1,2");
             StringAssert.Contains("brick_Tpipe",

@@ -1283,11 +1283,13 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public void SetPriorityVisualPath(IReadOnlyList<Vector2Int> routeCells,
             Vector3? startWorldPosition = null, Vector3? endWorldPosition = null,
-            IReadOnlyList<Vector2Int> alternateRouteCells = null)
+            IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells = null)
         {
             var nextConnections = new Dictionary<Vector2Int, PipeConnections>();
             AddPriorityRoute(nextConnections, routeCells);
-            AddPriorityRoute(nextConnections, alternateRouteCells);
+            if (branchRouteCells != null)
+                foreach (var branchCells in branchRouteCells)
+                    AddPriorityRoute(nextConnections, branchCells);
 
             if (routeCells is { Count: > 0 })
             {

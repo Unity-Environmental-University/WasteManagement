@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
@@ -223,6 +224,99 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(fixture.Path.HasAlternateRoute);
             Assert.IsTrue(fixture.Path.IsSplitPoint(splitter.transform.position));
             Assert.IsFalse(fixture.Path.IsSplitPoint(fixture.Board.GetCellTopPosition(new Vector2Int(1, 1))));
+        }
+
+        [Test]
+        public void Rebuild_GivesEverySplitterOnTheMainRouteItsOwnBranch()
+        {
+            var fixture = CreateSplitPathFixture();
+            // A second, left-hand loop leaving the main route at (1,4) and rejoining at (1,5).
+            PlaceVertical(fixture.Board, 0, 4, 2);
+            AddSplitter(fixture, new Vector2Int(1, 2));
+            AddSplitter(fixture, new Vector2Int(1, 4));
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(3, fixture.Path.RouteCount);
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var rightBranch));
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 4), out var leftBranch));
+            Assert.AreNotEqual(rightBranch, leftBranch);
+            CollectionAssert.Contains(fixture.Path.GetRouteCells(leftBranch), new Vector2Int(0, 5));
+
+            AssertBranchPreviewsShowing(fixture, 2);
+        }
+
+        [Test]
+        public void Rebuild_SplitsABranchAgain_AtASplitterOnThatBranch()
+        {
+            var fixture = CreateNestedSplitPathFixture();
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.AreEqual(3, fixture.Path.RouteCount);
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var branch));
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(branch, CellTop(fixture, 3, 4), out var subBranch));
+            Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 3, 4), out _),
+                "The main route never reaches the branch's splitter.");
+            CollectionAssert.Contains(fixture.Path.GetRouteCells(subBranch), new Vector2Int(5, 5));
+
+            AssertBranchPreviewsShowing(fixture, 2);
+        }
+
+        [Test]
+        public void PathSplitter_OnABranch_SendsIssuesFromThatBranchDownItsOwnBranch()
+        {
+            var fixture = CreateNestedSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var branch));
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(branch, CellTop(fixture, 3, 4), out var subBranch));
+
+            var branchSplitter = PathSplitter.Live.Single(s => s.transform.position == CellTop(fixture, 3, 4));
+            branchSplitter.SetRule(IssueType.Organic, SplitterRule.BranchOnly);
+            branchSplitter.SetRule(IssueType.Chemical, SplitterRule.MainOnly);
+
+            var diverted = CreatePrimitive("Diverted Issue").AddComponent<IssueObject>();
+            diverted.SetType(IssueType.Organic);
+            diverted.SetPath(fixture.Path);
+            Assert.IsTrue(diverted.TrySetRoute(branch));
+            Assert.IsTrue(branchSplitter.RouteIssue(diverted));
+            Assert.AreEqual(subBranch, diverted.GetRouteIndex());
+
+            var kept = CreatePrimitive("Kept Issue").AddComponent<IssueObject>();
+            kept.SetType(IssueType.Chemical);
+            kept.SetPath(fixture.Path);
+            Assert.IsTrue(kept.TrySetRoute(branch));
+            Assert.IsTrue(branchSplitter.RouteIssue(kept));
+            Assert.AreEqual(branch, kept.GetRouteIndex(), "The main lane keeps an issue on the branch it arrived on.");
+
+            // Issues on the main route pass this splitter's cell by without being split.
+            var mainIssue = CreatePrimitive("Main Issue").AddComponent<IssueObject>();
+            mainIssue.SetPath(fixture.Path);
+            Assert.IsFalse(branchSplitter.RouteIssue(mainIssue));
+        }
+
+        [Test]
+        public void RejoinedSubBranch_BecomesPartOfThePipeItRejoins()
+        {
+            var fixture = CreateNestedSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var branch));
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(branch, CellTop(fixture, 3, 4), out var subBranch));
+
+            // The sub-branch rejoins its parent at (3,7) and follows that branch's pipe exactly from there.
+            var parentCells = fixture.Path.GetRouteCells(branch);
+            var subCells = fixture.Path.GetRouteCells(subBranch);
+            var rejoin = new Vector2Int(3, 7);
+            var parentTail = parentCells.Skip(parentCells.ToList().IndexOf(rejoin)).ToList();
+            var subTail = subCells.Skip(subCells.ToList().IndexOf(rejoin)).ToList();
+            CollectionAssert.AreEqual(parentTail, subTail);
+
+            // Issues on the two routes may merge once both are past the rejoin...
+            Assert.IsTrue(fixture.Path.CanRoutesMergeAtProgress(
+                branch, fixture.Path.GetWaypointCount(branch) - 3,
+                subBranch, fixture.Path.GetWaypointCount(subBranch) - 3));
+            // ...but not while the sub-branch is still out on its own loop.
+            Assert.IsFalse(fixture.Path.CanRoutesMergeAtProgress(
+                branch, subCells.ToList().IndexOf(new Vector2Int(5, 5)) + 1,
+                subBranch, subCells.ToList().IndexOf(new Vector2Int(5, 5)) + 1));
         }
 
         [Test]
@@ -1060,6 +1154,50 @@ namespace _project.Scripts.Tests
             SetField(path, "endPoint", upper);
 
             return new PathFixture(board, path, lower, upper);
+        }
+
+        /// <summary>
+        ///     The split fixture with splitters at its fork (1,2) and on its right-hand branch at
+        ///     (3,4), where a further loop leaves the branch and rejoins it at (3,7).
+        /// </summary>
+        private PathFixture CreateNestedSplitPathFixture()
+        {
+            var fixture = CreateSplitPathFixture();
+            PlaceHorizontal(fixture.Board, 4, 4, 2);
+            PlaceVertical(fixture.Board, 5, 5, 2);
+            PlaceHorizontal(fixture.Board, 4, 7, 2);
+            AddSplitter(fixture, new Vector2Int(1, 2));
+            AddSplitter(fixture, new Vector2Int(3, 4));
+            return fixture;
+        }
+
+        private PathSplitter AddSplitter(PathFixture fixture, Vector2Int cell)
+        {
+            var splitter = CreateGameObject($"Path Splitter {cell}").AddComponent<PathSplitter>();
+            splitter.transform.position = fixture.Board.GetCellTopPosition(cell);
+            return splitter;
+        }
+
+        private static Vector3 CellTop(PathFixture fixture, int column, int row)
+        {
+            return fixture.Board.GetCellTopPosition(new Vector2Int(column, row));
+        }
+
+        private static void AssertBranchPreviewsShowing(PathFixture fixture, int count)
+        {
+            fixture.Path.RefreshLivePreview();
+            for (var i = 0; i < count; i++)
+            {
+                var name = i == 0 ? "Alternate Path Preview" : $"Alternate Path Preview {i + 1}";
+                var tube = fixture.Board.transform.Find(name)?.GetComponentInChildren<PathWaterTube>();
+                Assert.IsNotNull(tube, name);
+                Assert.IsTrue(tube.IsShowing, name);
+                Assert.Greater(tube.PointCount, 2, name);
+            }
+
+            var extra = fixture.Board.transform.Find($"Alternate Path Preview {count + 1}")
+                ?.GetComponentInChildren<PathWaterTube>();
+            Assert.IsTrue(!extra || !extra.IsShowing, "No preview beyond one per distinct branch.");
         }
 
         private PathFixture CreateSplitPathFixture()

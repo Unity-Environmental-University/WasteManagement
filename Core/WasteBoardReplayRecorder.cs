@@ -767,8 +767,9 @@ namespace _project.Scripts.Core
             {
                 if (!path.IsValid && !path.Rebuild()) continue;
                 RecordCompletedRoute(path.PathCells, pathIndex, "main");
-                if (path.AlternatePathCells.Count > 0)
-                    RecordCompletedRoute(path.AlternatePathCells, pathIndex, "alternate");
+                for (var routeIndex = 1; routeIndex < path.RouteCount; routeIndex++)
+                    RecordCompletedRoute(path.GetRouteCells(routeIndex), pathIndex,
+                        routeIndex == 1 ? "alternate" : $"alternate {routeIndex}");
                 pathIndex++;
             }
         }

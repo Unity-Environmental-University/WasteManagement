@@ -531,15 +531,14 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Moves this issue onto one of the path's two routes while preserving its progress.
-        ///     Used by PathSplitter; route 0 is the normal shortest route, and route 1 is the
-        ///     alternate branch discovered during WaypointPath.Rebuild().
+        ///     Moves this issue onto one of the path's routes while preserving its progress.
+        ///     Used by PathSplitter; route 0 is the normal shortest route, and the others are the
+        ///     splitter branches discovered during WaypointPath.Rebuild().
         /// </summary>
         public bool TrySetRoute(int routeIndex)
         {
             if (!path || IsDirectDestination) return false;
-            if (routeIndex is < 0 or > 1) return false;
-            if (routeIndex == 1 && !path.HasAlternateRoute) return false;
+            if (!path.IsRouteIndex(routeIndex)) return false;
 
             _routeIndex = routeIndex;
             _waypointIndex = path.FindClosestWaypointIndex(routeIndex, transform.position, _waypointIndex);
@@ -588,7 +587,7 @@ namespace _project.Scripts.Object_Scripts
             {
                 if (_hasHeldWaypoint && path && !IsDirectDestination && path.Count > 0)
                 {
-                    if (_routeIndex == 1 && !path.HasAlternateRoute) _routeIndex = 0;
+                    if (_routeIndex >= path.RouteCount) _routeIndex = 0;
 
                     // Preserve progress when the target survived the rebuild; otherwise resume
                     // at the held position rather than trusting an index from the old route.

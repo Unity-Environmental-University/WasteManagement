@@ -56,8 +56,19 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
         [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
 
-        [Tooltip("Color used for the fork-to-rejoin branch while a path splitter is installed.")] [SerializeField]
-        private Color alternatePreviewColor = new(1f, 0.52f, 0.08f, 0.95f);
+        // The water shader multiplies these into its blue, so they read darker and cooler on screen
+        // than they look here; warm hues need a strong red to stay distinct.
+        [Tooltip("Colors for the fork-to-rejoin branches splitters create, one per splitter in route order, " +
+                 "cycling when there are more splitters than colors.")]
+        [SerializeField]
+        private Color[] branchPreviewColors =
+        {
+            new(1f, 0.60f, 0.16f, 0.9f),    // amber
+            new(0.68f, 0.52f, 0.96f, 0.9f), // violet
+            new(0.52f, 0.88f, 0.42f, 0.9f), // sage
+            new(0.92f, 0.46f, 0.56f, 0.9f), // rose
+            new(0.86f, 0.80f, 0.32f, 0.9f)  // gold
+        };
 
         [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
         [SerializeField]
@@ -71,13 +82,23 @@ namespace _project.Scripts.Object_Scripts
         [Min(0f)]
         private float originPreviewHeightOffset = 1.5f;
 
-        private readonly List<Vector2Int> _alternateLivePreviewCells = new();
-        private readonly List<Vector2Int> _alternatePathCells = new();
-        private readonly List<Vector3> _alternateWaypoints = new();
+        // Upper bound on routes, so a board crowded with splitters can't multiply them without limit.
+        private const int MaxRoutes = 32;
 
-        // The route last shown by the live preview. Unlike _pathCells it stays current while the
-        // player edits the board, so placement can tell which way water flows through a cell.
-        private readonly List<Vector2Int> _livePreviewCells = new();
+        // Which route a splitter sends an issue down: keyed by the route the issue is on and the
+        // splitter's cell. Only Rebuild() changes it, so it always matches _routes while issues travel.
+        private readonly Dictionary<(int route, Vector2Int cell), int> _branchRoutes = new();
+
+        // One water tube per distinct splitter branch the live preview draws.
+        private readonly List<PathWaterTube> _branchLivePreviews = new();
+
+        // The routes last shown by the live preview, main first. Unlike _routes they stay current
+        // while the player edits the board, so placement can tell which way water flows through a cell.
+        private readonly List<Route> _previewRoutes = new();
+
+        // Every route issues can follow after the last Rebuild(): the main route first, then each
+        // splitter branch. Empty while the path is invalid.
+        private readonly List<Route> _routes = new();
 
         // Cells that ARE part of the final path. Cached for gizmo color-coding.
         private readonly List<Vector2Int> _pathCells = new();
@@ -96,8 +117,6 @@ namespace _project.Scripts.Object_Scripts
         // The final ordered list of world-space positions enemies traverse.
         // Built by Rebuild() — do not modify directly.
         private readonly List<Vector3> _waypoints = new();
-        private PathWaterTube _alternateLivePreview;
-        private bool _alternateLivePreviewComplete;
         private bool _hasOriginPreviewPositions;
         private Vector3 _lastLeftOriginPosition;
         private Vector3 _lastRightOriginPosition;
@@ -105,15 +124,7 @@ namespace _project.Scripts.Object_Scripts
         private PathWaterTube _leftOriginPreview;
 
         private PathWaterTube _livePreview;
-        private bool _livePreviewComplete;
-
-        // The fork last shown by the live preview, which follows board edits between rebuilds.
-        private Vector2Int? _livePreviewSplitCell;
         private PathWaterTube _rightOriginPreview;
-
-        // The fork the cached alternate waypoints leave from. Only Rebuild() changes it, so it
-        // always matches _alternateWaypoints while issues are travelling.
-        private Vector2Int? _splitCell;
         public bool RecyclingDestination => recyclingDestination;
 
         public PathKind PathKind => recyclingDestination
@@ -126,9 +137,14 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public int Count => _waypoints.Count;
 
-        public bool HasAlternateRoute => _alternateWaypoints.Count > 0;
+        /// <summary>Routes issues can follow: the main route (index 0) plus one per splitter branch.</summary>
+        public int RouteCount => _routes.Count;
+
+        public bool HasAlternateRoute => _routes.Count > 1;
         public IReadOnlyList<Vector2Int> PathCells => _pathCells;
-        public IReadOnlyList<Vector2Int> AlternatePathCells => _alternatePathCells;
+
+        /// <summary>The first branch's cells, or empty when the path has no branch.</summary>
+        public IReadOnlyList<Vector2Int> AlternatePathCells => GetRouteCells(1);
         public Transform Destination => endPoint;
 
         public bool IsValid { get; private set; }
@@ -159,11 +175,8 @@ namespace _project.Scripts.Object_Scripts
             if (_leftOriginPreview) _leftOriginPreview.Clear();
             if (_rightOriginPreview) _rightOriginPreview.Clear();
             _hasOriginPreviewPositions = false;
-            _splitCell = null;
-            _livePreviewSplitCell = null;
             _splitterCells.Clear();
-            _livePreviewCells.Clear();
-            _alternateLivePreviewCells.Clear();
+            _previewRoutes.Clear();
         }
 
         /// <summary>
@@ -325,49 +338,65 @@ namespace _project.Scripts.Object_Scripts
 
         public int GetWaypointCount(int routeIndex)
         {
-            return routeIndex == 1 && HasAlternateRoute ? _alternateWaypoints.Count : _waypoints.Count;
+            return GetRouteWaypoints(routeIndex).Count;
         }
 
         public Vector3 GetPosition(int routeIndex, int waypointIndex)
         {
-            return routeIndex == 1 && HasAlternateRoute
-                ? _alternateWaypoints[waypointIndex]
-                : _waypoints[waypointIndex];
+            return GetRouteWaypoints(routeIndex)[waypointIndex];
+        }
+
+        /// <summary>A route's cells, or empty when there is no such route.</summary>
+        public IReadOnlyList<Vector2Int> GetRouteCells(int routeIndex)
+        {
+            return routeIndex >= 0 && routeIndex < _routes.Count
+                ? _routes[routeIndex].Cells
+                : System.Array.Empty<Vector2Int>();
+        }
+
+        // An unknown route index falls back to the main route.
+        private List<Vector3> GetRouteWaypoints(int routeIndex)
+        {
+            return routeIndex > 0 && IsRouteIndex(routeIndex) ? _routes[routeIndex].Waypoints : _waypoints;
+        }
+
+        /// <summary>Route 0 always counts, so an issue can sit on the main route before the path is built.</summary>
+        public bool IsRouteIndex(int routeIndex)
+        {
+            return routeIndex == 0 || (routeIndex > 0 && routeIndex < _routes.Count);
         }
 
         /// <summary>
         ///     Returns whether two issues may merge at their current route progress. Issues on
-        ///     different branches stay isolated until both are targeting the shared route suffix
-        ///     where the branches have rejoined.
+        ///     different routes stay isolated until both are targeting the shared route suffix
+        ///     where their branches have rejoined.
         /// </summary>
         public bool CanRoutesMergeAtProgress(int firstRouteIndex, int firstWaypointIndex,
             int secondRouteIndex, int secondWaypointIndex)
         {
-            if (firstRouteIndex is < 0 or > 1 || secondRouteIndex is < 0 or > 1)
-                return false;
+            if (!IsRouteIndex(firstRouteIndex) || !IsRouteIndex(secondRouteIndex)) return false;
             if (firstRouteIndex == secondRouteIndex) return true;
-            if (!HasAlternateRoute) return false;
 
-            var defaultWaypointIndex = firstRouteIndex == 0 ? firstWaypointIndex : secondWaypointIndex;
-            var alternateWaypointIndex = firstRouteIndex == 1 ? firstWaypointIndex : secondWaypointIndex;
-            var sharedWaypointCount = GetSharedSuffixWaypointCount();
+            var first = GetRouteWaypoints(firstRouteIndex);
+            var second = GetRouteWaypoints(secondRouteIndex);
+            var sharedWaypointCount = GetSharedSuffixWaypointCount(first, second);
             if (sharedWaypointCount == 0) return false;
 
-            return defaultWaypointIndex >= _waypoints.Count - sharedWaypointCount &&
-                   alternateWaypointIndex >= _alternateWaypoints.Count - sharedWaypointCount;
+            return firstWaypointIndex >= first.Count - sharedWaypointCount &&
+                   secondWaypointIndex >= second.Count - sharedWaypointCount;
         }
 
-        private int GetSharedSuffixWaypointCount()
+        private static int GetSharedSuffixWaypointCount(List<Vector3> first, List<Vector3> second)
         {
             var sharedCount = 0;
-            var defaultIndex = _waypoints.Count - 1;
-            var alternateIndex = _alternateWaypoints.Count - 1;
-            while (defaultIndex >= 0 && alternateIndex >= 0 &&
-                   Vector3.SqrMagnitude(_waypoints[defaultIndex] - _alternateWaypoints[alternateIndex]) < 0.0001f)
+            var firstIndex = first.Count - 1;
+            var secondIndex = second.Count - 1;
+            while (firstIndex >= 0 && secondIndex >= 0 &&
+                   Vector3.SqrMagnitude(first[firstIndex] - second[secondIndex]) < 0.0001f)
             {
                 sharedCount++;
-                defaultIndex--;
-                alternateIndex--;
+                firstIndex--;
+                secondIndex--;
             }
 
             return sharedCount;
@@ -375,7 +404,7 @@ namespace _project.Scripts.Object_Scripts
 
         public int FindClosestWaypointIndex(int routeIndex, Vector3 position, int minimumIndex = 0)
         {
-            var route = routeIndex == 1 && HasAlternateRoute ? _alternateWaypoints : _waypoints;
+            var route = GetRouteWaypoints(routeIndex);
             if (route.Count == 0) return 0;
 
             var closestIndex = Mathf.Clamp(minimumIndex, 0, route.Count - 1);
@@ -392,10 +421,26 @@ namespace _project.Scripts.Object_Scripts
             return closestIndex;
         }
 
+        /// <summary>True when some route forks at the cell holding <paramref name="worldPosition" />.</summary>
         public bool IsSplitPoint(Vector3 worldPosition)
         {
-            return _splitCell.HasValue && pathBuildBoard &&
-                   pathBuildBoard.TryWorldToCell(worldPosition, out var cell) && cell == _splitCell.Value;
+            if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
+
+            foreach (var key in _branchRoutes.Keys)
+                if (key.cell == cell)
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        ///     Finds the branch an issue on <paramref name="routeIndex" /> takes when a splitter at
+        ///     <paramref name="worldPosition" /> diverts it. False when that route doesn't fork there.
+        /// </summary>
+        public bool TryGetBranchRoute(int routeIndex, Vector3 worldPosition, out int branchRouteIndex)
+        {
+            branchRouteIndex = -1;
+            return pathBuildBoard && pathBuildBoard.TryWorldToCell(worldPosition, out var cell) &&
+                   _branchRoutes.TryGetValue((routeIndex, cell), out branchRouteIndex);
         }
 
         /// <summary>
@@ -408,8 +453,10 @@ namespace _project.Scripts.Object_Scripts
             sign = 0f;
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
 
-            return TryGetFlowSign(_livePreviewCells, _livePreviewComplete, cell, axis, out sign) ||
-                   TryGetFlowSign(_alternateLivePreviewCells, _alternateLivePreviewComplete, cell, axis, out sign);
+            foreach (var route in _previewRoutes)
+                if (TryGetFlowSign(route.Cells, route.Complete, cell, axis, out sign))
+                    return true;
+            return false;
         }
 
         private bool TryGetFlowSign(List<Vector2Int> route, bool complete, Vector2Int cell, Vector3 axis,
@@ -462,9 +509,8 @@ namespace _project.Scripts.Object_Scripts
         public bool Rebuild()
         {
             _waypoints.Clear();
-            _alternateWaypoints.Clear();
-            _alternatePathCells.Clear();
-            _splitCell = null;
+            _routes.Clear();
+            _branchRoutes.Clear();
             _pathCells.Clear();
             _unusedCells.Clear();
             IsValid = false;
@@ -524,18 +570,18 @@ namespace _project.Scripts.Object_Scripts
             // Bookend with endPoint
             _waypoints.Add(endPoint.position);
 
+            _routes.Add(new Route(_pathCells, _waypoints) { Complete = true });
             CollectSplitterCells(_splitterCells);
-            var alternateCellPath = FindAlternateRoute(cellPath, goals, false, out _splitCell);
-            if (alternateCellPath != null)
-            {
-                _alternateWaypoints.Add(startPoint.position);
-                foreach (var cell in alternateCellPath)
-                {
-                    _alternatePathCells.Add(cell);
-                    _alternateWaypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
-                }
+            AddSplitterBranches(_routes, _branchRoutes, goals, false);
+            if (_routes.Count == 1) AddFirstForkBranch(goals);
 
-                _alternateWaypoints.Add(endPoint.position);
+            for (var i = 1; i < _routes.Count; i++)
+            {
+                var route = _routes[i];
+                route.Waypoints.Add(startPoint.position);
+                foreach (var cell in route.Cells)
+                    route.Waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
+                route.Waypoints.Add(endPoint.position);
             }
 
             IsValid = true;
@@ -547,21 +593,20 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>
         ///     Draws the route available right now in the Game view. A complete route uses
         ///     the normal BFS result. An incomplete route uses the same search and ends at
-        ///     the reachable cell with the smallest grid distance to the goal. A splitter on the
-        ///     route also shows the branch leaving its cell, however far that branch has been built.
+        ///     the reachable cell with the smallest grid distance to the goal. Every splitter on a
+        ///     shown route, branches included, also shows the branch leaving its cell, however far
+        ///     that branch has been built.
         /// </summary>
         public void RefreshLivePreview()
         {
-            _livePreviewSplitCell = null;
             CollectSplitterCells(_splitterCells);
-            _livePreviewCells.Clear();
-            _alternateLivePreviewCells.Clear();
-            _livePreviewComplete = false;
-            _alternateLivePreviewComplete = false;
+            _previewRoutes.Clear();
 
             var tube = GetLivePreviewTube();
             if (tube) tube.Clear();
-            if (_alternateLivePreview) _alternateLivePreview.Clear();
+            foreach (var branchTube in _branchLivePreviews)
+                if (branchTube)
+                    branchTube.Clear();
 
             if (!pathBuildBoard || !startPoint || !endPoint)
             {
@@ -584,20 +629,14 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var alternatePreviewCells = FindAlternateRoute(previewCells, goals, true, out _livePreviewSplitCell);
-
-            _livePreviewCells.AddRange(previewCells);
-            if (alternatePreviewCells != null)
-            {
-                _alternateLivePreviewCells.AddRange(alternatePreviewCells);
-                _alternateLivePreviewComplete = goals.Contains(alternatePreviewCells[^1]);
-            }
-
-            _livePreviewComplete = complete;
+            var main = new Route { Complete = complete };
+            main.Cells.AddRange(previewCells);
+            _previewRoutes.Add(main);
+            AddSplitterBranches(_previewRoutes, null, goals, true);
 
             if (!recyclingDestination)
                 pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
-                    complete ? endPoint.position : null, alternatePreviewCells);
+                    complete ? endPoint.position : null, GetBranchCells(_previewRoutes));
 
             if (!showLivePreview || !tube) return;
 
@@ -608,53 +647,67 @@ namespace _project.Scripts.Object_Scripts
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
+            if (_previewRoutes.Count == 1) return;
 
-            if (alternatePreviewCells == null || !_splitterCells.Contains(_livePreviewSplitCell.Value)) return;
+            // Routes that reach the same splitter from different directions share its branch once
+            // they have rejoined, so each distinct stretch of pipe is drawn only once.
+            var drawnBranches = new HashSet<(Vector2Int fork, Vector2Int exit, Vector2Int end)>();
+            var splitterColors = new Dictionary<Vector2Int, int>();
+            var branchTubeCount = 0;
+            for (var i = 1; i < _previewRoutes.Count; i++)
+            {
+                var route = _previewRoutes[i];
+                var lastIndex = route.JoinIndex >= 0 ? route.JoinIndex : route.Cells.Count - 1;
+                if (lastIndex <= route.ForkIndex ||
+                    !drawnBranches.Add((route.ForkCell, route.Cells[route.ForkIndex + 1], route.Cells[lastIndex])))
+                    continue;
 
-            var alternateTube = GetAlternateLivePreviewTube();
-            if (!alternateTube) return;
+                var branchTube = GetBranchLivePreviewTube(branchTubeCount++);
+                if (!branchTube) return;
 
-            // SetPath hides the tube itself when the distinct branch has fewer than two points.
-            CollectAlternateBranchPoints(previewCells, alternatePreviewCells, _previewPoints);
+                CollectBranchPoints(route, lastIndex, _previewPoints);
 
-            // The thinner branch stream would sink below the pipe floor the main stream still
-            // breaks through, so raise it until both water surfaces are level.
-            var surfaceLift = GetPreviewUp() * Mathf.Max(0f, tube.StartRadius - alternateTube.StartRadius);
-            for (var i = 0; i < _previewPoints.Count; i++)
-                _previewPoints[i] += surfaceLift;
+                // The thinner branch stream would sink below the pipe floor the main stream still
+                // breaks through, so raise it until both water surfaces are level.
+                var surfaceLift = GetPreviewUp() * Mathf.Max(0f, tube.StartRadius - branchTube.StartRadius);
+                for (var p = 0; p < _previewPoints.Count; p++)
+                    _previewPoints[p] += surfaceLift;
 
-            alternateTube.SetPath(_previewPoints, GetPreviewUp(), alternatePreviewColor);
+                if (!splitterColors.TryGetValue(route.ForkCell, out var colorIndex))
+                {
+                    colorIndex = splitterColors.Count;
+                    splitterColors.Add(route.ForkCell, colorIndex);
+                }
+
+                branchTube.SetPath(_previewPoints, GetPreviewUp(), GetBranchPreviewColor(colorIndex));
+            }
+        }
+
+        private static IEnumerable<IReadOnlyList<Vector2Int>> GetBranchCells(List<Route> routes)
+        {
+            for (var i = 1; i < routes.Count; i++)
+                yield return routes[i].Cells;
+        }
+
+        private Color GetBranchPreviewColor(int colorIndex)
+        {
+            return branchPreviewColors is { Length: > 0 }
+                ? branchPreviewColors[colorIndex % branchPreviewColors.Length]
+                : incompletePreviewColor;
         }
 
         /// <summary>
-        ///     Displays only the distinct portion of the alternate route. The final shared cell on
-        ///     either side is retained so the amber stream visibly leaves and rejoins the cyan route.
+        ///     Displays only the distinct portion of a branch: from its splitter to the cell where it
+        ///     rejoins earlier pipe, so the stream visibly leaves and rejoins the route it splits from.
+        ///     A branch that reaches the goal on its own runs on to the endpoint instead.
         /// </summary>
-        private void CollectAlternateBranchPoints(IReadOnlyList<Vector2Int> defaultRoute,
-            IReadOnlyList<Vector2Int> alternateRoute, List<Vector3> points)
+        private void CollectBranchPoints(Route route, int lastIndex, List<Vector3> points)
         {
-            var sharedPrefixCount = 0;
-            while (sharedPrefixCount < defaultRoute.Count && sharedPrefixCount < alternateRoute.Count &&
-                   defaultRoute[sharedPrefixCount] == alternateRoute[sharedPrefixCount])
-                sharedPrefixCount++;
-
-            var sharedSuffixCount = 0;
-            while (sharedSuffixCount < defaultRoute.Count - sharedPrefixCount &&
-                   sharedSuffixCount < alternateRoute.Count - sharedPrefixCount &&
-                   defaultRoute[defaultRoute.Count - 1 - sharedSuffixCount] ==
-                   alternateRoute[alternateRoute.Count - 1 - sharedSuffixCount])
-                sharedSuffixCount++;
-
-            var firstIndex = Mathf.Max(0, sharedPrefixCount - 1);
-            var lastIndex = sharedSuffixCount > 0
-                ? alternateRoute.Count - sharedSuffixCount
-                : alternateRoute.Count - 1;
-            var pointCount = Mathf.Max(0, lastIndex - firstIndex + 1);
             points.Clear();
-            for (var i = 0; i < pointCount; i++)
-                points.Add(
-                    GetPreviewPosition(
-                        pathBuildBoard.GetPathWaypointPosition(alternateRoute[firstIndex + i], PathKind)));
+            for (var i = route.ForkIndex; i <= lastIndex; i++)
+                points.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(route.Cells[i], PathKind)));
+            if (route.JoinIndex < 0 && route.Complete)
+                points.Add(GetPreviewPosition(endPoint.position));
         }
 
         private Vector3 GetPreviewUp()
@@ -677,9 +730,16 @@ namespace _project.Scripts.Object_Scripts
             return GetPreviewTube("Live Path Preview", ref _livePreview, previewWidth);
         }
 
-        private PathWaterTube GetAlternateLivePreviewTube()
+        // The first branch keeps the original "Alternate Path Preview" name, so an authored
+        // LineRenderer under it still styles the branches.
+        private PathWaterTube GetBranchLivePreviewTube(int index)
         {
-            return GetPreviewTube("Alternate Path Preview", ref _alternateLivePreview, previewWidth * 0.85f);
+            while (_branchLivePreviews.Count <= index) _branchLivePreviews.Add(null);
+
+            var branchTube = _branchLivePreviews[index];
+            var objectName = index == 0 ? "Alternate Path Preview" : $"Alternate Path Preview {index + 1}";
+            GetPreviewTube(objectName, ref branchTube, previewWidth * 0.85f);
+            return _branchLivePreviews[index] = branchTube;
         }
 
         /// <summary>
@@ -879,87 +939,151 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Finds one genuine second branch without enumerating every possible route. A cell
-        ///     holding a splitter is the preferred fork, so a splitter decides where the route
-        ///     divides; otherwise the first fork on the normal shortest path is used.
-        ///     With <paramref name="allowUnfinishedSplitterBranch" /> a splitter whose branch does
-        ///     not reach the goal yet still returns that branch as far as it has been built.
+        ///     Grows the route tree: every splitter on a route, past the point where that route itself
+        ///     forked, gets a branch, and new branches are searched in turn, so a splitter on a branch
+        ///     splits it again. A branch always forks further along than its parent did, so the search
+        ///     ends. With <paramref name="allowUnfinished" /> a splitter whose branch doesn't reach the
+        ///     goal yet still gets that branch as far as it has been built.
         /// </summary>
-        private List<Vector2Int> FindAlternateRoute(
-            IReadOnlyList<Vector2Int> defaultRoute,
-            IReadOnlyCollection<Vector2Int> goals,
-            bool allowUnfinishedSplitterBranch,
-            out Vector2Int? splitCell)
+        private void AddSplitterBranches(List<Route> routes,
+            Dictionary<(int route, Vector2Int cell), int> branchLookup,
+            List<Vector2Int> goals, bool allowUnfinished)
         {
-            splitCell = null;
-            if (PathKind != PathKind.Pipe) return null;
+            if (PathKind != PathKind.Pipe) return;
 
-            for (var forkIndex = 0; forkIndex < defaultRoute.Count; forkIndex++)
+            for (var routeIndex = 0; routeIndex < routes.Count; routeIndex++)
             {
-                if (!_splitterCells.Contains(defaultRoute[forkIndex])) continue;
+                var route = routes[routeIndex];
+                for (var forkIndex = route.ForkIndex + 1; forkIndex < route.Cells.Count; forkIndex++)
+                {
+                    if (routes.Count >= MaxRoutes) return;
 
-                var alternate = FindBranchFrom(defaultRoute, forkIndex, goals, false);
-                if (alternate == null && allowUnfinishedSplitterBranch)
-                    alternate = FindBranchFrom(defaultRoute, forkIndex, goals, true);
-                if (alternate == null) continue;
+                    var cell = route.Cells[forkIndex];
+                    if (!_splitterCells.Contains(cell)) continue;
 
-                splitCell = defaultRoute[forkIndex];
-                return alternate;
+                    var branch = FindBranchFrom(routes, routeIndex, forkIndex, goals, false);
+                    if (branch == null && allowUnfinished)
+                        branch = FindBranchFrom(routes, routeIndex, forkIndex, goals, true);
+                    if (branch == null) continue;
+
+                    if (branchLookup != null) branchLookup[(routeIndex, cell)] = routes.Count;
+                    routes.Add(branch);
+                }
             }
+        }
 
-            for (var forkIndex = 0; forkIndex < defaultRoute.Count - 1; forkIndex++)
+        /// <summary>
+        ///     With no splitter-made branch, the first fork on the main route still gets one, so a
+        ///     splitter placed there before the next rebuild already has a route to send issues down.
+        /// </summary>
+        private void AddFirstForkBranch(List<Vector2Int> goals)
+        {
+            if (PathKind != PathKind.Pipe) return;
+
+            var main = _routes[0];
+            for (var forkIndex = 0; forkIndex < main.Cells.Count - 1; forkIndex++)
             {
-                var alternate = FindBranchFrom(defaultRoute, forkIndex, goals, false);
-                if (alternate == null) continue;
+                var branch = FindBranchFrom(_routes, 0, forkIndex, goals, false);
+                if (branch == null) continue;
 
-                splitCell = defaultRoute[forkIndex];
-                return alternate;
+                _branchRoutes[(0, main.Cells[forkIndex])] = _routes.Count;
+                _routes.Add(branch);
+                return;
+            }
+        }
+
+        /// <summary>
+        ///     Tries each unused exit of one route cell and keeps the first that leads onward. The
+        ///     route up to the fork becomes the branch's prefix and is blocked during the search, so
+        ///     the branch can't turn back on itself. Where the branch runs into pipe an earlier route
+        ///     already uses, it joins that route and carries on as part of it.
+        /// </summary>
+        private Route FindBranchFrom(List<Route> routes, int parentIndex, int forkIndex,
+            List<Vector2Int> goals, bool allowPartial)
+        {
+            var parent = routes[parentIndex].Cells;
+            var fork = parent[forkIndex];
+            var parentExit = forkIndex < parent.Count - 1 ? parent[forkIndex + 1] : (Vector2Int?)null;
+
+            // Only an unfinished route can still be growing out of its last cell.
+            if (!parentExit.HasValue && !allowPartial) return null;
+
+            HashSet<Vector2Int> blocked = null;
+            foreach (var direction in Directions)
+            {
+                var exit = fork + direction;
+                if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0) continue;
+                if (!pathBuildBoard.IsOccupied(exit, PathKind)) continue;
+
+                var branch = new Route { ForkIndex = forkIndex };
+                branch.Cells.AddRange(parent.GetRange(0, forkIndex + 1));
+
+                // Pipe an earlier route flows through: join it, or skip an exit the branch could
+                // only enter against that flow.
+                if (IsOnAnyRoute(routes, exit))
+                {
+                    if (TryJoinEarlierRoute(routes, branch, new List<Vector2Int> { exit })) return branch;
+                    continue;
+                }
+
+                blocked ??= new HashSet<Vector2Int>(branch.Cells);
+                var continuation = BreadthFirstSearch(new[] { exit }, goals, blocked, allowPartial);
+                if (continuation == null) continue;
+                if (TryJoinEarlierRoute(routes, branch, continuation)) return branch;
+
+                branch.Cells.AddRange(continuation);
+                branch.Complete = goals.Contains(continuation[^1]);
+                return branch;
             }
 
             return null;
         }
 
         /// <summary>
-        ///     Tries each unused exit of one route cell and keeps the first that leads onward. The
-        ///     shared prefix is retained, and it is blocked during the second BFS, so the alternate
-        ///     cannot immediately turn around.
+        ///     Finds the first cell of <paramref name="continuation" /> that an earlier route passes
+        ///     through and, unless following that route on would revisit the branch's own cells, ends
+        ///     the branch's own pipe there and continues it as that route.
         /// </summary>
-        private List<Vector2Int> FindBranchFrom(
-            IReadOnlyList<Vector2Int> defaultRoute,
-            int forkIndex,
-            IReadOnlyCollection<Vector2Int> goals,
-            bool allowPartial)
+        private static bool TryJoinEarlierRoute(List<Route> routes, Route branch, List<Vector2Int> continuation)
         {
-            var fork = defaultRoute[forkIndex];
-            var defaultExit = forkIndex < defaultRoute.Count - 1 ? defaultRoute[forkIndex + 1] : (Vector2Int?)null;
-            var previous = forkIndex > 0 ? defaultRoute[forkIndex - 1] : (Vector2Int?)null;
-
-            // Only an unfinished route can still be growing out of its last cell.
-            if (!defaultExit.HasValue && !allowPartial) return null;
-
-            foreach (var direction in Directions)
+            var visited = new HashSet<Vector2Int>(branch.Cells);
+            for (var i = 0; i < continuation.Count; i++)
             {
-                var alternateExit = fork + direction;
-                if ((defaultExit.HasValue && alternateExit == defaultExit.Value) ||
-                    (previous.HasValue && alternateExit == previous.Value))
-                    continue;
-                if (!pathBuildBoard.IsOccupied(alternateExit, PathKind)) continue;
+                var cell = continuation[i];
+                foreach (var route in routes)
+                {
+                    var joinIndex = route.Cells.IndexOf(cell);
+                    if (joinIndex < 0 || !CanFollowFrom(route, joinIndex, visited)) continue;
 
-                var blocked = new HashSet<Vector2Int>();
-                for (var i = 0; i <= forkIndex; i++)
-                    blocked.Add(defaultRoute[i]);
+                    for (var c = 0; c < i; c++)
+                        branch.Cells.Add(continuation[c]);
+                    branch.JoinIndex = branch.Cells.Count;
+                    for (var c = joinIndex; c < route.Cells.Count; c++)
+                        branch.Cells.Add(route.Cells[c]);
+                    branch.Complete = route.Complete;
+                    return true;
+                }
 
-                var continuation = BreadthFirstSearch(new[] { alternateExit }, goals, blocked, allowPartial);
-                if (continuation == null) continue;
-
-                var alternate = new List<Vector2Int>(forkIndex + 1 + continuation.Count);
-                for (var i = 0; i <= forkIndex; i++)
-                    alternate.Add(defaultRoute[i]);
-                alternate.AddRange(continuation);
-                return alternate;
+                visited.Add(cell);
             }
 
-            return null;
+            return false;
+        }
+
+        private static bool CanFollowFrom(Route route, int fromIndex, HashSet<Vector2Int> visited)
+        {
+            for (var i = fromIndex; i < route.Cells.Count; i++)
+                if (visited.Contains(route.Cells[i]))
+                    return false;
+            return true;
+        }
+
+        private static bool IsOnAnyRoute(List<Route> routes, Vector2Int cell)
+        {
+            foreach (var route in routes)
+                if (route.Cells.Contains(cell))
+                    return true;
+            return false;
         }
 
         // ============================================================
@@ -1023,6 +1147,34 @@ namespace _project.Scripts.Object_Scripts
         {
             RecordAllOccupiedAsUnused();
             return false;
+        }
+
+        /// <summary>One way through the pipe network: the main route, or a branch a splitter feeds.</summary>
+        private sealed class Route
+        {
+            public readonly List<Vector2Int> Cells;
+            public readonly List<Vector3> Waypoints;
+
+            // Cell index where this route leaves the route it branched from; -1 for the main route.
+            public int ForkIndex = -1;
+
+            // Cell index where this route runs into an earlier route and continues as part of it;
+            // -1 when it never does.
+            public int JoinIndex = -1;
+
+            public bool Complete;
+
+            public Route() : this(new List<Vector2Int>(), new List<Vector3>())
+            {
+            }
+
+            public Route(List<Vector2Int> cells, List<Vector3> waypoints)
+            {
+                Cells = cells;
+                Waypoints = waypoints;
+            }
+
+            public Vector2Int ForkCell => Cells[ForkIndex];
         }
     }
 }
