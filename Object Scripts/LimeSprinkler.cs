@@ -20,8 +20,20 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Board used to resolve nearby cells. Falls back to GameMaster.Instance.pathBuildBoard.")]
         [SerializeField] private PathBuildBoard board;
 
+        [Header("Area Overlay")]
+        [Tooltip("Transparent material for the tiles marking the affected cells.")]
+        [SerializeField] private Material areaMaterial;
+        [Tooltip("Tint while choosing where to place a sprinkler.")]
+        [SerializeField] private Color previewAreaColor = new(0.85f, 1f, 0.4f, 0.55f);
+        [Tooltip("Fainter tint that stays under a placed sprinkler.")]
+        [SerializeField] private Color placedAreaColor = new(0.85f, 1f, 0.4f, 0.15f);
+
         private SpecialInteractController _slot;
         private int _infraValue;
+        private LimeSprinklerArea _area;
+
+        // One shared placement preview; only one slot can be hovered at a time.
+        private static LimeSprinklerArea _previewArea;
 
         // Reused between calls so per-sprinkle lookups don't allocate.
         private readonly List<Vector2Int> _surroundingCells = new(9);
@@ -36,6 +48,11 @@ namespace _project.Scripts.Object_Scripts
             LiveComponentRegistry.Unregister(this);
         }
 
+        private void OnDestroy()
+        {
+            if (_area) Destroy(_area.gameObject);
+        }
+
         #region Placement
 
         /// <summary>Called by <see cref="SpecialInteractController" /> when this utility is placed.</summary>
@@ -44,6 +61,7 @@ namespace _project.Scripts.Object_Scripts
             _slot = slot;
             _infraValue = infraValue;
             ApplyToNearbyCesspits();
+            ShowPlacedArea();
         }
 
         #endregion
@@ -57,23 +75,14 @@ namespace _project.Scripts.Object_Scripts
         ///     sits off-board or no <see cref="PathBuildBoard" /> can be resolved.
         ///     The returned list is reused between calls — copy it if you need to hold onto it.
         /// </summary>
-        /// <param name="includeCenter">False to skip the sprinkler's own cell and return only the 8 neighbours.</param>
-        private List<Vector2Int> GetSurroundingCells(bool includeCenter = true)
+        private List<Vector2Int> GetSurroundingCells()
         {
             _surroundingCells.Clear();
 
             if (!ResolveBoard() || !board.TryWorldToCell(transform.position, out var center))
                 return _surroundingCells;
 
-            for (var columnOffset = -1; columnOffset <= 1; columnOffset++)
-            for (var rowOffset = -1; rowOffset <= 1; rowOffset++)
-            {
-                if (!includeCenter && columnOffset == 0 && rowOffset == 0) continue;
-
-                var cell = new Vector2Int(center.x + columnOffset, center.y + rowOffset);
-                if (board.IsCellInBounds(cell)) _surroundingCells.Add(cell);
-            }
-
+            LimeSprinklerArea.GetCells(board, center, _surroundingCells);
             return _surroundingCells;
         }
 
@@ -81,6 +90,39 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!board) board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
             return board;
+        }
+
+        #endregion
+
+        #region Area Overlay
+
+        private void ShowPlacedArea()
+        {
+            if (!ResolveBoard()) return;
+
+            if (!_area) _area = LimeSprinklerArea.Create($"{name} Area", areaMaterial);
+            _area.Show(board, transform.position, placedAreaColor);
+        }
+
+        /// <summary>
+        ///     Shows the bold placement preview for a sprinkler built from <paramref name="prefab" />
+        ///     at <paramref name="worldPosition" />, using that prefab's material and preview tint.
+        /// </summary>
+        public static void ShowPlacementPreview(LimeSprinkler prefab, Vector3 worldPosition)
+        {
+            if (!prefab) return;
+
+            var targetBoard = prefab.board ? prefab.board :
+                GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (!targetBoard) return;
+
+            if (!_previewArea) _previewArea = LimeSprinklerArea.Create("Lime Sprinkler Preview", prefab.areaMaterial);
+            _previewArea.Show(targetBoard, worldPosition, prefab.previewAreaColor);
+        }
+
+        public static void HidePlacementPreview()
+        {
+            if (_previewArea) _previewArea.Hide();
         }
 
         #endregion

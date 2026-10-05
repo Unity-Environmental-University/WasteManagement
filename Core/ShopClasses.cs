@@ -369,6 +369,9 @@ namespace _project.Scripts.Core
             InfraValue = infraValue;
         }
 
+        /// <summary>The prefab's sprinkler component, which carries the area preview's material and tint.</summary>
+        public LimeSprinkler SprinklerPrefab => _prefab ? _prefab.GetComponent<LimeSprinkler>() : null;
+
         public string DisplayName { get; }
         public string Description { get; }
         public int RequiredLevel { get; }

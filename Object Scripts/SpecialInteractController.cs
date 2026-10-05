@@ -21,15 +21,15 @@ namespace _project.Scripts.Object_Scripts
         [FormerlySerializedAs("associatedHealthBar")]
         [SerializeField] private Slider associatedStatusBar;
 
-        private bool _isOccupied;
         private bool _isHovered;
+        private bool _showingAreaPreview;
         private Collider _slotCollider;
         private PlacementInventory _placementInventory;
         private MaterialPropertyBlock _slotColorPropertyBlock;
         private static bool Debugging => GameMaster.Instance.debugging;
 
         public PlaceableType AcceptedType => acceptedType;
-        public bool IsOccupied => _isOccupied;
+        public bool IsOccupied { get; private set; }
 
         private void Awake()
         {
@@ -59,6 +59,7 @@ namespace _project.Scripts.Object_Scripts
 
             _placementInventory = null;
             _isHovered = false;
+            RefreshAreaPreview(null);
         }
 
         public void OnPointerEnter(PointerEventData eventData)
@@ -67,6 +68,7 @@ namespace _project.Scripts.Object_Scripts
             if (pending == null || !CanAccept(pending)) return;
             _isHovered = true;
             UpdateVisualState(pending);
+            RefreshAreaPreview(pending);
             if (Debugging) Debug.Log($"[SpecialInteract] Hovering — pending: {pending.PlaceableType}");
         }
 
@@ -81,7 +83,7 @@ namespace _project.Scripts.Object_Scripts
             var pending = GameMaster.Instance.PendingPlacement;
             if (pending == null) return;
 
-            if (_isOccupied)
+            if (IsOccupied)
             {
                 if (Debugging) Debug.Log("[SpecialInteract] Slot already occupied.");
                 return;
@@ -116,7 +118,7 @@ namespace _project.Scripts.Object_Scripts
                 placed.TryGetComponent<LimeSprinkler>(out var limeSprinkler))
                 limeSprinkler.SetSlot(this, pending.InfraValue);
 
-            _isOccupied = true;
+            IsOccupied = true;
             _isHovered = false;
             var gm = GameMaster.Instance;
             gm.CompletePlacement(placed);
@@ -136,9 +138,9 @@ namespace _project.Scripts.Object_Scripts
 
         public void ClearOccupied(int infraValue = 0)
         {
-            if (!_isOccupied) return;
+            if (!IsOccupied) return;
 
-            _isOccupied = false;
+            IsOccupied = false;
             if (infraValue > 0 && GameMaster.Instance && GameMaster.Instance.turnController)
                 GameMaster.Instance.turnController.infrastructureValue -= infraValue;
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
@@ -193,6 +195,26 @@ namespace _project.Scripts.Object_Scripts
 
             if (_slotCollider) _slotCollider.enabled = canInteract;
             UpdateVisualState(pending);
+            RefreshAreaPreview(pending);
+        }
+
+        /// <summary>
+        ///     Previews the cells a lime sprinkler would cover while one is pending and this empty
+        ///     slot is hovered. Only hides a preview this slot showed, so a slot exiting after its
+        ///     neighbour was entered can't wipe the neighbour's preview.
+        /// </summary>
+        private void RefreshAreaPreview(IPlaceable pending)
+        {
+            if (_isHovered && !IsOccupied && pending is LimeSprinklerShopItem sprinkler)
+            {
+                LimeSprinkler.ShowPlacementPreview(sprinkler.SprinklerPrefab, transform.position);
+                _showingAreaPreview = true;
+            }
+            else if (_showingAreaPreview)
+            {
+                LimeSprinkler.HidePlacementPreview();
+                _showingAreaPreview = false;
+            }
         }
 
         private void UpdateVisualState(IPlaceable pending)
@@ -201,8 +223,8 @@ namespace _project.Scripts.Object_Scripts
 
             var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
             var runInProgress = turnController && turnController.currentPhase == GamePhase.Tower;
-            slotRenderer.enabled = !_isOccupied && !runInProgress;
-            if (_isOccupied || runInProgress)
+            slotRenderer.enabled = !IsOccupied && !runInProgress;
+            if (IsOccupied || runInProgress)
                 return;
 
             // Property-block tint — `.material.color` would clone a material instance per slot.
