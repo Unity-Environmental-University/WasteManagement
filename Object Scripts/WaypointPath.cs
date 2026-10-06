@@ -357,11 +357,10 @@ namespace _project.Scripts.Object_Scripts
         // An unknown route index falls back to the main route.
         private List<Vector3> GetRouteWaypoints(int routeIndex)
         {
-            return routeIndex > 0 && IsRouteIndex(routeIndex) ? _routes[routeIndex].Waypoints : _waypoints;
+            return routeIndex > 0 && routeIndex < _routes.Count ? _routes[routeIndex].Waypoints : _waypoints;
         }
 
-        /// <summary>Route 0 always counts, so an issue can sit on the main route before the path is built.</summary>
-        public bool IsRouteIndex(int routeIndex)
+        private bool IsRouteIndex(int routeIndex)
         {
             return routeIndex == 0 || (routeIndex > 0 && routeIndex < _routes.Count);
         }
@@ -647,7 +646,6 @@ namespace _project.Scripts.Object_Scripts
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
-            if (_previewRoutes.Count == 1) return;
 
             // Routes that reach the same splitter from different directions share its branch once
             // they have rejoined, so each distinct stretch of pipe is drawn only once.
@@ -738,8 +736,9 @@ namespace _project.Scripts.Object_Scripts
 
             var branchTube = _branchLivePreviews[index];
             var objectName = index == 0 ? "Alternate Path Preview" : $"Alternate Path Preview {index + 1}";
-            GetPreviewTube(objectName, ref branchTube, previewWidth * 0.85f);
-            return _branchLivePreviews[index] = branchTube;
+            branchTube = GetPreviewTube(objectName, ref branchTube, previewWidth * 0.85f);
+            _branchLivePreviews[index] = branchTube;
+            return branchTube;
         }
 
         /// <summary>
@@ -1008,28 +1007,30 @@ namespace _project.Scripts.Object_Scripts
             // Only an unfinished route can still be growing out of its last cell.
             if (!parentExit.HasValue && !allowPartial) return null;
 
-            HashSet<Vector2Int> blocked = null;
+            var blocked = new HashSet<Vector2Int>();
+            for (var i = 0; i <= forkIndex; i++)
+                blocked.Add(parent[i]);
+
             foreach (var direction in Directions)
             {
                 var exit = fork + direction;
-                if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0) continue;
+                if (exit == parentExit || blocked.Contains(exit)) continue;
                 if (!pathBuildBoard.IsOccupied(exit, PathKind)) continue;
 
-                var branch = new Route { ForkIndex = forkIndex };
-                branch.Cells.AddRange(parent.GetRange(0, forkIndex + 1));
-
-                // Pipe an earlier route flows through: join it, or skip an exit the branch could
-                // only enter against that flow.
-                if (IsOnAnyRoute(routes, exit))
-                {
-                    if (TryJoinEarlierRoute(routes, branch, new List<Vector2Int> { exit })) return branch;
-                    continue;
-                }
-
-                blocked ??= new HashSet<Vector2Int>(branch.Cells);
-                var continuation = BreadthFirstSearch(new[] { exit }, goals, blocked, allowPartial);
+                var exitOnRoute = IsOnAnyRoute(routes, exit);
+                var continuation = exitOnRoute
+                    ? new List<Vector2Int> { exit }
+                    : BreadthFirstSearch(new[] { exit }, goals, blocked, allowPartial);
                 if (continuation == null) continue;
+
+                var branch = new Route { ForkIndex = forkIndex };
+                for (var i = 0; i <= forkIndex; i++)
+                    branch.Cells.Add(parent[i]);
+
                 if (TryJoinEarlierRoute(routes, branch, continuation)) return branch;
+
+                // Pipe an earlier route flows through that the branch could only enter against that flow.
+                if (exitOnRoute) continue;
 
                 branch.Cells.AddRange(continuation);
                 branch.Complete = goals.Contains(continuation[^1]);

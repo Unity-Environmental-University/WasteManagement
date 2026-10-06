@@ -46,7 +46,7 @@ namespace _project.Scripts.Object_Scripts
         {
             path = p;
             _waypointIndex = Mathf.Max(0, startIndex);
-            _routeIndex = p && p.IsRouteIndex(routeIndex) ? routeIndex : 0;
+            _routeIndex = p && routeIndex > 0 && routeIndex < p.RouteCount ? routeIndex : 0;
         }
 
         public void SetMoveSpeed(float speed) => moveSpeed = Mathf.Max(0f, speed);
