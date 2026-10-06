@@ -342,8 +342,8 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_cells == null) return;
 
-            RefreshSplitterHighlight();
             var breakPreviewPieceId = GetBreakPreviewPieceId();
+            RefreshSplitterHighlight();
 
             for (var column = 0; column < columns; column++)
             for (var row = 0; row < rows; row++)
@@ -1513,7 +1513,7 @@ namespace _project.Scripts.Object_Scripts
         private int GetBreakPreviewPieceId()
         {
             if (ActiveTool != PathBuildTool.Break || !_hoveredCell || _pieceIds == null ||
-                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row) || _highlightedSplitter)
+                !IsInBounds(_hoveredCell.Column, _hoveredCell.Row) || GetBreakPreviewSplitter())
                 return 0;
 
             if (ActivePathKind == PathKind.RecyclingBelt)
