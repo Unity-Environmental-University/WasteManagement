@@ -21,6 +21,7 @@ namespace _project.Scripts.Object_Scripts
         [FormerlySerializedAs("associatedHealthBar")]
         [SerializeField] private Slider associatedStatusBar;
 
+        private bool _isOccupied;
         private bool _isHovered;
         private bool _showingAreaPreview;
         private Collider _slotCollider;
@@ -29,7 +30,7 @@ namespace _project.Scripts.Object_Scripts
         private static bool Debugging => GameMaster.Instance.debugging;
 
         public PlaceableType AcceptedType => acceptedType;
-        public bool IsOccupied { get; private set; }
+        public bool IsOccupied => _isOccupied;
 
         private void Awake()
         {
@@ -83,7 +84,7 @@ namespace _project.Scripts.Object_Scripts
             var pending = GameMaster.Instance.PendingPlacement;
             if (pending == null) return;
 
-            if (IsOccupied)
+            if (_isOccupied)
             {
                 if (Debugging) Debug.Log("[SpecialInteract] Slot already occupied.");
                 return;
@@ -103,10 +104,26 @@ namespace _project.Scripts.Object_Scripts
                 GameMaster.Instance.pipCompMan.AssignHealthBar(placed, associatedStatusBar);
 
             if (pending.PlaceableType == PlaceableType.Utility && placed &&
-                placed.TryGetComponent<IRemovableUtility>(out var utility))
-                utility.SetSlot(this, pending.InfraValue);
+                placed.TryGetComponent<WasteSifter>(out var sifter))
+                sifter.SetSlot(this, pending.InfraValue);
 
-            IsOccupied = true;
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<Cesspit>(out var cesspit))
+                cesspit.SetSlot(this, pending.InfraValue);
+
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<TreatmentTank>(out var tank))
+                tank.SetSlot(this, pending.InfraValue);
+
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<PathSplitter>(out var splitter))
+                splitter.SetSlot(this, pending.InfraValue);
+
+            if (pending.PlaceableType == PlaceableType.Utility && placed &&
+                placed.TryGetComponent<LimeSprinkler>(out var limeSprinkler))
+                limeSprinkler.SetSlot(this, pending.InfraValue);
+
+            _isOccupied = true;
             _isHovered = false;
             var gm = GameMaster.Instance;
             gm.CompletePlacement(placed);
@@ -126,9 +143,9 @@ namespace _project.Scripts.Object_Scripts
 
         public void ClearOccupied(int infraValue = 0)
         {
-            if (!IsOccupied) return;
+            if (!_isOccupied) return;
 
-            IsOccupied = false;
+            _isOccupied = false;
             if (infraValue > 0 && GameMaster.Instance && GameMaster.Instance.turnController)
                 GameMaster.Instance.turnController.infrastructureValue -= infraValue;
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
@@ -193,7 +210,7 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void RefreshAreaPreview(IPlaceable pending)
         {
-            if (_isHovered && !IsOccupied && pending is LimeSprinklerShopItem sprinkler)
+            if (_isHovered && !_isOccupied && pending is LimeSprinklerShopItem sprinkler)
             {
                 LimeSprinkler.ShowPlacementPreview(sprinkler.SprinklerPrefab, transform.position);
                 _showingAreaPreview = true;
@@ -211,8 +228,8 @@ namespace _project.Scripts.Object_Scripts
 
             var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
             var runInProgress = turnController && turnController.currentPhase == GamePhase.Tower;
-            slotRenderer.enabled = !IsOccupied && !runInProgress;
-            if (IsOccupied || runInProgress)
+            slotRenderer.enabled = !_isOccupied && !runInProgress;
+            if (_isOccupied || runInProgress)
                 return;
 
             // Property-block tint — `.material.color` would clone a material instance per slot.
