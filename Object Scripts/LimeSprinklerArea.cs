@@ -22,13 +22,16 @@ namespace _project.Scripts.Object_Scripts
         ///     Fills <paramref name="result" /> with the 3x3 block of in-bounds cells centred on
         ///     <paramref name="center" />, in column-major order.
         /// </summary>
-        public static void GetCells(PathBuildBoard board, Vector2Int center, List<Vector2Int> result)
+        public static void GetCells(PathBuildBoard board, Vector2Int center, List<Vector2Int> result,
+            bool includeCenter = true)
         {
             result.Clear();
 
             for (var columnOffset = -1; columnOffset <= 1; columnOffset++)
             for (var rowOffset = -1; rowOffset <= 1; rowOffset++)
             {
+                if (!includeCenter && columnOffset == 0 && rowOffset == 0) continue;
+
                 var cell = new Vector2Int(center.x + columnOffset, center.y + rowOffset);
                 if (board.IsCellInBounds(cell)) result.Add(cell);
             }
