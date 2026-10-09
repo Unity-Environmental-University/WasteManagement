@@ -443,6 +443,23 @@ namespace _project.Scripts.Object_Scripts
                    _branchRoutes.TryGetValue((routeIndex, cell), out branchRouteIndex);
         }
 
+        // Where a route comes from and goes to around one of its cells: the neighboring cells, or
+        // the start and end points at the route's ends. Null when the route has nothing on that side.
+        private void GetRouteNeighbors(List<Vector2Int> route, bool complete, int index,
+            out Vector3? previous, out Vector3? next)
+        {
+            previous = index > 0
+                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1], PathKind)
+                : startPoint
+                    ? startPoint.position
+                    : null;
+            next = index < route.Count - 1
+                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1], PathKind)
+                : complete && endPoint
+                    ? endPoint.position
+                    : null;
+        }
+
         /// <summary>
         ///     Returns +1 when water on the live route passes through the cell at
         ///     <paramref name="worldPosition" /> travelling along <paramref name="axis" />, or -1
@@ -467,19 +484,10 @@ namespace _project.Scripts.Object_Scripts
             if (index < 0) return false;
 
             var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
-            var previous = index > 0
-                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1], PathKind)
-                : startPoint
-                    ? startPoint.position
-                    : current;
-            var next = index < route.Count - 1
-                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1], PathKind)
-                : complete && endPoint
-                    ? endPoint.position
-                    : current;
+            GetRouteNeighbors(route, complete, index, out var previous, out var next);
 
             // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
-            var along = Vector3.Dot(next - previous, axis);
+            var along = Vector3.Dot((next ?? current) - (previous ?? current), axis);
             if (Mathf.Abs(along) < 0.0001f) return false;
 
             sign = Mathf.Sign(along);
