@@ -109,7 +109,7 @@ namespace _project.Scripts.Object_Scripts
         // can skip the GetComponentsInChildren<Renderer> walk entirely.
         private readonly Dictionary<GameObject, Color> _appliedVisualColors = new();
 
-        private static readonly Vector2Int[] CellNeighborOffsets =
+        internal static readonly Vector2Int[] CellNeighborOffsets =
         {
             Vector2Int.right,
             Vector2Int.left,
@@ -549,8 +549,13 @@ namespace _project.Scripts.Object_Scripts
             // Waypoint containers in existing scenes are intentionally inactive. Unity does
             // not invoke OnEnable on those components, but their paths are still used by the
             // spawners. Refresh them explicitly so their board-hosted preview remains live.
-            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
+            var paths = FindObjectsByType<WaypointPath>(FindObjectsInactive.Include);
+            foreach (var path in paths)
                 path.RefreshLivePreview();
+
+            foreach (var splitter in PathSplitter.Live)
+                if (splitter)
+                    splitter.RefreshPipeStubs(this, paths);
         }
 
         /// <summary>

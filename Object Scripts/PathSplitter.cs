@@ -40,6 +40,12 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Share of split issues kept on the main route; the rest take the branch.")]
         [SerializeField] [Range(0, 100)] private int mainSharePercent = 50;
 
+        // The model's pipe stubs, one per side, are the child renderers with this in their name.
+        private const string PipeStubName = "Pipe";
+
+        private static readonly List<Vector3> FlowOffsets = new();
+        private static readonly List<Vector2Int> ConnectedSides = new();
+
         private readonly HashSet<EntityId> _routedIssueIds = new();
 
         // Indexed by IssueType.
@@ -48,6 +54,7 @@ namespace _project.Scripts.Object_Scripts
         // Branch share accumulated by split issues; each full 100 sends one down the branch.
         private int _branchCredit;
         private Renderer[] _modelRenderers;
+        private Renderer[] _pipeStubs;
 
         /// <summary>Share (0–100) of split issues kept on the main route; the rest take the branch.</summary>
         public int MainSharePercent
@@ -96,6 +103,43 @@ namespace _project.Scripts.Object_Scripts
             _infraValue = infraValue;
         }
 
+        /// <summary>
+        ///     Shows only the pipe stubs that connect to something on <paramref name="board" />: the
+        ///     intake and each outlet of the live routes through this cell, or, while no route
+        ///     reaches it yet, the sides with pipe laid next to it.
+        /// </summary>
+        public void RefreshPipeStubs(PathBuildBoard board, WaypointPath[] paths)
+        {
+            if (!board.TryWorldToCell(transform.position, out var cell)) return;
+
+            FlowOffsets.Clear();
+            var onRoute = false;
+            foreach (var path in paths)
+                onRoute |= path && path.UsesBoard(board) &&
+                           path.CollectFlowOffsets(transform.position, FlowOffsets);
+
+            if (!onRoute)
+                foreach (var step in PathBuildBoard.CellNeighborOffsets)
+                    if (board.IsOccupied(cell + step))
+                        FlowOffsets.Add(board.GetCellTopPosition(cell + step) - board.GetCellTopPosition(cell));
+
+            ConnectedSides.Clear();
+            foreach (var offset in FlowOffsets)
+                ConnectedSides.Add(GetSide(transform.InverseTransformDirection(offset)));
+
+            // The stubs share the model's pivot, so a stub's side comes from where its mesh sits.
+            foreach (var stub in _pipeStubs)
+                stub.enabled = ConnectedSides.Contains(GetSide(transform.InverseTransformPoint(
+                    stub.transform.TransformPoint(stub.localBounds.center))));
+        }
+
+        private static Vector2Int GetSide(Vector3 local)
+        {
+            return Mathf.Abs(local.x) > Mathf.Abs(local.z)
+                ? new Vector2Int(local.x > 0f ? 1 : -1, 0)
+                : new Vector2Int(0, local.z > 0f ? 1 : -1);
+        }
+
         private void Awake()
         {
             if (!TryGetComponent<Collider>(out var trigger))
@@ -115,6 +159,8 @@ namespace _project.Scripts.Object_Scripts
                 child.gameObject.layer = ignoreRaycastLayer;
 
             _modelRenderers = GetComponentsInChildren<Renderer>(true);
+            _pipeStubs = Array.FindAll(_modelRenderers,
+                modelRenderer => modelRenderer.name.Contains(PipeStubName));
         }
 
         private void OnEnable()

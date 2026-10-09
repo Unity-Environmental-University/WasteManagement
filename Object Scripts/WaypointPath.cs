@@ -443,6 +443,31 @@ namespace _project.Scripts.Object_Scripts
                    _branchRoutes.TryGetValue((routeIndex, cell), out branchRouteIndex);
         }
 
+        /// <summary>
+        ///     Adds the world-space offset from the cell at <paramref name="worldPosition" /> to each
+        ///     neighbor the live routes enter it from or leave it by. False when no live route
+        ///     crosses that cell.
+        /// </summary>
+        public bool CollectFlowOffsets(Vector3 worldPosition, List<Vector3> offsets)
+        {
+            if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
+
+            var found = false;
+            foreach (var route in _previewRoutes)
+            {
+                var index = route.Cells.IndexOf(cell);
+                if (index < 0) continue;
+
+                found = true;
+                var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
+                GetRouteNeighbors(route.Cells, route.Complete, index, out var previous, out var next);
+                if (previous.HasValue) offsets.Add(previous.Value - current);
+                if (next.HasValue) offsets.Add(next.Value - current);
+            }
+
+            return found;
+        }
+
         // Where a route comes from and goes to around one of its cells: the neighboring cells, or
         // the start and end points at the route's ends. Null when the route has nothing on that side.
         private void GetRouteNeighbors(List<Vector2Int> route, bool complete, int index,

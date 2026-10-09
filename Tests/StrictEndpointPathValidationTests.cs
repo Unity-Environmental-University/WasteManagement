@@ -146,6 +146,53 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitter_ShowsOnlyThePipeStubsItsRoutesUse()
+        {
+            var fixture = CreateSplitPathFixture();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var cell = new Vector2Int(1, 2);
+            var host = CreateGameObject("Path Splitter");
+            host.transform.position = CellTop(fixture, cell.x, cell.y);
+
+            Renderer AddStub(Vector2Int neighbor)
+            {
+                var stub = CreatePrimitive($"Model_Pipe {neighbor}");
+                stub.transform.SetParent(host.transform, false);
+                stub.transform.position = Vector3.Lerp(host.transform.position,
+                    CellTop(fixture, neighbor.x, neighbor.y), 0.4f);
+                return stub.GetComponent<Renderer>();
+            }
+
+            var intake = AddStub(new Vector2Int(1, 1));
+            var mainOutlet = AddStub(new Vector2Int(1, 3));
+            var branchOutlet = AddStub(new Vector2Int(2, 2));
+            var unused = AddStub(new Vector2Int(0, 2));
+
+            // The splitter finds its stubs by name and announces itself, which refreshes them.
+            var splitter = host.AddComponent<PathSplitter>();
+
+            Assert.IsTrue(intake.enabled);
+            Assert.IsTrue(mainOutlet.enabled);
+            Assert.IsTrue(branchOutlet.enabled);
+            Assert.IsFalse(unused.enabled, "No route uses the fourth side.");
+
+            // Placed ahead of any pipe, the splitter has nothing to connect to.
+            splitter.transform.position = CellTop(fixture, 5, 5);
+            splitter.enabled = false;
+            splitter.enabled = true;
+            foreach (var stub in new[] { intake, mainOutlet, branchOutlet, unused })
+                Assert.IsFalse(stub.enabled, stub.name);
+
+            // Pipe laid beside it shows that side at once, before any route reaches the splitter.
+            PlaceVertical(fixture.Board, 5, 5, 2);
+            Assert.IsTrue(mainOutlet.enabled);
+            Assert.IsFalse(intake.enabled);
+            Assert.IsFalse(branchOutlet.enabled);
+            Assert.IsFalse(unused.enabled);
+        }
+
+        [Test]
         public void LivePreview_DoesNotShowAlternateBranchForSplitterAwayFromFork()
         {
             var fixture = CreateSplitPathFixture();
