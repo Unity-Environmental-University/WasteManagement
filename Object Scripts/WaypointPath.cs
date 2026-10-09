@@ -647,6 +647,7 @@ namespace _project.Scripts.Object_Scripts
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
+            if (_previewRoutes.Count == 1) return;
 
             // Routes that reach the same splitter from different directions share its branch once
             // they have rejoined, so each distinct stretch of pipe is drawn only once.
@@ -737,9 +738,8 @@ namespace _project.Scripts.Object_Scripts
 
             var branchTube = _branchLivePreviews[index];
             var objectName = index == 0 ? "Alternate Path Preview" : $"Alternate Path Preview {index + 1}";
-            branchTube = GetPreviewTube(objectName, ref branchTube, previewWidth * 0.85f);
-            _branchLivePreviews[index] = branchTube;
-            return branchTube;
+            GetPreviewTube(objectName, ref branchTube, previewWidth * 0.85f);
+            return _branchLivePreviews[index] = branchTube;
         }
 
         /// <summary>
