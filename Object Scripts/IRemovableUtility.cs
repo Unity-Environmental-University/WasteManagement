@@ -10,6 +10,9 @@ namespace _project.Scripts.Object_Scripts
     {
         bool CanRemove { get; }
 
+        /// <summary>Called by <see cref="SpecialInteractController" /> when this utility is placed.</summary>
+        void SetSlot(SpecialInteractController slot, int infraValue = 0);
+
         /// <summary>Frees the utility's slot, refunds its infrastructure value, and destroys it.</summary>
         void Remove();
     }
