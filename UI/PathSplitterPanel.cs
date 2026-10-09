@@ -89,15 +89,15 @@ namespace _project.Scripts.UI
             if (window && window.activeSelf && (!Target || !Target.isActiveAndEnabled))
                 Hide();
 
-            // Tuning is a setup-phase job; close the window when the tower phase begins.
-            var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
-            if (IsOpen && turnController && turnController.currentPhase != GamePhase.Card)
-                Hide();
-
-            // The Remove tool's hover tint would fight the target tint; it can't tune anyway.
-            var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
-            if (IsOpen && board && board.ActiveTool == PathBuildTool.Break)
-                Hide();
+            var gm = GameMaster.Instance;
+            if (IsOpen && gm)
+            {
+                // Tuning is a setup-phase job; close the window when the tower phase begins.
+                var setupOver = gm.turnController && gm.turnController.currentPhase != GamePhase.Card;
+                // The Remove tool's hover tint would fight the target tint; it can't tune anyway.
+                var removing = gm.pathBuildBoard && gm.pathBuildBoard.ActiveTool == PathBuildTool.Break;
+                if (setupOver || removing) Hide();
+            }
 
             if (IsOpen && Keyboard.current != null && Keyboard.current[Key.Escape].wasPressedThisFrame)
                 Hide();
