@@ -357,10 +357,11 @@ namespace _project.Scripts.Object_Scripts
         // An unknown route index falls back to the main route.
         private List<Vector3> GetRouteWaypoints(int routeIndex)
         {
-            return routeIndex > 0 && routeIndex < _routes.Count ? _routes[routeIndex].Waypoints : _waypoints;
+            return routeIndex > 0 && IsRouteIndex(routeIndex) ? _routes[routeIndex].Waypoints : _waypoints;
         }
 
-        private bool IsRouteIndex(int routeIndex)
+        /// <summary>Route 0 always counts, so an issue can sit on the main route before the path is built.</summary>
+        public bool IsRouteIndex(int routeIndex)
         {
             return routeIndex == 0 || (routeIndex > 0 && routeIndex < _routes.Count);
         }

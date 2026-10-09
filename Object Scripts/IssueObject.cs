@@ -538,7 +538,7 @@ namespace _project.Scripts.Object_Scripts
         public bool TrySetRoute(int routeIndex)
         {
             if (!path || IsDirectDestination) return false;
-            if (routeIndex < 0 || (routeIndex > 0 && routeIndex >= path.RouteCount)) return false;
+            if (!path.IsRouteIndex(routeIndex)) return false;
 
             _routeIndex = routeIndex;
             _waypointIndex = path.FindClosestWaypointIndex(routeIndex, transform.position, _waypointIndex);
