@@ -555,7 +555,7 @@ namespace _project.Scripts.Object_Scripts
 
             foreach (var splitter in PathSplitter.Live)
                 if (splitter)
-                    splitter.RefreshPipeStubs(this, paths);
+                    splitter.RefreshConnections(this, paths);
         }
 
         /// <summary>

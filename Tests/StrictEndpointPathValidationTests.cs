@@ -146,7 +146,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathSplitter_ShowsOnlyThePipeStubsItsRoutesUse()
+        public void PathSplitter_ShowsItsConnectedStubsAndPointsHandlesDownItsOutlets()
         {
             var fixture = CreateSplitPathFixture();
             Assert.IsTrue(fixture.Path.Rebuild());
@@ -155,19 +155,28 @@ namespace _project.Scripts.Tests
             var host = CreateGameObject("Path Splitter");
             host.transform.position = CellTop(fixture, cell.x, cell.y);
 
-            Renderer AddStub(Vector2Int neighbor)
+            Renderer AddPart(string partName, Vector2Int neighbor)
             {
-                var stub = CreatePrimitive($"Model_Pipe {neighbor}");
+                var stub = CreatePrimitive($"Model_{partName} {neighbor}");
                 stub.transform.SetParent(host.transform, false);
                 stub.transform.position = Vector3.Lerp(host.transform.position,
                     CellTop(fixture, neighbor.x, neighbor.y), 0.4f);
                 return stub.GetComponent<Renderer>();
             }
 
-            var intake = AddStub(new Vector2Int(1, 1));
-            var mainOutlet = AddStub(new Vector2Int(1, 3));
-            var branchOutlet = AddStub(new Vector2Int(2, 2));
-            var unused = AddStub(new Vector2Int(0, 2));
+            var intake = AddPart("Pipe", new Vector2Int(1, 1));
+            var mainOutlet = AddPart("Pipe", new Vector2Int(1, 3));
+            var branchOutlet = AddPart("Pipe", new Vector2Int(2, 2));
+            var unused = AddPart("Pipe", new Vector2Int(0, 2));
+            var mainHandle = AddPart("ValveBlue", new Vector2Int(0, 2));
+            var branchHandle = AddPart("ValveOrange", new Vector2Int(1, 3));
+
+            void AssertPointsAt(Renderer handle, Vector2Int neighbor)
+            {
+                Assert.IsTrue(handle.enabled, handle.name);
+                var expected = Vector3.Lerp(host.transform.position, CellTop(fixture, neighbor.x, neighbor.y), 0.4f);
+                Assert.Less(Vector3.Distance(expected, handle.transform.position), 0.001f, handle.name);
+            }
 
             // The splitter finds its stubs by name and announces itself, which refreshes them.
             var splitter = host.AddComponent<PathSplitter>();
@@ -176,13 +185,15 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(mainOutlet.enabled);
             Assert.IsTrue(branchOutlet.enabled);
             Assert.IsFalse(unused.enabled, "No route uses the fourth side.");
+            AssertPointsAt(mainHandle, new Vector2Int(1, 3));
+            AssertPointsAt(branchHandle, new Vector2Int(2, 2));
 
             // Placed ahead of any pipe, the splitter has nothing to connect to.
             splitter.transform.position = CellTop(fixture, 5, 5);
             splitter.enabled = false;
             splitter.enabled = true;
-            foreach (var stub in new[] { intake, mainOutlet, branchOutlet, unused })
-                Assert.IsFalse(stub.enabled, stub.name);
+            foreach (var part in new[] { intake, mainOutlet, branchOutlet, unused, mainHandle, branchHandle })
+                Assert.IsFalse(part.enabled, part.name);
 
             // Pipe laid beside it shows that side at once, before any route reaches the splitter.
             PlaceVertical(fixture.Board, 5, 5, 2);

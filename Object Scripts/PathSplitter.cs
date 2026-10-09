@@ -43,6 +43,10 @@ namespace _project.Scripts.Object_Scripts
         // The model's pipe stubs, one per side, are the child renderers with this in their name.
         private const string PipeStubName = "Pipe";
 
+        // The valve handles that point down the main lane and the branch, found the same way.
+        private const string MainHandleName = "ValveBlue";
+        private const string BranchHandleName = "ValveOrange";
+
         private static readonly List<Vector3> FlowOffsets = new();
         private static readonly List<Vector2Int> ConnectedSides = new();
 
@@ -55,6 +59,8 @@ namespace _project.Scripts.Object_Scripts
         private int _branchCredit;
         private Renderer[] _modelRenderers;
         private Renderer[] _pipeStubs;
+        private Renderer _mainHandle;
+        private Renderer _branchHandle;
 
         /// <summary>Share (0–100) of split issues kept on the main route; the rest take the branch.</summary>
         public int MainSharePercent
@@ -104,19 +110,25 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Shows only the pipe stubs that connect to something on <paramref name="board" />: the
-        ///     intake and each outlet of the live routes through this cell, or, while no route
-        ///     reaches it yet, the sides with pipe laid next to it.
+        ///     Matches the model to what it connects to on <paramref name="board" />. Only the pipe
+        ///     stubs on connected sides show: the intake and each outlet of the live routes through
+        ///     this cell, or, while no route reaches it yet, the sides with pipe laid next to it.
+        ///     Each valve handle points down its outlet, and hides while that outlet doesn't exist.
         /// </summary>
-        public void RefreshPipeStubs(PathBuildBoard board, WaypointPath[] paths)
+        public void RefreshConnections(PathBuildBoard board, WaypointPath[] paths)
         {
             if (!board.TryWorldToCell(transform.position, out var cell)) return;
 
             FlowOffsets.Clear();
             var onRoute = false;
+            Vector3? mainOutlet = null;
+            Vector3? branchOutlet = null;
             foreach (var path in paths)
-                onRoute |= path && path.UsesBoard(board) &&
-                           path.CollectFlowOffsets(transform.position, FlowOffsets);
+            {
+                if (!path || !path.UsesBoard(board)) continue;
+                onRoute |= path.CollectFlowOffsets(transform.position, FlowOffsets);
+                path.GetOutletOffsets(transform.position, ref mainOutlet, ref branchOutlet);
+            }
 
             if (!onRoute)
                 foreach (var step in PathBuildBoard.CellNeighborOffsets)
@@ -127,10 +139,30 @@ namespace _project.Scripts.Object_Scripts
             foreach (var offset in FlowOffsets)
                 ConnectedSides.Add(GetSide(transform.InverseTransformDirection(offset)));
 
-            // The stubs share the model's pivot, so a stub's side comes from where its mesh sits.
             foreach (var stub in _pipeStubs)
-                stub.enabled = ConnectedSides.Contains(GetSide(transform.InverseTransformPoint(
-                    stub.transform.TransformPoint(stub.localBounds.center))));
+                stub.enabled = ConnectedSides.Contains(GetModelSide(stub));
+
+            PointHandle(_mainHandle, mainOutlet);
+            PointHandle(_branchHandle, branchOutlet);
+        }
+
+        private void PointHandle(Renderer handle, Vector3? outletOffset)
+        {
+            if (!handle) return;
+
+            handle.enabled = outletOffset.HasValue;
+            if (!outletOffset.HasValue) return;
+
+            var from = GetModelSide(handle);
+            var to = GetSide(transform.InverseTransformDirection(outletOffset.Value));
+            var angle = Vector3.SignedAngle(new Vector3(from.x, 0f, from.y), new Vector3(to.x, 0f, to.y), Vector3.up);
+            handle.transform.RotateAround(transform.position, transform.up, angle);
+        }
+
+        // The model's parts share its pivot, so the side a part is on comes from where its mesh sits.
+        private Vector2Int GetModelSide(Renderer part)
+        {
+            return GetSide(transform.InverseTransformPoint(part.transform.TransformPoint(part.localBounds.center)));
         }
 
         private static Vector2Int GetSide(Vector3 local)
@@ -161,6 +193,10 @@ namespace _project.Scripts.Object_Scripts
             _modelRenderers = GetComponentsInChildren<Renderer>(true);
             _pipeStubs = Array.FindAll(_modelRenderers,
                 modelRenderer => modelRenderer.name.Contains(PipeStubName));
+            _mainHandle = Array.Find(_modelRenderers,
+                modelRenderer => modelRenderer.name.Contains(MainHandleName));
+            _branchHandle = Array.Find(_modelRenderers,
+                modelRenderer => modelRenderer.name.Contains(BranchHandleName));
         }
 
         private void OnEnable()

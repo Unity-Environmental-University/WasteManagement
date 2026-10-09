@@ -468,6 +468,31 @@ namespace _project.Scripts.Object_Scripts
             return found;
         }
 
+        /// <summary>
+        ///     Finds the world-space offsets from the cell at <paramref name="worldPosition" /> to
+        ///     where the live routes leave it: the lane that carries on, and the branch that forks
+        ///     off there. An offset already set, or with no route on that side, is left alone.
+        /// </summary>
+        public void GetOutletOffsets(Vector3 worldPosition, ref Vector3? main, ref Vector3? branch)
+        {
+            if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return;
+
+            // A branch lists the route it forked from first, so the first route through the cell
+            // that doesn't fork there is the lane the others branch off.
+            var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
+            foreach (var route in _previewRoutes)
+            {
+                var index = route.Cells.IndexOf(cell);
+                if (index < 0) continue;
+
+                ref var outlet = ref route.ForkIndex == index ? ref branch : ref main;
+                if (outlet.HasValue) continue;
+
+                GetRouteNeighbors(route.Cells, route.Complete, index, out _, out var next);
+                outlet = next - current;
+            }
+        }
+
         // Where a route comes from and goes to around one of its cells: the neighboring cells, or
         // the start and end points at the route's ends. Null when the route has nothing on that side.
         private void GetRouteNeighbors(List<Vector2Int> route, bool complete, int index,
