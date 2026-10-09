@@ -1008,30 +1008,28 @@ namespace _project.Scripts.Object_Scripts
             // Only an unfinished route can still be growing out of its last cell.
             if (!parentExit.HasValue && !allowPartial) return null;
 
-            var blocked = new HashSet<Vector2Int>();
-            for (var i = 0; i <= forkIndex; i++)
-                blocked.Add(parent[i]);
-
+            HashSet<Vector2Int> blocked = null;
             foreach (var direction in Directions)
             {
                 var exit = fork + direction;
-                if (exit == parentExit || blocked.Contains(exit)) continue;
+                if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0) continue;
                 if (!pathBuildBoard.IsOccupied(exit, PathKind)) continue;
 
-                var exitOnRoute = IsOnAnyRoute(routes, exit);
-                var continuation = exitOnRoute
-                    ? new List<Vector2Int> { exit }
-                    : BreadthFirstSearch(new[] { exit }, goals, blocked, allowPartial);
-                if (continuation == null) continue;
-
                 var branch = new Route { ForkIndex = forkIndex };
-                for (var i = 0; i <= forkIndex; i++)
-                    branch.Cells.Add(parent[i]);
+                branch.Cells.AddRange(parent.GetRange(0, forkIndex + 1));
 
+                // Pipe an earlier route flows through: join it, or skip an exit the branch could
+                // only enter against that flow.
+                if (IsOnAnyRoute(routes, exit))
+                {
+                    if (TryJoinEarlierRoute(routes, branch, new List<Vector2Int> { exit })) return branch;
+                    continue;
+                }
+
+                blocked ??= new HashSet<Vector2Int>(branch.Cells);
+                var continuation = BreadthFirstSearch(new[] { exit }, goals, blocked, allowPartial);
+                if (continuation == null) continue;
                 if (TryJoinEarlierRoute(routes, branch, continuation)) return branch;
-
-                // Pipe an earlier route flows through that the branch could only enter against that flow.
-                if (exitOnRoute) continue;
 
                 branch.Cells.AddRange(continuation);
                 branch.Complete = goals.Contains(continuation[^1]);
