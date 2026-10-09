@@ -71,12 +71,8 @@ namespace _project.Scripts.Object_Scripts
         {
             // Lift the reduction this sprinkler applied to the cesspits in its block.
             foreach (var pit in FindObjectsByType<Cesspit>())
-            {
-                var cells = GetSurroundingCells();
-                if (cells.Count > 0 && board.TryWorldToCell(pit.transform.position, out var pitCell) &&
-                    cells.Contains(pitCell))
+                if (Covers(pit))
                     pit.ApplyStinkReduction(-limeStinkReduction);
-            }
 
             if (_slot) _slot.ClearOccupied(_infraValue);
             Destroy(gameObject);
@@ -95,15 +91,14 @@ namespace _project.Scripts.Object_Scripts
         ///     sits off-board or no <see cref="PathBuildBoard" /> can be resolved.
         ///     The returned list is reused between calls — copy it if you need to hold onto it.
         /// </summary>
-        /// <param name="includeCenter">False to skip the sprinkler's own cell and return only the 8 neighbours.</param>
-        private List<Vector2Int> GetSurroundingCells(bool includeCenter = true)
+        private List<Vector2Int> GetSurroundingCells()
         {
             _surroundingCells.Clear();
 
             if (!ResolveBoard() || !board.TryWorldToCell(transform.position, out var center))
                 return _surroundingCells;
 
-            LimeSprinklerArea.GetCells(board, center, _surroundingCells, includeCenter);
+            LimeSprinklerArea.GetCells(board, center, _surroundingCells);
             return _surroundingCells;
         }
 
@@ -168,18 +163,19 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public bool TryApplyTo(Cesspit pit)
         {
-            if (!pit) return false;
-
-            // Empty when the board is unresolved or this sprinkler sits off-board; returning here
-            // also keeps the board dereference below safe.
-            var cells = GetSurroundingCells();
-            if (cells.Count == 0) return false;
-
-            if (!board.TryWorldToCell(pit.transform.position, out var pitCell) ||
-                !cells.Contains(pitCell)) return false;
+            if (!pit || !Covers(pit)) return false;
 
             pit.ApplyStinkReduction(limeStinkReduction);
             return true;
+        }
+
+        private bool Covers(Cesspit pit)
+        {
+            // Empty when the board is unresolved or this sprinkler sits off-board; checking the
+            // count first also keeps the board dereference safe.
+            var cells = GetSurroundingCells();
+            return cells.Count > 0 && board.TryWorldToCell(pit.transform.position, out var pitCell) &&
+                   cells.Contains(pitCell);
         }
 
         #endregion
