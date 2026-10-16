@@ -227,5 +227,15 @@ namespace _project.Scripts.Core
             if (_populationSize < startingPopSize)
                 _populationSize = startingPopSize;
         }
+
+        public int GetEra(int level)
+        {
+            if (level <= 1)
+                return 1; // Era 1
+            if (level <= 4)
+                return 2; // Era 2
+            else
+                return 3; // Era 3
+        }
     }
 }
