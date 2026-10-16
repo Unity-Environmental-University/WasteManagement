@@ -1,12 +1,13 @@
 using _project.Scripts.Core;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace _project.Scripts.UI
 {
-    public class ShopObject : MonoBehaviour
+    public class ShopObject : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
         [SerializeField] private TextMeshProUGUI titleText;
         [FormerlySerializedAs("costText")]
@@ -32,6 +33,17 @@ namespace _project.Scripts.UI
         private void OnDestroy()
         {
             UnbindInventory();
+            ShopManager.Instance?.ClearHoveredShopObject(this);
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            ShopManager.Instance?.SetHoveredShopObject(this, ShopItem);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            ShopManager.Instance?.ClearHoveredShopObject(this);
         }
 
         public void Setup(IShopItem item)
@@ -79,13 +91,16 @@ namespace _project.Scripts.UI
             if (PlaceableItem != null)
             {
                 ArmOrDisarmPlaceable();
+                var inventory = GameMaster.Instance ? GameMaster.Instance.placementInventory : null;
+                ShopManager.Instance?.SetSelectedShopItem(inventory ? inventory.SelectedItem : ShopItem);
                 return;
             }
 
             // One-shot, non-placeable items (cards) keep the original buy-and-remove behavior.
+            ShopManager.Instance?.SetSelectedShopItem(ShopItem);
             ShopItem.Purchase();
             if (!ShopItem.RemoveAfterPurchase) return;
-            ShopManager.Instance.MarkPurchased(ShopItem);
+            ShopManager.Instance!.MarkPurchased(ShopItem);
             ShopManager.Instance.RemoveShopItem(gameObject);
         }
 
@@ -130,6 +145,8 @@ namespace _project.Scripts.UI
         /// <summary>Orange box while this item is the pending selection, so the player knows what they are placing.</summary>
         private void HandleSelectionChanged(IPlaceable selected)
         {
+            ShopManager.Instance?.SetSelectedShopItem(selected);
+
             var isSelected = selected != null && selected == PlaceableItem;
             if (isSelected == _isSelected) return;
             _isSelected = isSelected;

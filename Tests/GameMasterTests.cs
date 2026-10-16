@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
+using _project.Scripts.UI;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -48,6 +49,60 @@ namespace _project.Scripts.Tests
 
             Assert.IsNotNull(gameMaster.pathBuildBoard);
             Assert.AreEqual(boardGo.GetComponent<PathBuildBoard>(), gameMaster.pathBuildBoard);
+        }
+
+        [Test]
+        public void ShopItemHoverEffect_RemainsActiveForHoveredOrSelectedItem()
+        {
+            var manager = CreateGameObject("Shop UI").AddComponent<ShopManager>();
+            var effect = CreateGameObject("Shop Item Effect");
+            SetPrivateField(manager, "shopItemHoverEffect", effect);
+            var itemDescription = effect.AddComponent<ItemDescription>();
+            var textMeshProType = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Select(assembly => assembly.GetType("TMPro.TextMeshProUGUI"))
+                .FirstOrDefault(type => type != null);
+            Assert.IsNotNull(textMeshProType);
+            var nameText = CreateGameObject("Item Name").AddComponent(textMeshProType);
+            var descriptionText = CreateGameObject("Item Description").AddComponent(textMeshProType);
+            SetPrivateField(itemDescription, "itemNameText", nameText);
+            SetPrivateField(itemDescription, "itemDescriptionText", descriptionText);
+            var textProperty = textMeshProType.GetProperty("text");
+            Assert.IsNotNull(textProperty);
+            effect.SetActive(false);
+            var firstItem = CreateGameObject("First Shop Item").AddComponent<ShopObject>();
+            var secondItem = CreateGameObject("Second Shop Item").AddComponent<ShopObject>();
+            var hoveredItem = new TestShopItem("Hovered", "Hovered description");
+            var selectedItem = new TestShopItem("Selected", "Selected description");
+
+            manager.SetHoveredShopObject(firstItem, hoveredItem);
+            Assert.IsTrue(effect.activeSelf);
+            Assert.AreEqual("Hovered", textProperty.GetValue(nameText));
+            Assert.AreEqual("Hovered description", textProperty.GetValue(descriptionText));
+
+            firstItem.OnPointerExit(null);
+            Assert.IsFalse(effect.activeSelf);
+
+            manager.SetSelectedShopItem(selectedItem);
+            manager.SetHoveredShopObject(firstItem, hoveredItem);
+            firstItem.OnPointerExit(null);
+            Assert.IsTrue(effect.activeSelf);
+            Assert.AreEqual("Selected", textProperty.GetValue(nameText));
+            Assert.AreEqual("Selected description", textProperty.GetValue(descriptionText));
+
+            manager.SetHoveredShopObject(secondItem, hoveredItem);
+            manager.SetSelectedShopItem(null);
+            firstItem.OnPointerExit(null);
+            Assert.IsTrue(effect.activeSelf);
+            Assert.AreEqual("Hovered", textProperty.GetValue(nameText));
+            Assert.AreEqual("Hovered description", textProperty.GetValue(descriptionText));
+
+            secondItem.OnPointerExit(null);
+            Assert.IsFalse(effect.activeSelf);
+
+            manager.SetSelectedShopItem(selectedItem);
+            manager.SetHoveredShopObject(firstItem, hoveredItem);
+            manager.CloseShop();
+            Assert.IsFalse(effect.activeSelf);
         }
 
         [Test]
@@ -557,6 +612,23 @@ namespace _project.Scripts.Tests
             public void Purchase() { }
 
             public GameObject Place(Transform location) => null;
+        }
+
+        private sealed class TestShopItem : IShopItem
+        {
+            public TestShopItem(string displayName, string description)
+            {
+                DisplayName = displayName;
+                Description = description;
+            }
+
+            public string DisplayName { get; }
+            public string Description { get; }
+            public int RequiredLevel => 1;
+            public int InfraValue => 0;
+            public Sprite DisplaySprite => null;
+            public bool RemoveAfterPurchase => false;
+            public void Purchase() { }
         }
     }
 }

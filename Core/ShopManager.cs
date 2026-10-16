@@ -11,6 +11,13 @@ namespace _project.Scripts.Core
         [SerializeField] private Transform shopItemsParent;
         [SerializeField] private ShopObject shopItemPrefab;
 
+        [Header("Shop Item Effect")]
+        [Tooltip("Enabled while a shop item is hovered or an item remains selected.")]
+
+
+        [SerializeField]
+        private GameObject shopItemHoverEffect;
+
         [Header("Tower Item")] [SerializeField]
         private string towerDisplayName = "Processing Tower";
 
@@ -125,6 +132,9 @@ namespace _project.Scripts.Core
         private readonly List<IShopItem> _stockItems = new();
         private readonly HashSet<IShopItem> _purchasedItems = new();
         private bool _stockCreated;
+        private ShopObject _hoveredShopObject;
+        private IShopItem _hoveredShopItem;
+        private IShopItem _selectedShopItem;
 
         private static int CurrentLevel =>
             GameMaster.Instance && GameMaster.Instance.turnController ? 
@@ -145,6 +155,7 @@ namespace _project.Scripts.Core
 
             Instance = this;
             if (shopPanel) shopPanel.SetActive(false);
+            if (shopItemHoverEffect) shopItemHoverEffect.SetActive(false);
         }
 
         public void OpenShop()
@@ -185,8 +196,45 @@ namespace _project.Scripts.Core
         public void CloseShop()
         {
             if (shopPanel) shopPanel.SetActive(false);
+            _hoveredShopObject = null;
+            _hoveredShopItem = null;
+            _selectedShopItem = null;
+            RefreshShopItemHoverEffect();
             GameMaster.Instance?.interfaceManager?.RecoverUIForShop();
             if (Debugging) Debug.Log("[ShopManager] Shop closed.");
+        }
+
+        public void SetHoveredShopObject(ShopObject shopObject, IShopItem item)
+        {
+            _hoveredShopObject = shopObject;
+            _hoveredShopItem = item;
+            RefreshShopItemHoverEffect();
+        }
+
+        public void ClearHoveredShopObject(ShopObject shopObject)
+        {
+            if (_hoveredShopObject != shopObject) return;
+
+            _hoveredShopObject = null;
+            _hoveredShopItem = null;
+            RefreshShopItemHoverEffect();
+        }
+
+        public void SetSelectedShopItem(IShopItem item)
+        {
+            _selectedShopItem = item;
+            RefreshShopItemHoverEffect();
+        }
+
+        private void RefreshShopItemHoverEffect()
+        {
+            if (shopItemHoverEffect)
+                shopItemHoverEffect.SetActive(_hoveredShopObject || _selectedShopItem != null);
+
+            var itemToDisplay = _hoveredShopItem ?? _selectedShopItem;
+            if (shopItemHoverEffect && itemToDisplay != null &&
+                shopItemHoverEffect.TryGetComponent<ItemDescription>(out var itemDescription))
+                itemDescription.SetItemDescription(itemToDisplay.DisplayName, itemToDisplay.Description);
         }
 
         public void RemoveShopItem(GameObject shopItemGo)
