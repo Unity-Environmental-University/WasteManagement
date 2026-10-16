@@ -10,6 +10,12 @@ namespace _project.Scripts.UI
 {
     public class InterfaceManager : MonoBehaviour
     {
+        [Header("Dynamic UI Elements")]
+        [SerializeField] private DynamicSpriteSO openShopButtonSprite;
+        [SerializeField] private DynamicSpriteSO closeShopButtonSprite;
+        public DynamicSpriteSO ItemBoxSprite;
+
+        [Header("UI Elements")]
         [SerializeField] private Button quitButton;
         [SerializeField] private Button nextButton;
         [SerializeField] private Button openShopButton;
@@ -87,6 +93,16 @@ namespace _project.Scripts.UI
             SetActive(nextButton, false);
             EnsurePathToolBar();
             if (pathToolBar) pathToolBar.SetVisible(false);
+        }
+
+        private void OnEnable()
+        {
+            TurnController.OnLevelChanged += UpdateUIElements;
+        }
+
+        private void OnDisable()
+        {
+            TurnController.OnLevelChanged -= UpdateUIElements;
         }
 
         public void ShowPrepUI()
@@ -254,6 +270,13 @@ namespace _project.Scripts.UI
         private static void SetActive(GameObject target, bool active)
         {
             if (target) target.SetActive(active);
+        }
+
+        public void UpdateUIElements(int level)
+        {
+            var era = GameMaster.Instance ? GameMaster.Instance.popManager.GetEra(level) : 1;
+            if (openShopButton && openShopButtonSprite) openShopButton.image.sprite = openShopButtonSprite.GetSpriteForEra(era);
+            if (closeShopButton && closeShopButtonSprite) closeShopButton.image.sprite = closeShopButtonSprite.GetSpriteForEra(era);
         }
     }
 }
