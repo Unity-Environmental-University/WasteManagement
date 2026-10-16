@@ -33,25 +33,18 @@ namespace _project.Scripts.Object_Scripts
     /// </summary>
     public class PathBuildBoard : MonoBehaviour
     {
-        /// <summary>
-        ///     Raised whenever the occupied-cell graph changes. Runtime path previews can
-        ///     subscribe to this instead of rebuilding every frame.
-        /// </summary>
-        public event Action PathLayoutChanged;
-        [SerializeField] private Material conveyorMaterial;
-        public Material ConveyorMaterial => conveyorMaterial ? conveyorMaterial : pipeMaterial;
-        private readonly Dictionary<Vector2Int, int> _beltPieceIds = new();
-        private GameObject _beltPreviewVisual;
-        private Vector2Int? _beltPreviewAnchor;
-        private int _beltPreviewLength;
-        private PathPieceOrientation _beltPreviewOrientation;
-        public PathKind ActivePathKind { get; private set; }
+        internal static readonly Vector2Int[] CellNeighborOffsets =
+        {
+            Vector2Int.right,
+            Vector2Int.left,
+            Vector2Int.up,
+            Vector2Int.down
+        };
 
-        private static PathKind KindOf(IPathPiecePlaceable piece) =>
-            piece is ITypedPathPiece typed ? typed.PathKind : PathKind.Pipe;
+        // Board cells under a placed conveyor belt.
+        private static readonly Color BeltCellColor = new(0.15f, 0.4f, 0.22f);
 
         [Header("Grid")] [SerializeField] private int columns = 10;
-
         [SerializeField] private int rows = 10;
         [SerializeField] private float cellSize = 1f;
         [SerializeField] private float cellGap = 0.1f;
@@ -59,13 +52,15 @@ namespace _project.Scripts.Object_Scripts
 
         [Header("Visuals")] [SerializeField] private Material cellMaterial;
         [SerializeField] private Material pipeMaterial;
+        [SerializeField] private Material conveyorMaterial;
+        [SerializeField] private PipeVisualLibrary pipeVisualLibrary;
         [SerializeField] private Color emptyColor = new(0.18f, 0.18f, 0.18f, 1f);
-
         [SerializeField] private Color occupiedColor = new(0.28f, 0.28f, 0.28f, 1f);
         [SerializeField] private Color validPreviewColor = new(0.35f, 0.8f, 1f, 1f);
         [SerializeField] private Color invalidPreviewColor = new(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color placedPipeColor = new(0.8f, 0.8f, 0.8f, 1f);
         [SerializeField] private Color breakPreviewColor = new(1f, 0.55f, 0.2f, 1f);
+
         [Tooltip("Height used only for the untextured fallback box drawn when no pipe model is available.")]
         [SerializeField]
         private float pipeVisualHeight = 0.1f;
@@ -82,65 +77,48 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField, Range(0f, 1f)]
         private float entityRideHeightFraction = 0.45f;
 
-        [SerializeField] private PipeVisualLibrary pipeVisualLibrary;
-
         public float entityOnBoardHeight;
+
+        // Grid and placed pieces
+        private PathBuildCell[,] _cells;
+        private PieceOccupancy _occupancy; // Null until the grid is built
         private readonly List<PlacedPathPiece> _placedPieces = new();
         private readonly Dictionary<int, GameObject> _placedVisuals = new();
-        private readonly Dictionary<Vector2Int, PipeConnections> _priorityVisualConnections = new();
+        private int _nextPieceId = 1;
 
-        // Tile/model reuse pools. Rebuilding a pipe visual reconfigures existing tiles instead of
-        // destroying and recreating them, so hover previews and placements stop churning
-        // Instantiate/Destroy every change. Play mode only; edit mode keeps immediate semantics.
-        private readonly Dictionary<GameObject, Dictionary<Vector2Int, GameObject>> _visualTiles = new();
-        private readonly Dictionary<GameObject, GameObject> _tileModels = new();
-        private readonly Dictionary<GameObject, GameObject> _tileModelPrefabs = new();
-        private readonly Stack<GameObject> _tilePool = new();
-        private readonly Dictionary<GameObject, Stack<GameObject>> _modelPool = new();
-        private Transform _poolRoot;
+        // Hover, selection and previews
+        private PathBuildCell _hoveredCell;
+        private IPathPiecePlaceable _lastPreviewedPiece;
+        private PlacementInventory _placementInventory;
+        private GameObject _previewVisual;
+        private ConveyorPreview _conveyorPreview;
+        private int _highlightedPieceId; // Placed piece currently tinted for break preview (0 = none)
+        private PathSplitter _highlightedSplitter;
 
-        // What each live tile was last configured as, so hover-driven rebuilds skip the model
-        // swap / bounds measurement / layer walk for tiles whose cell and connections are
-        // unchanged (the common case when the preview footprint moves by one cell).
-        private readonly Dictionary<GameObject, (Vector2Int cell, PipeConnections connections,
-            PathPieceOrientation orientation)> _tileConfigurations = new();
+        // Pipe visuals
+        private Transform _visualRoot;
+        private PipeVisualLibrary _runtimePipeVisualLibrary;
+        private MaterialPropertyBlock _colorPropertyBlock;
+        private readonly PriorityRouteConnections _priorityRoutes = new();
 
         // Last color actually applied to each visual, so an unchanged preview/placement repaint
         // can skip the GetComponentsInChildren<Renderer> walk entirely.
         private readonly Dictionary<GameObject, Color> _appliedVisualColors = new();
 
-        internal static readonly Vector2Int[] CellNeighborOffsets =
-        {
-            Vector2Int.right,
-            Vector2Int.left,
-            Vector2Int.up,
-            Vector2Int.down
-        };
+        private PipeTilePool _tilePool;
+        private PipeTileShaper _tileShaper;
+        private PipeTilePool TilePool => _tilePool ??= new PipeTilePool(this);
+        private PipeTileShaper TileShaper => _tileShaper ??= new PipeTileShaper(this, TilePool);
 
-        private PathBuildCell[,] _cells;
-        private PathBuildCell _hoveredCell;
-        private IPathPiecePlaceable _lastPreviewedPiece;
-        private PlacementInventory _placementInventory;
-        private int _nextPieceId = 1;
-        private int _highlightedPieceId; // Placed piece currently tinted for break preview (0 = none)
-        private int[,] _pieceIds; // Tracks which piece occupies each cell (0 = empty)
-        private GameObject _previewVisual;
-        private PipeVisualLibrary _runtimePipeVisualLibrary;
-        private Transform _visualRoot;
-        private MaterialPropertyBlock _colorPropertyBlock;
+        /// <summary>
+        ///     Raised whenever the occupied-cell graph changes. Runtime path previews can
+        ///     subscribe to this instead of rebuilding every frame.
+        /// </summary>
+        public event Action PathLayoutChanged;
 
-        // World height of a scaled pipe tile, measured as tiles are built. Zero until the first
-        // model-backed tile exists, in which case the fallback box height stands in.
-        private float _measuredPipeTileHeight;
+        public Material ConveyorMaterial => conveyorMaterial ? conveyorMaterial : pipeMaterial;
 
-        // Footprint of the straight module, measured once and reused for every piece type so all
-        // tiles share one scale. Cached against the library it was measured from.
-        private float _sharedPipeFootprint;
-        private PipeVisualLibrary _footprintSource;
-
-        // The authored pipe FBXs run front-to-back along local Z. Board rotation calculations
-        // use zero degrees for an east/west (local X) connection, so compensate at the source.
-        private const float PipeSourceAxisCorrection = 90f;
+        public PathKind ActivePathKind { get; private set; }
 
         /// <summary>
         ///     Read-only collection of all path pieces that have been successfully placed on the board.
@@ -173,13 +151,26 @@ namespace _project.Scripts.Object_Scripts
         ///     share an edge rather than leaving the cell gap open; the seam overlap then pushes the
         ///     open sides just past that edge to hide the join.
         /// </summary>
-        private float PipeCellPitch => cellSize + cellGap;
+        internal float PipeCellPitch => cellSize + cellGap;
+
+        internal float CellHeight => cellHeight;
+
+        /// <summary>Height of the untextured box drawn when no pipe model is available.</summary>
+        internal float FallbackPipeHeight => pipeVisualHeight;
+
+        internal float PipeHeightScale => pipeHeightScale;
+
+        internal float PipeSeamOverlap => pipeSeamOverlap;
 
         /// <summary>
         ///     Height of a placed pipe above the cell surface. Derived from the scaled model so
         ///     waypoints keep tracking the channel as the cell size or art changes.
         /// </summary>
-        private float PipeSurfaceHeight => _measuredPipeTileHeight > 0f ? _measuredPipeTileHeight : pipeVisualHeight;
+        private float PipeSurfaceHeight =>
+            _tileShaper is { MeasuredTileHeight: > 0f } ? _tileShaper.MeasuredTileHeight : pipeVisualHeight;
+
+        private static PathKind KindOf(IPathPiecePlaceable piece) =>
+            piece is ITypedPathPiece typed ? typed.PathKind : PathKind.Pipe;
 
         /// <summary>
         ///     Initializes the grid by attempting to bind existing cells or building new ones.
@@ -324,9 +315,8 @@ namespace _project.Scripts.Object_Scripts
             ClearGeneratedCells();
             _hoveredCell = null;
             _placedPieces.Clear();
-            _beltPieceIds.Clear();
             _placedVisuals.Clear();
-            _priorityVisualConnections.Clear();
+            _priorityRoutes.Clear();
             _nextPieceId = 1;
             _highlightedPieceId = 0;
             BuildGridIfNeeded();
@@ -351,10 +341,12 @@ namespace _project.Scripts.Object_Scripts
                 var cell = _cells[column, row];
                 if (!cell) continue;
 
-                var pieceId = _pieceIds[column, row];
+                var coordinate = new Vector2Int(column, row);
+                var pieceId = _occupancy.Get(coordinate, PathKind.Pipe);
+                var beltId = _occupancy.Get(coordinate, PathKind.RecyclingBelt);
                 var cellColor = emptyColor;
-                if (_beltPieceIds.TryGetValue(new Vector2Int(column, row), out var beltId))
-                    cellColor = beltId == breakPreviewPieceId ? breakPreviewColor : new Color(.15f,.4f,.22f);
+                if (beltId > 0)
+                    cellColor = beltId == breakPreviewPieceId ? breakPreviewColor : BeltCellColor;
                 if (pieceId > 0)
                     cellColor = pieceId == breakPreviewPieceId ? breakPreviewColor : occupiedColor;
                 cell.SetColor(cellColor);
@@ -388,27 +380,13 @@ namespace _project.Scripts.Object_Scripts
             if (kind == PathKind.RecyclingBelt)
             {
                 if (_previewVisual) _previewVisual.SetActive(false);
-                var anchor = new Vector2Int(_hoveredCell.Column, _hoveredCell.Row);
-                if (!_beltPreviewVisual || _beltPreviewAnchor != anchor || _beltPreviewLength != selectedPiece.Length ||
-                    _beltPreviewOrientation != selectedPiece.Orientation)
-                {
-                    if (_beltPreviewVisual)
-                    {
-                        ReleaseVisualTiles(_beltPreviewVisual);
-                        DestroyVisual(_beltPreviewVisual);
-                    }
-                    _beltPreviewVisual = CreatePipeVisual("Conveyor Preview");
-                    ConveyorVisual.Build(_beltPreviewVisual.transform, this, footprint, selectedPiece.Orientation);
-                    _beltPreviewAnchor = anchor;
-                    _beltPreviewLength = selectedPiece.Length;
-                    _beltPreviewOrientation = selectedPiece.Orientation;
-                }
-                _beltPreviewVisual.SetActive(true);
-                SetVisualColor(_beltPreviewVisual, previewColor);
+                _conveyorPreview ??= new ConveyorPreview(this);
+                _conveyorPreview.Show(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), footprint,
+                    selectedPiece.Orientation, previewColor);
             }
             else
             {
-                if (_beltPreviewVisual) _beltPreviewVisual.SetActive(false);
+                _conveyorPreview?.Hide();
                 UpdatePipeVisual(GetPreviewVisual(), footprint, selectedPiece.Orientation, previewColor);
             }
         }
@@ -465,8 +443,7 @@ namespace _project.Scripts.Object_Scripts
 
             foreach (var cell in footprint)
             {
-                if (kind == PathKind.RecyclingBelt) _beltPieceIds[cell] = placedPiece.id;
-                else _pieceIds[cell.x, cell.y] = placedPiece.id;
+                _occupancy.Set(cell, kind, placedPiece.id);
                 placedPiece.cells.Add(cell);
             }
 
@@ -500,13 +477,10 @@ namespace _project.Scripts.Object_Scripts
         public bool TryBreak(PathBuildCell cell, PathKind kind, out int infraValue)
         {
             infraValue = 0;
-            if (cell == null || _pieceIds == null || !IsInBounds(cell.Column, cell.Row))
+            if (cell == null || _occupancy == null || !IsInBounds(cell.Column, cell.Row))
                 return false;
 
-            var coordinate = new Vector2Int(cell.Column, cell.Row);
-            var pieceId = kind == PathKind.RecyclingBelt
-                ? (_beltPieceIds.TryGetValue(coordinate, out var beltId) ? beltId : 0)
-                : _pieceIds[cell.Column, cell.Row];
+            var pieceId = _occupancy.Get(new Vector2Int(cell.Column, cell.Row), kind);
             if (pieceId <= 0) return false;
 
             var pieceIndex = _placedPieces.FindIndex(piece => piece.id == pieceId);
@@ -517,17 +491,12 @@ namespace _project.Scripts.Object_Scripts
             infraValue = piece.infraValue;
 
             foreach (var occupied in piece.cells)
-                if (kind == PathKind.RecyclingBelt) _beltPieceIds.Remove(occupied);
-                else if (IsInBounds(occupied.x, occupied.y) && _pieceIds[occupied.x, occupied.y] == piece.id)
-                    _pieceIds[occupied.x, occupied.y] = 0;
+                _occupancy.Clear(occupied, kind, piece.id);
 
             if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
             {
                 ReleaseVisualTiles(visual);
-                if (Application.isPlaying)
-                    Destroy(visual);
-                else
-                    DestroyImmediate(visual);
+                DestroyObject(visual);
             }
 
             _placedVisuals.Remove(piece.id);
@@ -578,23 +547,12 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Checks if a given grid cell is occupied by any placed piece.
-        /// </summary>
-        /// <param name="column">The column index.</param>
-        /// <param name="row">The row index.</param>
-        /// <returns>True if the cell is in bounds and occupied, otherwise false.</returns>
-        private bool IsOccupied(int column, int row)
-        {
-            return _pieceIds != null && IsInBounds(column, row) && _pieceIds[column, row] > 0;
-        }
-
-        /// <summary>
         ///     Convenience overload — checks if a cell is occupied using a Vector2Int.
         /// </summary>
         public bool IsOccupied(Vector2Int cell) => IsOccupied(cell, PathKind.Pipe);
 
         public bool IsOccupied(Vector2Int cell, PathKind kind) =>
-            kind == PathKind.RecyclingBelt ? _beltPieceIds.ContainsKey(cell) : IsOccupied(cell.x, cell.y);
+            _occupancy != null && _occupancy.IsOccupied(cell, kind);
 
         /// <summary>
         ///     Returns true if the given cell is within the grid bounds (public accessor
@@ -634,7 +592,7 @@ namespace _project.Scripts.Object_Scripts
             rows = Mathf.Max(1, rows);
 
             _cells = new PathBuildCell[columns, rows];
-            _pieceIds = new int[columns, rows];
+            _occupancy = new PieceOccupancy(columns, rows);
             _visualRoot = GetOrCreateVisualRoot();
 
             for (var column = 0; column < columns; column++)
@@ -671,7 +629,7 @@ namespace _project.Scripts.Object_Scripts
                 return false;
 
             _cells = new PathBuildCell[columns, rows];
-            _pieceIds = new int[columns, rows];
+            _occupancy = new PieceOccupancy(columns, rows);
             _visualRoot = GetOrCreateVisualRoot();
 
             foreach (var cell in existingCells)
@@ -694,30 +652,31 @@ namespace _project.Scripts.Object_Scripts
         {
             for (var i = transform.childCount - 1; i >= 0; i--)
             {
-                var child = transform.GetChild(i).gameObject;
-
-                if (Application.isPlaying)
-                    Destroy(child);
-                else
-                    DestroyImmediate(child);
+                DestroyObject(transform.GetChild(i).gameObject);
             }
 
             _cells = null;
-            _pieceIds = null;
+            _occupancy = null;
             _visualRoot = null;
             _previewVisual = null;
-            _beltPreviewVisual = null;
-            _beltPreviewAnchor = null;
-            _beltPieceIds.Clear();
-            _poolRoot = null;
-            _visualTiles.Clear();
-            _tileModels.Clear();
-            _tileModelPrefabs.Clear();
-            _tilePool.Clear();
-            _modelPool.Clear();
-            _tileConfigurations.Clear();
+            _conveyorPreview?.Forget();
+            _tilePool?.Clear();
             _appliedVisualColors.Clear();
         }
+
+        /// <summary>The "PipeVisuals" child that holds every pipe visual, created on first use.</summary>
+        internal Transform VisualRoot
+        {
+            get
+            {
+                if (!_visualRoot)
+                    _visualRoot = GetOrCreateVisualRoot();
+                return _visualRoot;
+            }
+        }
+
+        /// <summary>Material for the untextured box drawn when no pipe model is available.</summary>
+        internal Material FallbackPipeMaterial => pipeMaterial;
 
         /// <summary>
         ///     Gets or creates the "PipeVisuals" child GameObject that holds all pipe visuals.
@@ -745,19 +704,27 @@ namespace _project.Scripts.Object_Scripts
             return _previewVisual;
         }
 
-        /// <summary>
-        ///     Hides the preview visual by deactivating it.
-        /// </summary>
-        private static void DestroyVisual(GameObject visual)
+        /// <summary>Returns a visual's tiles to the pool, hides it, and destroys it.</summary>
+        internal void DestroyVisual(GameObject visual)
         {
+            ReleaseVisualTiles(visual);
             visual.SetActive(false);
-            if (Application.isPlaying) Destroy(visual); else DestroyImmediate(visual);
+            DestroyObject(visual);
+        }
+
+        /// <summary>Destroys at end of frame in Play mode and immediately in Edit mode.</summary>
+        internal static void DestroyObject(UnityEngine.Object target)
+        {
+            if (Application.isPlaying)
+                Destroy(target);
+            else
+                DestroyImmediate(target);
         }
 
         private void HidePreviewVisual()
         {
             if (_previewVisual) _previewVisual.SetActive(false);
-            if (_beltPreviewVisual) _beltPreviewVisual.SetActive(false);
+            _conveyorPreview?.Hide();
         }
 
         /// <summary>
@@ -766,17 +733,14 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         /// <param name="visualName">The name of the GameObject.</param>
         /// <returns>The created visual GameObject (initially inactive).</returns>
-        private GameObject CreatePipeVisual(string visualName)
+        internal GameObject CreatePipeVisual(string visualName)
         {
-            if (!_visualRoot)
-                _visualRoot = GetOrCreateVisualRoot();
-
             var visual = new GameObject(visualName)
             {
                 name = visualName,
                 layer = gameObject.layer
             };
-            visual.transform.SetParent(_visualRoot, false);
+            visual.transform.SetParent(VisualRoot, false);
             visual.SetActive(false);
             return visual;
         }
@@ -807,11 +771,7 @@ namespace _project.Scripts.Object_Scripts
             visual.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             visual.transform.localScale = Vector3.one;
 
-            if (!_visualTiles.TryGetValue(visual, out var tileMap))
-            {
-                tileMap = new Dictionary<Vector2Int, GameObject>();
-                _visualTiles[visual] = tileMap;
-            }
+            var tileMap = TilePool.GetTileMap(visual);
 
             var additionalCells = new HashSet<Vector2Int>(footprint);
 
@@ -823,7 +783,7 @@ namespace _project.Scripts.Object_Scripts
             if (staleCells != null)
                 foreach (var cell in staleCells)
                 {
-                    ReleaseTile(tileMap[cell]);
+                    TilePool.ReleaseTile(tileMap[cell]);
                     tileMap.Remove(cell);
                 }
 
@@ -833,8 +793,8 @@ namespace _project.Scripts.Object_Scripts
                 if (!GetCell(cell)) continue;
 
                 var connections = GetVisualConnections(cell, additionalCells, orientation);
-                var tile = AcquireTile(visual.transform, tileMap, cell);
-                tilesChanged |= ConfigureTile(tile, cell, connections, orientation);
+                var tile = TilePool.AcquireTile(visual.transform, tileMap, cell);
+                tilesChanged |= TileShaper.ConfigureTile(tile, cell, connections, orientation);
             }
 
             // Repaint only when a tile actually changed or the color did — repainting walks
@@ -855,15 +815,13 @@ namespace _project.Scripts.Object_Scripts
             var affectedIds = new HashSet<int>();
             foreach (var cell in cells)
             {
-                if (IsInBounds(cell.x, cell.y) && _pieceIds[cell.x, cell.y] > 0)
-                    affectedIds.Add(_pieceIds[cell.x, cell.y]);
+                var pieceId = _occupancy.Get(cell, PathKind.Pipe);
+                if (pieceId > 0) affectedIds.Add(pieceId);
 
                 foreach (var offset in CellNeighborOffsets)
                 {
-                    var neighbor = cell + offset;
-                    if (!IsInBounds(neighbor.x, neighbor.y)) continue;
-                    if (_pieceIds[neighbor.x, neighbor.y] <= 0) continue;
-                    affectedIds.Add(_pieceIds[neighbor.x, neighbor.y]);
+                    var neighborId = _occupancy.Get(cell + offset, PathKind.Pipe);
+                    if (neighborId > 0) affectedIds.Add(neighborId);
                 }
             }
 
@@ -882,360 +840,19 @@ namespace _project.Scripts.Object_Scripts
         private void ReleaseVisualTiles(GameObject visual)
         {
             _appliedVisualColors.Remove(visual);
-            if (!_visualTiles.TryGetValue(visual, out var tileMap)) return;
-
-            foreach (var tile in tileMap.Values)
-                ReleaseTile(tile);
-            _visualTiles.Remove(visual);
+            TilePool.ReleaseVisual(visual);
         }
 
-        private GameObject AcquireTile(Transform parent, Dictionary<Vector2Int, GameObject> tileMap, Vector2Int cell)
+        /// <summary>The inspector-assigned pipe library, or the default one loaded on first use.</summary>
+        internal PipeVisualLibrary PipeLibrary
         {
-            if (tileMap.TryGetValue(cell, out var tile))
+            get
             {
-                if (tile)
-                {
-                    tile.SetActive(true);
-                    return tile;
-                }
-
-                tileMap.Remove(cell);
+                if (pipeVisualLibrary) return pipeVisualLibrary;
+                if (!_runtimePipeVisualLibrary)
+                    _runtimePipeVisualLibrary = PipeVisualLibrary.Load();
+                return _runtimePipeVisualLibrary;
             }
-
-            if (Application.isPlaying && _tilePool.Count > 0)
-            {
-                tile = _tilePool.Pop();
-                tile.transform.SetParent(parent, false);
-                tile.SetActive(true);
-            }
-            else
-            {
-                tile = new GameObject("Pipe Tile");
-                tile.transform.SetParent(parent, false);
-            }
-
-            tileMap[cell] = tile;
-            return tile;
-        }
-
-        private void ReleaseTile(GameObject tile)
-        {
-            if (!tile) return;
-
-            _tileConfigurations.Remove(tile);
-
-            if (_tileModels.TryGetValue(tile, out var model))
-            {
-                _tileModelPrefabs.TryGetValue(tile, out var prefab);
-                ReturnModelToPool(model, prefab);
-                _tileModels.Remove(tile);
-                _tileModelPrefabs.Remove(tile);
-            }
-
-            if (Application.isPlaying)
-            {
-                tile.transform.SetParent(GetOrCreatePoolRoot(), false);
-                tile.SetActive(false);
-                _tilePool.Push(tile);
-            }
-            else
-            {
-                DestroyImmediate(tile);
-            }
-        }
-
-        // The tile transform carries the board rotation and the one shared footprint scale;
-        // the model beneath it carries the per-axis seam adjustment. Splitting the two keeps
-        // every tile reporting the same uniform footprint whichever mesh it happens to use.
-        // Returns true when the tile was actually (re)configured; an unchanged tile is skipped.
-        private bool ConfigureTile(GameObject tile, Vector2Int cell, PipeConnections connections,
-            PathPieceOrientation fallbackOrientation)
-        {
-            var configuration = (cell, connections, fallbackOrientation);
-            if (_tileConfigurations.TryGetValue(tile, out var applied) && applied == configuration)
-                return false;
-
-            var library = GetPipeVisualLibrary();
-            var prefab = SelectPipePrefab(library, connections);
-
-            tile.transform.localPosition = Vector3.zero;
-            tile.transform.localRotation = Quaternion.Euler(0f,
-                GetPipeRotation(connections, fallbackOrientation) + PipeSourceAxisCorrection, 0f);
-            tile.transform.localScale = Vector3.one;
-
-            var model = AcquireModel(tile, prefab);
-            ConfigurePipeTileHierarchy(tile);
-
-            var renderers = tile.GetComponentsInChildren<Renderer>(true);
-            if (prefab) ApplyPipeSurfaceMaterial(renderers, library ? library.SurfaceMaterial : null);
-
-            // The straight module is the only mesh that stays closed on its side walls; every
-            // junction opens on both axes and so has to reach past the cell edge on both.
-            var opensOnBothAxes = !prefab || !library || prefab != library.StraightPipe;
-            NormalizePipeTile(tile, model.transform, cell, renderers, prefab, opensOnBothAxes);
-
-            tile.name = $"Pipe Tile {cell.x},{cell.y}";
-            _tileConfigurations[tile] = configuration;
-            return true;
-        }
-
-        /// <summary>
-        ///     Returns the tile's model instance for the requested prefab, reusing the current one
-        ///     when it already matches and recycling it through the model pool when it does not.
-        /// </summary>
-        private GameObject AcquireModel(GameObject tile, GameObject prefab)
-        {
-            if (_tileModels.TryGetValue(tile, out var current))
-            {
-                GameObject source = null;
-                if (current && _tileModelPrefabs.TryGetValue(tile, out source) && source == prefab)
-                    return current;
-
-                if (current)
-                    ReturnModelToPool(current, source);
-                _tileModels.Remove(tile);
-                _tileModelPrefabs.Remove(tile);
-            }
-
-            GameObject model = null;
-            if (Application.isPlaying && prefab)
-            {
-                if (_modelPool.TryGetValue(prefab, out var pool))
-                    while (!model && pool.Count > 0)
-                        model = pool.Pop();
-
-                if (model)
-                {
-                    model.transform.SetParent(tile.transform, false);
-                    model.SetActive(true);
-                }
-            }
-
-            if (!model)
-            {
-                model = prefab
-                    ? Instantiate(prefab, tile.transform)
-                    : GameObject.CreatePrimitive(PrimitiveType.Cube);
-                model.transform.SetParent(tile.transform, false);
-                if (!prefab && model.TryGetComponent<Renderer>(out var renderer) && pipeMaterial)
-                    renderer.sharedMaterial = pipeMaterial;
-            }
-
-            model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.identity;
-            model.transform.localScale = Vector3.one;
-            _tileModels[tile] = model;
-            _tileModelPrefabs[tile] = prefab;
-            return model;
-        }
-
-        private void ReturnModelToPool(GameObject model, GameObject prefab)
-        {
-            if (!model) return;
-
-            // Fallback cube models have no prefab key to pool under — destroy them outright.
-            if (!Application.isPlaying || !prefab)
-            {
-                if (Application.isPlaying)
-                    Destroy(model);
-                else
-                    DestroyImmediate(model);
-                return;
-            }
-
-            model.transform.SetParent(GetOrCreatePoolRoot(), false);
-            model.SetActive(false);
-            if (!_modelPool.TryGetValue(prefab, out var pool))
-            {
-                pool = new Stack<GameObject>();
-                _modelPool[prefab] = pool;
-            }
-
-            pool.Push(model);
-        }
-
-        private Transform GetOrCreatePoolRoot()
-        {
-            if (_poolRoot) return _poolRoot;
-            if (!_visualRoot)
-                _visualRoot = GetOrCreateVisualRoot();
-
-            var existing = _visualRoot.Find("PipeTilePool");
-            _poolRoot = existing ? existing : new GameObject("PipeTilePool").transform;
-            if (!_poolRoot.parent)
-                _poolRoot.SetParent(_visualRoot, false);
-            return _poolRoot;
-        }
-
-        private PipeVisualLibrary GetPipeVisualLibrary()
-        {
-            if (pipeVisualLibrary) return pipeVisualLibrary;
-            if (!_runtimePipeVisualLibrary)
-                _runtimePipeVisualLibrary = PipeVisualLibrary.Load();
-            return _runtimePipeVisualLibrary;
-        }
-
-        private static GameObject SelectPipePrefab(PipeVisualLibrary library, PipeConnections connections)
-        {
-            if (!library) return null;
-
-            var connectionCount = CountConnections(connections);
-            // No dedicated cap is required: the straight model keeps isolated/off-route cells
-            // visually tidy and gives one-neighbor route cells an opening toward an endpoint.
-            if (connectionCount <= 1) return library.StraightPipe;
-
-            // A three-way cell must use the tee. Substituting the four-way mesh leaves its
-            // unused arm poking into a neighbor as a dead-end stub.
-            if (connectionCount == 3)
-                return library.TJunctionPipe ? library.TJunctionPipe : library.StraightPipe;
-
-            if (connectionCount >= 4)
-                return library.JunctionPipe ? library.JunctionPipe : library.StraightPipe;
-
-            return IsStraight(connections)
-                ? library.StraightPipe
-                : library.CornerPipe ? library.CornerPipe : library.StraightPipe;
-        }
-
-        private void NormalizePipeTile(GameObject tile, Transform model, Vector2Int cell,
-            IReadOnlyList<Renderer> renderers, GameObject prefab, bool opensOnBothAxes)
-        {
-            if (!TryCalculateLocalRendererBounds(tile.transform, renderers, out var bounds))
-            {
-                var fallbackPosition = GetLocalPosition(cell.x, cell.y);
-                tile.transform.localPosition =
-                    new Vector3(fallbackPosition.x, cellHeight * 0.5f + pipeVisualHeight * 0.5f, fallbackPosition.z);
-                tile.transform.localScale = new Vector3(PipeCellPitch, pipeVisualHeight, PipeCellPitch);
-                return;
-            }
-
-            // Every mesh in the kit is authored as a square single-cell module, so one footprint
-            // scale serves all of them, and it is measured once from the straight module rather
-            // than per mesh: a corner authored a fraction larger than its neighbors must not
-            // arrive at a join a step wider. X and Z stay equal so mortar courses line up on
-            // horizontal and vertical runs alike. Height is squashed separately for the top-down
-            // read; because the squash is the same for every piece, it costs only brick proportion
-            // on the walls, never joint alignment.
-            var footprint = GetSharedPipeFootprint(prefab, bounds);
-            var scale = footprint > Mathf.Epsilon ? PipeCellPitch / footprint : 1f;
-            var verticalScale = scale * pipeHeightScale;
-            tile.transform.localScale = new Vector3(scale, verticalScale, scale);
-
-            // The seam overlap is directional. A tile reaches past the cell edge only on the axes
-            // it actually opens on, closing those joins. It pulls in by the same amount on the
-            // sides it keeps walled — otherwise two parallel runs bleed into each other's cells.
-            // The authored modules run front-to-back along local Z, so that is the open axis.
-            var openFactor = 1f + pipeSeamOverlap / PipeCellPitch;
-            var closedFactor = 1f - pipeSeamOverlap / PipeCellPitch;
-            var modelScale = new Vector3(opensOnBothAxes ? openFactor : closedFactor, 1f, openFactor);
-            model.localScale = modelScale;
-
-            var totalScale = new Vector3(scale * modelScale.x, verticalScale, scale * modelScale.z);
-            var rotatedCenter = tile.transform.localRotation * Vector3.Scale(bounds.center, totalScale);
-            var cellPosition = GetLocalPosition(cell.x, cell.y);
-            tile.transform.localPosition = new Vector3(
-                cellPosition.x - rotatedCenter.x,
-                cellHeight * 0.5f - bounds.min.y * verticalScale,
-                cellPosition.z - rotatedCenter.z);
-
-            _measuredPipeTileHeight = bounds.size.y * verticalScale;
-        }
-
-        /// <summary>
-        ///     Footprint used to scale every pipe tile, taken from the straight module so that all
-        ///     piece types share one scale. Falls back to the tile's own bounds when no library
-        ///     model backs the tile (the untextured box).
-        /// </summary>
-        private float GetSharedPipeFootprint(GameObject prefab, Bounds tileBounds)
-        {
-            var tileFootprint = Mathf.Max(tileBounds.size.x, tileBounds.size.z);
-            var library = GetPipeVisualLibrary();
-            var reference = library ? library.StraightPipe : null;
-            if (!prefab || !reference) return tileFootprint;
-
-            if (_footprintSource != library || _sharedPipeFootprint <= Mathf.Epsilon)
-            {
-                _footprintSource = library;
-                _sharedPipeFootprint = MeasurePrefabFootprint(reference);
-            }
-
-            return _sharedPipeFootprint > Mathf.Epsilon ? _sharedPipeFootprint : tileFootprint;
-        }
-
-        private static float MeasurePrefabFootprint(GameObject prefab)
-        {
-            var bounds = default(Bounds);
-            var hasBounds = false;
-            foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
-            {
-                if (!filter.sharedMesh) continue;
-                EncapsulateLocalBounds(prefab.transform, filter.transform, filter.sharedMesh.bounds,
-                    ref bounds, ref hasBounds);
-            }
-
-            return hasBounds ? Mathf.Max(bounds.size.x, bounds.size.z) : 0f;
-        }
-
-        private static bool TryCalculateLocalRendererBounds(Transform root, IReadOnlyList<Renderer> renderers,
-            out Bounds bounds)
-        {
-            bounds = default;
-            var hasBounds = false;
-            foreach (var renderer in renderers)
-                EncapsulateLocalBounds(root, renderer.transform, renderer.localBounds, ref bounds, ref hasBounds);
-
-            return hasBounds;
-        }
-
-        /// <summary>
-        ///     Expands <paramref name="bounds" /> (expressed in <paramref name="root" />'s local space)
-        ///     to cover the eight corners of <paramref name="localBounds" /> taken in
-        ///     <paramref name="source" />'s local space.
-        /// </summary>
-        private static void EncapsulateLocalBounds(Transform root, Transform source, Bounds localBounds,
-            ref Bounds bounds, ref bool hasBounds)
-        {
-            var min = localBounds.min;
-            var max = localBounds.max;
-
-            for (var x = 0; x < 2; x++)
-            for (var y = 0; y < 2; y++)
-            for (var z = 0; z < 2; z++)
-            {
-                var sourcePoint = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
-                    z == 0 ? min.z : max.z);
-                var rootPoint = root.InverseTransformPoint(source.TransformPoint(sourcePoint));
-                if (!hasBounds)
-                {
-                    bounds = new Bounds(rootPoint, Vector3.zero);
-                    hasBounds = true;
-                }
-                else
-                {
-                    bounds.Encapsulate(rootPoint);
-                }
-            }
-        }
-
-        private static void ApplyPipeSurfaceMaterial(IReadOnlyList<Renderer> renderers, Material surfaceMaterial)
-        {
-            if (!surfaceMaterial) return;
-            foreach (var renderer in renderers)
-            {
-                var materials = renderer.sharedMaterials;
-                for (var i = 0; i < materials.Length; i++)
-                    materials[i] = surfaceMaterial;
-                renderer.sharedMaterials = materials;
-            }
-        }
-
-        private void ConfigurePipeTileHierarchy(GameObject tile)
-        {
-            foreach (var child in tile.GetComponentsInChildren<Transform>(true))
-                child.gameObject.layer = gameObject.layer;
-
-            foreach (var collisionComp in tile.GetComponentsInChildren<Collider>(true))
-                collisionComp.enabled = false;
         }
 
         private PipeConnections GetVisualConnections(Vector2Int cell, HashSet<Vector2Int> additionalCells,
@@ -1244,7 +861,7 @@ namespace _project.Scripts.Object_Scripts
             // The ordered route produced by WaypointPath is authoritative. Using its exact
             // previous/next edges prevents nearby branches from changing a route tile into the
             // wrong corner or junction model.
-            if (_priorityVisualConnections.TryGetValue(cell, out var priorityConnections))
+            if (_priorityRoutes.TryGet(cell, out var priorityConnections))
                 return priorityConnections;
 
             var connections = PipeConnections.None;
@@ -1263,7 +880,7 @@ namespace _project.Scripts.Object_Scripts
             HashSet<Vector2Int> currentCells, PathPieceOrientation currentOrientation)
         {
             if (!IsInBounds(neighbor.x, neighbor.y)) return false;
-            if (_priorityVisualConnections.ContainsKey(neighbor)) return false;
+            if (_priorityRoutes.Contains(neighbor)) return false;
 
             // Cells belonging to the same placed/previewed segment always connect. Different
             // pieces connect only at compatible endpoints; mere side adjacency is not a junction.
@@ -1291,106 +908,29 @@ namespace _project.Scripts.Object_Scripts
             Vector3? startWorldPosition = null, Vector3? endWorldPosition = null,
             IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells = null)
         {
-            var nextConnections = new Dictionary<Vector2Int, PipeConnections>();
-            AddPriorityRoute(nextConnections, routeCells);
-            if (branchRouteCells != null)
-                foreach (var branchCells in branchRouteCells)
-                    AddPriorityRoute(nextConnections, branchCells);
+            Vector2Int? startOutsideCell = startWorldPosition.HasValue
+                ? ClampToOutsideRing(WorldToCellUnclamped(startWorldPosition.Value))
+                : null;
+            Vector2Int? endOutsideCell = endWorldPosition.HasValue
+                ? ClampToOutsideRing(WorldToCellUnclamped(endWorldPosition.Value))
+                : null;
 
-            if (routeCells is { Count: > 0 })
-            {
-                if (startWorldPosition.HasValue)
-                    AddPriorityOpening(nextConnections, routeCells[0],
-                        ClampToOutsideRing(WorldToCellUnclamped(startWorldPosition.Value)));
-                if (endWorldPosition.HasValue)
-                    AddPriorityOpening(nextConnections, routeCells[^1],
-                        ClampToOutsideRing(WorldToCellUnclamped(endWorldPosition.Value)));
-            }
-
-            if (HaveSameConnections(_priorityVisualConnections, nextConnections)) return;
-
-            // Only cells whose connections actually changed can change their tile model.
-            var changedCells = new HashSet<Vector2Int>();
-            foreach (var pair in nextConnections)
-                if (!_priorityVisualConnections.TryGetValue(pair.Key, out var connections) ||
-                    connections != pair.Value)
-                    changedCells.Add(pair.Key);
-            foreach (var pair in _priorityVisualConnections)
-                if (!nextConnections.ContainsKey(pair.Key))
-                    changedCells.Add(pair.Key);
-
-            _priorityVisualConnections.Clear();
-            foreach (var pair in nextConnections)
-                _priorityVisualConnections.Add(pair.Key, pair.Value);
-            RefreshNeighborPipeGeometry(changedCells);
-        }
-
-        private static void AddPriorityRoute(IDictionary<Vector2Int, PipeConnections> connections,
-            IReadOnlyList<Vector2Int> routeCells)
-        {
-            if (routeCells == null) return;
-
-            for (var i = 0; i < routeCells.Count; i++)
-            {
-                connections.TryAdd(routeCells[i], PipeConnections.None);
-                if (i > 0)
-                    AddPriorityEdge(connections, routeCells[i - 1], routeCells[i]);
-            }
+            var changedCells = _priorityRoutes.Set(routeCells, startOutsideCell, endOutsideCell, branchRouteCells);
+            if (changedCells.Count > 0)
+                RefreshNeighborPipeGeometry(changedCells);
         }
 
         public void ClearPriorityVisualPath()
         {
-            if (_priorityVisualConnections.Count == 0) return;
-
-            var changedCells = new List<Vector2Int>(_priorityVisualConnections.Keys);
-            _priorityVisualConnections.Clear();
-            RefreshNeighborPipeGeometry(changedCells);
-        }
-
-        private static void AddPriorityEdge(IDictionary<Vector2Int, PipeConnections> connections,
-            Vector2Int from, Vector2Int to)
-        {
-            var forward = GetConnectionDirection(to - from);
-            var backward = GetConnectionDirection(from - to);
-            if (forward == PipeConnections.None || backward == PipeConnections.None) return;
-
-            connections.TryAdd(from, PipeConnections.None);
-            connections.TryAdd(to, PipeConnections.None);
-            connections[from] |= forward;
-            connections[to] |= backward;
-        }
-
-        private static void AddPriorityOpening(IDictionary<Vector2Int, PipeConnections> connections,
-            Vector2Int cell, Vector2Int outsideCell)
-        {
-            var direction = GetConnectionDirection(outsideCell - cell);
-            if (direction != PipeConnections.None)
-                connections[cell] |= direction;
-        }
-
-        private static PipeConnections GetConnectionDirection(Vector2Int delta)
-        {
-            if (delta == Vector2Int.right) return PipeConnections.East;
-            if (delta == Vector2Int.up) return PipeConnections.North;
-            if (delta == Vector2Int.left) return PipeConnections.West;
-            if (delta == Vector2Int.down) return PipeConnections.South;
-            return PipeConnections.None;
-        }
-
-        private static bool HaveSameConnections(IReadOnlyDictionary<Vector2Int, PipeConnections> left,
-            IReadOnlyDictionary<Vector2Int, PipeConnections> right)
-        {
-            if (left.Count != right.Count) return false;
-            foreach (var pair in left)
-                if (!right.TryGetValue(pair.Key, out var connections) || connections != pair.Value)
-                    return false;
-            return true;
+            var changedCells = _priorityRoutes.Clear();
+            if (changedCells.Count > 0)
+                RefreshNeighborPipeGeometry(changedCells);
         }
 
         private bool TryGetPlacedPieceAt(Vector2Int cell, out PlacedPathPiece piece)
         {
             piece = null;
-            var pieceId = _pieceIds[cell.x, cell.y];
+            var pieceId = _occupancy.Get(cell, PathKind.Pipe);
             if (pieceId <= 0) return false;
 
             piece = _placedPieces.Find(candidate => candidate.id == pieceId);
@@ -1405,64 +945,6 @@ namespace _project.Scripts.Object_Scripts
             return !cells.Contains(cell - axis) || !cells.Contains(cell + axis);
         }
 
-        private static int CountConnections(PipeConnections connections)
-        {
-            var count = 0;
-            if ((connections & PipeConnections.East) != 0) count++;
-            if ((connections & PipeConnections.North) != 0) count++;
-            if ((connections & PipeConnections.West) != 0) count++;
-            if ((connections & PipeConnections.South) != 0) count++;
-            return count;
-        }
-
-        private static bool IsStraight(PipeConnections connections)
-        {
-            return connections == (PipeConnections.East | PipeConnections.West) ||
-                   connections == (PipeConnections.North | PipeConnections.South);
-        }
-
-        private static float GetPipeRotation(PipeConnections connections,
-            PathPieceOrientation fallbackOrientation)
-        {
-            var count = CountConnections(connections);
-            if (count == 0)
-                return fallbackOrientation == PathPieceOrientation.Horizontal ? 0f : 90f;
-
-            if (count == 1)
-            {
-                if ((connections & PipeConnections.East) != 0) return 0f;
-                if ((connections & PipeConnections.South) != 0) return 90f;
-                if ((connections & PipeConnections.West) != 0) return 180f;
-                return 270f;
-            }
-
-            if (count == 2)
-            {
-                if (IsStraight(connections))
-                    return (connections & PipeConnections.East) != 0 ? 0f : 90f;
-
-                // brick_cornerPipe is authored opening north+west; after the source-axis
-                // correction it opens north+east at zero, so each quadrant steps by 90.
-                if (connections == (PipeConnections.North | PipeConnections.East)) return 0f;
-                if (connections == (PipeConnections.East | PipeConnections.South)) return 90f;
-                if (connections == (PipeConnections.South | PipeConnections.West)) return 180f;
-                return 270f;
-            }
-
-            if (count == 3)
-            {
-                // brick_TPipe is authored opening north+south+west, so after the correction its
-                // closed side faces south at zero. Rotate by whichever side has no connection.
-                if ((connections & PipeConnections.South) == 0) return 0f;
-                if ((connections & PipeConnections.West) == 0) return 90f;
-                if ((connections & PipeConnections.North) == 0) return 180f;
-                return 270f;
-            }
-
-            // The four-way mesh is rotationally symmetric.
-            return 0f;
-        }
-
         /// <summary>
         ///     Calculates the local position for a cell at the given column and row.
         ///     Centers the grid around the origin.
@@ -1470,11 +952,10 @@ namespace _project.Scripts.Object_Scripts
         /// <param name="column">The column index.</param>
         /// <param name="row">The row index.</param>
         /// <returns>The local position of the cell.</returns>
-        private Vector3 GetLocalPosition(int column, int row)
+        internal Vector3 GetLocalPosition(int column, int row)
         {
-            var step = cellSize + cellGap;
-            var xOffset = (column - (columns - 1) * 0.5f) * step;
-            var zOffset = (row - (rows - 1) * 0.5f) * step;
+            var xOffset = (column - (columns - 1) * 0.5f) * PipeCellPitch;
+            var zOffset = (row - (rows - 1) * 0.5f) * PipeCellPitch;
             return new Vector3(xOffset, 0f, zOffset);
         }
 
@@ -1491,8 +972,6 @@ namespace _project.Scripts.Object_Scripts
 
             return true;
         }
-
-        private PathSplitter _highlightedSplitter;
 
         // A splitter sits on top of the path, so it claims the hover (and the click) over the piece below it.
         private PathSplitter GetBreakPreviewSplitter()
@@ -1517,13 +996,11 @@ namespace _project.Scripts.Object_Scripts
 
         private int GetBreakPreviewPieceId()
         {
-            if (ActiveTool != PathBuildTool.Break || !_hoveredCell || _pieceIds == null ||
+            if (ActiveTool != PathBuildTool.Break || !_hoveredCell || _occupancy == null ||
                 !IsInBounds(_hoveredCell.Column, _hoveredCell.Row) || _highlightedSplitter)
                 return 0;
 
-            if (ActivePathKind == PathKind.RecyclingBelt)
-                return _beltPieceIds.TryGetValue(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), out var id) ? id : 0;
-            return _pieceIds[_hoveredCell.Column, _hoveredCell.Row];
+            return _occupancy.Get(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), ActivePathKind);
         }
 
         private void RefreshPlacedVisualColors(int breakPreviewPieceId)
@@ -1543,23 +1020,13 @@ namespace _project.Scripts.Object_Scripts
                 SetVisualColor(visual, color);
         }
 
-        private void SetVisualColor(GameObject visual, Color color)
+        internal void SetVisualColor(GameObject visual, Color color)
         {
             if (!visual) return;
 
             _appliedVisualColors[visual] = color;
             foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
                 RendererColorUtility.SetColor(renderer, color, ref _colorPropertyBlock);
-        }
-
-        [Flags]
-        private enum PipeConnections
-        {
-            None = 0,
-            East = 1 << 0,
-            North = 1 << 1,
-            West = 1 << 2,
-            South = 1 << 3
         }
 
         /// <summary>
@@ -1626,13 +1093,13 @@ namespace _project.Scripts.Object_Scripts
         {
             rotation = Quaternion.identity;
 
-            if (_pieceIds == null || _placedPieces.Count == 0)
+            if (_occupancy == null || _placedPieces.Count == 0)
                 return false;
 
             if (!TryWorldToCell(worldPosition, out var cell))
                 return false;
 
-            var pieceId = _pieceIds[cell.x, cell.y];
+            var pieceId = _occupancy.Get(cell, PathKind.Pipe);
             if (pieceId <= 0)
                 return false;
 
@@ -1694,13 +1161,10 @@ namespace _project.Scripts.Object_Scripts
             // Transform world position into this board's local space
             var local = transform.InverseTransformPoint(worldPosition);
 
-            // Cell spacing includes both the cell itself and the gap between cells
-            var step = cellSize + cellGap;
-
             // Reverse the GetLocalPosition math to recover column/row indices
             // (GetLocalPosition centers the grid, so we add the half-extent back)
-            var column = Mathf.RoundToInt(local.x / step + (columns - 1) * 0.5f);
-            var row = Mathf.RoundToInt(local.z / step + (rows - 1) * 0.5f);
+            var column = Mathf.RoundToInt(local.x / PipeCellPitch + (columns - 1) * 0.5f);
+            var row = Mathf.RoundToInt(local.z / PipeCellPitch + (rows - 1) * 0.5f);
 
             return new Vector2Int(column, row);
         }
