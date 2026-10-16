@@ -46,7 +46,7 @@ namespace _project.Scripts.UI
             ShopManager.Instance?.ClearHoveredShopObject(this);
         }
 
-        public void Setup(IShopItem item)
+        public void Setup(IShopItem item, int era)
         {
             ShopItem = item;
             titleText.text = item.DisplayName;
@@ -60,7 +60,11 @@ namespace _project.Scripts.UI
                 displayImage.sprite = item.DisplaySprite;
                 displayImage.enabled = item.DisplaySprite;
             }
-
+            var interfaceManager = GameMaster.Instance ? GameMaster.Instance.interfaceManager : null;
+            var itemBoxSprite = interfaceManager && interfaceManager.ItemBoxSprite
+                ? interfaceManager.ItemBoxSprite.GetSpriteForEra(era)
+                : null;
+            if (itemBoxSprite) GetComponent<Image>().sprite = itemBoxSprite;
             // Tint the shop item's frame/background rather than its icon. Preserve the
             // complete Button color block because its transition also drives this graphic.
             _selectionGraphic = buyButton.targetGraphic ? buyButton.targetGraphic : GetComponent<Graphic>();

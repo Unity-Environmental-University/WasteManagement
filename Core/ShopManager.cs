@@ -17,6 +17,10 @@ namespace _project.Scripts.Core
 
         [SerializeField]
         private GameObject shopItemHoverEffect;
+        [SerializeField] private Transform shopItemHoverEffectParent;
+        [SerializeField]
+        private List<GameObject> shopHoverPrefabs = new List<GameObject>();
+        [SerializeField] private DynamicSpriteSO shopBackgroundSprite;
 
         [Header("Tower Item")] [SerializeField]
         private string towerDisplayName = "Processing Tower";
@@ -25,7 +29,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int towerRequiredLevel = 1;
         [SerializeField] private int towerInfraValue = 2;
         [SerializeField] private GameObject towerPrefab;
-        [SerializeField] private Sprite towerSprite;
+        [SerializeField] private DynamicSpriteSO towerSprite;
 
         [Header("Sifter Item")] [SerializeField]
         private string sifterDisplayName = "Waste Sifter";
@@ -34,7 +38,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int sifterRequiredLevel = 1;
         [SerializeField] private int sifterInfraValue = 1;
         [SerializeField] private GameObject sifterPrefab;
-        [SerializeField] private Sprite sifterSprite;
+        [SerializeField] private DynamicSpriteSO sifterSprite;
 
         [Header("Path Splitter Item")] [SerializeField]
         private string pathSplitterDisplayName = "Splitter Box";
@@ -45,7 +49,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int pathSplitterRequiredLevel = 1;
         [SerializeField] private int pathSplitterInfraValue = 1;
         [SerializeField] private GameObject pathSplitterPrefab;
-        [SerializeField] private Sprite pathSplitterSprite;
+        [SerializeField] private DynamicSpriteSO pathSplitterSprite;
 
         [Header("Cesspit Item")] [SerializeField]
         private string cesspitDisplayName = "Cesspit";
@@ -56,7 +60,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int cesspitRequiredLevel = 1;
         [SerializeField] private int cesspitInfraValue = 2;
         [SerializeField] private GameObject cesspitPrefab;
-        [SerializeField] private Sprite cesspitSprite;
+        [SerializeField] private DynamicSpriteSO cesspitSprite;
 
         [Header("Cesspit Cap Item")] [SerializeField]
         private bool offerCesspitCap = true;
@@ -65,7 +69,7 @@ namespace _project.Scripts.Core
         [SerializeField] private string cesspitCapDescription =
             "Select, then click a cesspit to seal it and permanently stop runaways.";
         [SerializeField] private int cesspitCapRequiredLevel = 1;
-        [SerializeField] private Sprite cesspitCapSprite;
+        [SerializeField] private DynamicSpriteSO cesspitCapSprite;
 
         [Header("Bury Cesspit Item")] [SerializeField]
         private bool offerBuryCesspit = true;
@@ -76,7 +80,7 @@ namespace _project.Scripts.Core
             "Select, then click a cesspit to demolish it, leaving a debuff tile on its cell.";
 
         [SerializeField] private int buryCesspitRequiredLevel = 3;
-        [SerializeField] private Sprite buryCesspitSprite;
+        [SerializeField] private DynamicSpriteSO buryCesspitSprite;
 
         [Header("Treatment Tank Item")] [SerializeField]
         private string treatmentTankDisplayName = "Treatment Tank";
@@ -87,7 +91,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int treatmentTankRequiredLevel = 4;
         [SerializeField] private int treatmentTankInfraValue = 8;
         [SerializeField] private GameObject treatmentTankPrefab;
-        [SerializeField] private Sprite treatmentTankSprite;
+        [SerializeField] private DynamicSpriteSO treatmentTankSprite;
 
         [Header("Lime Sprinkler Item")] [SerializeField]
         private string limeSprinklerDisplayName = "Lime Sprinkler";
@@ -98,7 +102,7 @@ namespace _project.Scripts.Core
         [SerializeField] private int limeSprinklerRequiredLevel = 1;
         [SerializeField] private int limeSprinklerInfraValue = 2;
         [SerializeField] private GameObject limeSprinklerPrefab;
-        [SerializeField] private Sprite limeSprinklerSprite;
+        [SerializeField] private DynamicSpriteSO limeSprinklerSprite;
 
         [Header("Path Tools")] [SerializeField]
         private int pipeInfraValue;
@@ -139,6 +143,10 @@ namespace _project.Scripts.Core
         private static int CurrentLevel =>
             GameMaster.Instance && GameMaster.Instance.turnController ? 
                 GameMaster.Instance.turnController.currentLevel : 1;
+
+        private static int CurrentEra =>
+            GameMaster.Instance && GameMaster.Instance.popManager ?
+                GameMaster.Instance.popManager.GetEra(CurrentLevel) : 1;
 
         public bool CanSelectConveyorTool => CurrentLevel >= 1;
         public bool CanSelectShortPipeTool => CurrentLevel >= shortPipeRequiredLevel;
@@ -315,7 +323,7 @@ namespace _project.Scripts.Core
             if (currentLevel <= previousLevel) return unlocked;
 
             var seenNames = new HashSet<string>();
-            foreach (var item in CreateShopItems())
+            foreach (var item in CreateShopItems(1))
                 AddUnlock(unlocked, seenNames, item, previousLevel, currentLevel);
 
             return unlocked;
@@ -357,45 +365,46 @@ namespace _project.Scripts.Core
             if (includeBlankTestItem && blankTestSprite)
                 _stockItems.Add(new BlankShopItem(blankTestSprite));
 
-            _stockItems.AddRange(CreateShopItems());
+            _stockItems.AddRange(CreateShopItems(CurrentEra));
+            ApplyEraVisuals(CurrentEra);
             _stockCreated = true;
         }
 
-        private IEnumerable<IShopItem> CreateShopItems()
+        private IEnumerable<IShopItem> CreateShopItems(int era)
         {
             if (towerPrefab)
                 yield return new TowerShopItem(towerDisplayName, towerDescription, towerRequiredLevel, towerPrefab,
-                    towerSprite, towerInfraValue);
+                    towerSprite.GetSpriteForEra(era), towerInfraValue);
 
             // Persistent, infinite-supply tools: one palette tile each. Supply is no longer gated by
             // a per-round stock count; the infrastructure budget spent per placement is the limiter.
             if (sifterPrefab)
                 yield return new SifterShopItem(sifterDisplayName, sifterDescription, sifterRequiredLevel,
-                    sifterPrefab, sifterSprite, sifterInfraValue);
+                    sifterPrefab, sifterSprite.GetSpriteForEra(era), sifterInfraValue);
 
             if (pathSplitterPrefab)
                 yield return new PathSplitterShopItem(pathSplitterDisplayName, pathSplitterDescription,
-                    pathSplitterRequiredLevel, pathSplitterPrefab, pathSplitterSprite, pathSplitterInfraValue);
+                    pathSplitterRequiredLevel, pathSplitterPrefab, pathSplitterSprite.GetSpriteForEra(era), pathSplitterInfraValue);
 
             if (cesspitPrefab)
                 yield return new CesspitShopItem(cesspitDisplayName, cesspitDescription, cesspitRequiredLevel,
-                    cesspitPrefab, cesspitSprite, cesspitInfraValue);
+                    cesspitPrefab, cesspitSprite.GetSpriteForEra(era), cesspitInfraValue);
 
             if (offerCesspitCap)
                 yield return new CesspitCapShopItem(cesspitCapDisplayName, cesspitCapDescription,
-                    cesspitCapRequiredLevel, cesspitCapSprite);
+                    cesspitCapRequiredLevel, cesspitCapSprite ? cesspitCapSprite.GetSpriteForEra(era) : null);
 
             if (offerBuryCesspit)
                 yield return new BuryCesspitShopItem(buryCesspitDisplayName, buryCesspitDescription,
-                    buryCesspitRequiredLevel, buryCesspitSprite);
+                    buryCesspitRequiredLevel, buryCesspitSprite ? buryCesspitSprite.GetSpriteForEra(era) : null);
 
             if (treatmentTankPrefab)
                 yield return new TreatmentTankShopItem(treatmentTankDisplayName, treatmentTankDescription,
-                    treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite, treatmentTankInfraValue);
+                    treatmentTankRequiredLevel, treatmentTankPrefab, treatmentTankSprite.GetSpriteForEra(era), treatmentTankInfraValue);
 
             if (limeSprinklerPrefab)
                 yield return new LimeSprinklerShopItem(limeSprinklerDisplayName, limeSprinklerDescription,
-                    limeSprinklerRequiredLevel, limeSprinklerPrefab, limeSprinklerSprite, limeSprinklerInfraValue);
+                    limeSprinklerRequiredLevel, limeSprinklerPrefab, limeSprinklerSprite.GetSpriteForEra(era), limeSprinklerInfraValue);
 
             if (cardEntries == null) yield break;
 
@@ -407,12 +416,36 @@ namespace _project.Scripts.Core
             }
         }
 
+        // Update the shop background and description panel based on the era
+        private void ApplyEraVisuals(int era)
+        {
+            if (shopPanel && shopBackgroundSprite)
+            {
+                shopPanel.GetComponent<UnityEngine.UI.Image>().sprite = shopBackgroundSprite.GetSpriteForEra(era);
+                shopPanel.transform.GetChild(0).GetComponent<UnityEngine.UI.Image>().sprite = shopBackgroundSprite.GetSpriteForEra(era);
+            }
+
+            if (era > shopHoverPrefabs.Count || !shopHoverPrefabs[era - 1]) return;
+
+            var oldHoverPrefab = shopItemHoverEffect;
+            shopItemHoverEffect = Instantiate(shopHoverPrefabs[era - 1], shopItemHoverEffectParent);
+            if (oldHoverPrefab != null)
+            {
+                CopyRectTransformValues(oldHoverPrefab.GetComponent<RectTransform>(),
+                    shopItemHoverEffect.GetComponent<RectTransform>());
+                Destroy(oldHoverPrefab);
+            }
+
+            // Hide the new panel until an item is hovered or selected
+            RefreshShopItemHoverEffect();
+        }
+
         private void SpawnShopItem(IShopItem item)
         {
             if (!HasAccess(item)) return;
             if (!shopItemPrefab || !shopItemsParent) return;
             var ui = Instantiate(shopItemPrefab, shopItemsParent);
-            ui.Setup(item);
+            ui.Setup(item, CurrentEra);
         }
 
         private void SelectPathPieceTool(string displayName, string description, int requiredLevel, int length,
@@ -458,6 +491,20 @@ namespace _project.Scripts.Core
             if (!shopItemsParent) return;
             for (var i = shopItemsParent.childCount - 1; i >= 0; i--)
                 Destroy(shopItemsParent.GetChild(i).gameObject);
+        }
+
+        private static void CopyRectTransformValues(RectTransform source, RectTransform target)
+        {
+            if (source is null || target is null) return;
+
+            target.anchorMin = source.anchorMin;
+            target.anchorMax = source.anchorMax;
+            target.pivot = source.pivot;
+            target.anchoredPosition = source.anchoredPosition;
+            target.sizeDelta = source.sizeDelta;
+            
+            target.localRotation = source.localRotation;
+            target.localScale = source.localScale;
         }
     }
 }
