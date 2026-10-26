@@ -11,7 +11,8 @@ namespace _project.Scripts.Object_Scripts
     {
         Organic,
         Chemical,
-        NonWaste
+        NonWaste,
+        Metal
     }
     
     public class IssueObject : MonoBehaviour
@@ -34,7 +35,7 @@ namespace _project.Scripts.Object_Scripts
         private GameObject[] sizeVisuals = new GameObject[3];
 
         [Tooltip(
-            "Non-waste look, same size tiers as sizeVisuals (0 = size 1, 1 = size 2, 2 = size 3 and above). Used instead of sizeVisuals whenever this issue's type is NonWaste, so junk reads as visibly different from organic/chemical waste. Leave a tier empty to fall back to sizeVisuals for that tier.")]
+            "Junk models (boot, tire, alligator...). Each NonWaste issue shows one of the assigned models at random, so junk reads as visibly different from organic/chemical waste. Metal falls back to these by size tier when it has no model of its own.")]
         [SerializeField]
         private GameObject[] nonWasteVisuals = new GameObject[3];
 
@@ -43,6 +44,25 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField]
         [Min(1)]
         private int nonWasteSize = 3;
+
+        [Tooltip(
+            "Metal look, same size tiers as sizeVisuals. An empty tier falls back to nonWasteVisuals, then sizeVisuals.")]
+        [SerializeField]
+        private GameObject[] metalVisuals = new GameObject[3];
+
+        [Tooltip("Tint that marks metal objects apart from waste and junk, applied over whichever model they use.")]
+        [SerializeField]
+        private Color metalTint = new(0.62f, 0.68f, 0.74f);
+
+        [Tooltip("Town level from which spawners start mixing metal objects in with the waste.")]
+        [SerializeField]
+        [Min(1)]
+        private int metalUnlockLevel = 3;
+
+        [Tooltip("Every Metal issue spawns at this size. Keep it below pipeBlockSize: metal never merges, so it can't clog.")]
+        [SerializeField]
+        [Min(1)]
+        private int metalSize = 2;
 
         [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
         [SerializeField]
@@ -101,6 +121,10 @@ namespace _project.Scripts.Object_Scripts
         private Color? _visualOverrideColor;
         private Material _visualOverrideMaterial;
         private GameObject _activeVisual;
+
+        // Which junk model this NonWaste issue shows. Junk is pinned to one size, so the model is
+        // rolled on its own instead of following the size tier (or every piece would be the same one).
+        private int _junkModel = -1;
         private Renderer[] _activeVisualRenderers;
         private Renderer[] _fallbackVisualRenderers;
         private IssueBlockHighlight _blockHighlight;
@@ -376,24 +400,30 @@ namespace _project.Scripts.Object_Scripts
 
         public void AssignType()
         {
-            // var rand = Random.Range(0, 2);
-            // if (GameMaster.Instance.turnController.currentLevel >= 3)
-                 var rand = Random.Range(0, 3);
+            // Metal joins the mix once the town reaches metalUnlockLevel.
+            var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+            var metalUnlocked = turnController && turnController.currentLevel >= metalUnlockLevel;
+            var rand = Random.Range(0, metalUnlocked ? 4 : 3);
 
-            type = rand switch
+            SetType(rand switch
             {
                 0 => IssueType.Organic,
                 1 => IssueType.Chemical,
                 2 => IssueType.NonWaste,
+                3 => IssueType.Metal,
                 _ => IssueType.Organic
-            };
+            });
 
             // Awake() rolled a random size and picked a model from sizeVisuals before AssignType ever
             // ran — re-apply now that the type (and therefore which visual set) is actually known.
-            // Junk doesn't come in sizes: pin it, which re-applies the visuals on its own.
+            // Junk doesn't come in sizes: pin it, which re-applies the visuals on its own. SetType
+            // has already done the same for metal.
             if (type == IssueType.NonWaste)
+            {
+                _junkModel = RollJunkModel();
                 SetSize(nonWasteSize);
-            else
+            }
+            else if (type != IssueType.Metal)
                 ApplySizeVisualModel();
         }
 
@@ -501,6 +531,11 @@ namespace _project.Scripts.Object_Scripts
         public void SetType(IssueType t)
         {
             type = t;
+            if (type != IssueType.Metal) return;
+
+            // Metal comes in one size and one look, and the visuals must follow the new type.
+            SetVisualOverride(metalTint);
+            SetSize(metalSize);
         }
 
         public WaypointPath GetPath()
@@ -716,6 +751,8 @@ namespace _project.Scripts.Object_Scripts
             // NonWaste is junk, not waste — it doesn't clump with turds or with other junk.
             // Both sides simply pass through each other on collision.
             if (type == IssueType.NonWaste || other.type == IssueType.NonWaste) return false;
+            // Metal objects are solid pieces headed for their own receptacle; they never clump either.
+            if (type == IssueType.Metal || other.type == IssueType.Metal) return false;
             if (!path || path != other.path) return false;
             // Either side being freshly de-clogged skips this merge — see postShrinkMergeImmunity.
             if (Time.time < _mergeImmuneUntil || Time.time < other._mergeImmuneUntil) return false;
@@ -762,6 +799,24 @@ namespace _project.Scripts.Object_Scripts
             _blockHighlight?.Refresh(GetVisualRenderers());
         }
 
+        /// <summary>Picks one of the assigned junk models at random, or -1 when none is assigned.</summary>
+        private int RollJunkModel()
+        {
+            if (nonWasteVisuals == null) return -1;
+
+            var assigned = 0;
+            foreach (var visual in nonWasteVisuals)
+                if (visual)
+                    assigned++;
+            if (assigned == 0) return -1;
+
+            var pick = Random.Range(0, assigned);
+            for (var i = 0; i < nonWasteVisuals.Length; i++)
+                if (nonWasteVisuals[i] && pick-- == 0)
+                    return i;
+            return -1;
+        }
+
         /// <summary>
         ///     Enables the model matching the current size tier (small / medium / big) and disables
         ///     the others. Sizes past the last tier keep the largest model and grow by scale alone,
@@ -769,25 +824,28 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void ApplySizeVisualModel()
         {
-            // NonWaste uses its own junk models where a tier is assigned; an empty tier falls
-            // back to the regular waste model so a half-filled nonWasteVisuals never goes invisible.
-            var tier = Mathf.Clamp(Size - 1, 0, Mathf.Max(sizeVisuals?.Length ?? 0, nonWasteVisuals?.Length ?? 0) - 1);
+            // NonWaste uses its own junk models where a tier is assigned, and Metal its own models
+            // before the junk ones; an empty tier falls back to the regular waste model so a
+            // half-filled visual set never goes invisible.
+            var tier = Mathf.Clamp(Size - 1, 0, Mathf.Max(sizeVisuals?.Length ?? 0,
+                Mathf.Max(nonWasteVisuals?.Length ?? 0, metalVisuals?.Length ?? 0)) - 1);
             GameObject target = null;
-            if (type == IssueType.NonWaste && nonWasteVisuals != null && tier < nonWasteVisuals.Length)
+            if (type == IssueType.Metal && metalVisuals != null && tier < metalVisuals.Length)
+                target = metalVisuals[tier];
+            if (type == IssueType.NonWaste && nonWasteVisuals != null && _junkModel >= 0 &&
+                _junkModel < nonWasteVisuals.Length)
+                target = nonWasteVisuals[_junkModel];
+            if (!target && (type is IssueType.NonWaste or IssueType.Metal) && nonWasteVisuals != null &&
+                tier < nonWasteVisuals.Length)
                 target = nonWasteVisuals[tier];
             if (!target && sizeVisuals != null && tier < sizeVisuals.Length)
                 target = sizeVisuals[tier];
             // An unassigned tier would otherwise hide every model and leave an invisible issue.
             if (!target) return;
 
-            if (sizeVisuals != null)
-                foreach (var visual in sizeVisuals)
-                    if (visual)
-                        visual.SetActive(visual == target);
-            if (nonWasteVisuals != null)
-                foreach (var visual in nonWasteVisuals)
-                    if (visual)
-                        visual.SetActive(visual == target);
+            ShowOnly(sizeVisuals, target);
+            ShowOnly(nonWasteVisuals, target);
+            ShowOnly(metalVisuals, target);
 
             if (target == _activeVisual) return;
 
@@ -795,6 +853,14 @@ namespace _project.Scripts.Object_Scripts
             _activeVisualRenderers = target.GetComponentsInChildren<Renderer>(true);
             // A swapped-in model arrives with its own materials — re-apply any active override.
             ApplyVisualOverride();
+        }
+
+        private static void ShowOnly(GameObject[] visuals, GameObject target)
+        {
+            if (visuals == null) return;
+            foreach (var visual in visuals)
+                if (visual)
+                    visual.SetActive(visual == target);
         }
 
         /// <summary>

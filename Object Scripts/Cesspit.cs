@@ -19,6 +19,11 @@ namespace _project.Scripts.Object_Scripts
         [Min(1f)]
         private float flushedJunkDamageMultiplier = 10f;
 
+        [Tooltip("Metal fills this pit by its normal deposit times this. Solid metal wrecks a pit even faster than junk.")]
+        [SerializeField]
+        [Min(1f)]
+        private float metalDamageMultiplier = 15f;
+
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 10f;
@@ -209,7 +214,9 @@ namespace _project.Scripts.Object_Scripts
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
             var deposit = issue.SiftCost;
-            if (issue.WasFlushedFromSifter)
+            if (issue.GetIssueType() == IssueType.Metal)
+                deposit *= metalDamageMultiplier;
+            else if (issue.WasFlushedFromSifter)
                 deposit *= flushedJunkDamageMultiplier;
 
             SetFullness(fullness + deposit);

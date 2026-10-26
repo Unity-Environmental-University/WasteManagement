@@ -207,6 +207,17 @@ namespace _project.Scripts.Object_Scripts
             var issue = other.GetComponent<IssueObject>();
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
+            if (issue.GetIssueType() == IssueType.Metal && !IsBlocked && maxDebrisAccumulation > 0f)
+            {
+                // Metal doesn't clog the screen gradually — it breaks it open in one hit. The gates
+                // jam open (flushing anything already held) and the metal stays wedged in the
+                // screen until the player opens the sifter and clears it by hand.
+                AccumulateDebris(maxDebrisAccumulation);
+                issue.SetHeldBySifter(true);
+                _heldIssues.Add(issue);
+                return;
+            }
+
             var isNonWaste = issue.GetIssueType() == IssueType.NonWaste;
             if (isNonWaste && !IsBlocked)
             {

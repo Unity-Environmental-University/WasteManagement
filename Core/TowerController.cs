@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
@@ -96,7 +95,8 @@ namespace _project.Scripts.Core
             {
                 IssueType.Organic => organicProcessPower,
                 IssueType.Chemical => chemicalProcessPower,
-                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+                // Junk and metal aren't treated here, so they cost the tower nothing.
+                _ => 0f
             };
         }
 

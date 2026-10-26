@@ -1,4 +1,7 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -215,6 +218,76 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(runawayIssue);
             Assert.AreEqual(1f, pathIssue.ProcessCost);
             Assert.AreEqual(1f, runawayIssue.ProcessCost);
+        }
+
+        [Test]
+        public void MetalIssues_NeverMergeAndKeepTheirFixedSize()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var metal = CreateIssue("Metal Issue", fixture.Path);
+            metal.SetType(IssueType.Metal);
+            var waste = CreateIssue("Waste Issue", fixture.Path);
+            waste.SetType(IssueType.Organic);
+
+            var canMerge = typeof(IssueObject).GetMethod("CanMergeWith", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(canMerge);
+            Assert.IsFalse((bool)canMerge.Invoke(metal, new object[] { waste }));
+            Assert.IsFalse((bool)canMerge.Invoke(waste, new object[] { metal }));
+            Assert.AreEqual(metal.ProcessCost, GetField<int>(metal, "metalSize") * 1f);
+            Assert.IsFalse(metal.IsBlockingPipe);
+        }
+
+        [Test]
+        public void AssignType_MixesMetalIn_OnlyFromLevelThree()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
+
+            int CountMetal(int level)
+            {
+                gm.turnController.currentLevel = level;
+                var metal = 0;
+                for (var i = 0; i < 200; i++)
+                {
+                    issue.AssignType();
+                    if (issue.GetIssueType() == IssueType.Metal) metal++;
+                }
+
+                return metal;
+            }
+
+            Assert.AreEqual(0, CountMetal(2));
+            Assert.Greater(CountMetal(3), 0);
+        }
+
+        [Test]
+        public void NonWaste_ShowsEveryJunkModel_NotJustTheOneForItsPinnedSize()
+        {
+            var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
+            var junk = new[] { "Boot", "Tire", "Alligator" }
+                .Select(name =>
+                {
+                    var model = CreateGameObject(name);
+                    model.transform.SetParent(issue.transform, false);
+                    return model;
+                }).ToArray();
+            SetField(issue, "nonWasteVisuals", junk);
+
+            var seen = new HashSet<GameObject>();
+            for (var i = 0; i < 200 && seen.Count < junk.Length; i++)
+            {
+                issue.AssignType();
+                if (issue.GetIssueType() != IssueType.NonWaste) continue;
+
+                var shown = junk.Where(model => model.activeSelf).ToArray();
+                Assert.AreEqual(1, shown.Length, "Exactly one junk model shows.");
+                seen.Add(shown[0]);
+            }
+
+            Assert.AreEqual(junk.Length, seen.Count, "Boot, tire and alligator all turn up.");
         }
 
         /// <summary>
