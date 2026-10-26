@@ -7,7 +7,8 @@ namespace _project.Scripts.Object_Scripts
     ///     Isolated pipe is a closed tube too slim for an issue's model, so while an issue travels
     ///     through it the model is hidden and a bulge in the pipe slides along in its place, as if
     ///     the pipe were swelling around whatever is being pushed through. The bulge is tinted by the
-    ///     issue's type. Colliders stay on, so sifters, merging and clicks work as usual.
+    ///     issue's type, and a clog swells and flashes the block highlight's orange, since the hidden
+    ///     model can't show that warning. Colliders stay on, so sifters, merging and clicks work as usual.
     /// </summary>
     [RequireComponent(typeof(IssueObject))]
     public class IsolatedPipeRider : MonoBehaviour
@@ -16,11 +17,14 @@ namespace _project.Scripts.Object_Scripts
         private const float BulgeLength = 2.2f;
         private const float PulseSpeed = 14f;
         private const float PulseAmount = 0.05f;
+        private const float BlockedSwell = 1.3f;
+        private const float BlockedPulseAmount = 0.15f;
 
         private static readonly Color MetalBulge = new(0.86f, 0.9f, 0.96f);
         private static readonly Color OrganicBulge = new(0.66f, 0.52f, 0.36f);
         private static readonly Color ChemicalBulge = new(0.52f, 0.74f, 0.44f);
         private static readonly Color JunkBulge = new(0.58f, 0.58f, 0.64f);
+        private static readonly Color BlockedBulge = new(1f, 0.45f, 0.05f); // The block outline's default.
 
         private readonly List<Renderer> _renderers = new();
         private readonly List<Renderer> _hidden = new();
@@ -65,7 +69,6 @@ namespace _project.Scripts.Object_Scripts
             {
                 HideModel();
                 GetBulge(board).gameObject.SetActive(true);
-                RendererColorUtility.SetColor(_bulgeRenderer, BulgeColor(_issue.GetIssueType()), ref _colorBlock);
                 return;
             }
 
@@ -107,9 +110,17 @@ namespace _project.Scripts.Object_Scripts
 
             _bulge.rotation = Quaternion.LookRotation(_heading, boardTransform.up);
 
+            var blocked = _issue.IsBlockingPipe;
+            var wave = Mathf.Sin(Time.time * PulseSpeed);
+            var pulse = 1f + wave * (blocked ? BlockedPulseAmount : PulseAmount);
+            var width = BulgeWidth * (blocked ? BlockedSwell : 1f) * pulse;
+            var length = BulgeLength * (blocked ? BlockedSwell : 1f) / pulse;
             var diameter = board.IsolatedPipeRadius * 2f * boardTransform.lossyScale.x;
-            var pulse = 1f + Mathf.Sin(Time.time * PulseSpeed) * PulseAmount;
-            _bulge.localScale = new Vector3(BulgeWidth * pulse, BulgeWidth * pulse, BulgeLength / pulse) * diameter;
+            _bulge.localScale = new Vector3(width, width, length) * diameter;
+
+            var color = BulgeColor(_issue.GetIssueType());
+            if (blocked) color = Color.Lerp(color, BlockedBulge, 0.6f + 0.4f * wave);
+            RendererColorUtility.SetColor(_bulgeRenderer, color, ref _colorBlock);
         }
 
         private Transform GetBulge(PathBuildBoard board)

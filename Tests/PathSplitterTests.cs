@@ -973,6 +973,20 @@ namespace _project.Scripts.Tests
             var tubeCenter = fixture.Path.GetPosition(metal.GetRouteIndex(), metal.GetWaypointIndex());
             Assert.AreEqual(tubeCenter.y, bulge.transform.position.y, 0.001f, "The bulge sits in the tube.");
 
+            // A clog inside the tube still warns the player: the bulge swells and flashes orange.
+            var bulgeRenderer = bulge.GetComponent<Renderer>();
+            var block = new MaterialPropertyBlock();
+            bulgeRenderer.GetPropertyBlock(block);
+            var calmColor = block.GetColor("_BaseColor");
+            var calmWidth = bulge.transform.localScale.x;
+            metal.SetSize(GetField<int>(metal, "pipeBlockSize"));
+            Assert.IsTrue(metal.IsBlockingPipe);
+            rider.SendMessage("LateUpdate");
+            Assert.Greater(bulge.transform.localScale.x, calmWidth * 1.03f);
+            bulgeRenderer.GetPropertyBlock(block);
+            Assert.AreNotEqual(calmColor, block.GetColor("_BaseColor"));
+            metal.SetSize(1);
+
             // Back on ordinary pipe, the model returns and the bulge goes.
             metal.TrySetRoute(0);
             rider.SendMessage("LateUpdate");
