@@ -313,6 +313,38 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(1, junk.Count(model => model.activeSelf), "Exactly one junk model shows.");
         }
 
+        [Test]
+        public void SetType_ThroughMetalAndBack_LeavesNoTintOnTheEarlierModel()
+        {
+            var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
+            GameObject Model(string name)
+            {
+                var model = CreatePrimitive(name);
+                model.transform.SetParent(issue.transform, false);
+                return model;
+            }
+
+            var waste = Model("Waste");
+            var metal = Model("Metal");
+            SetField(issue, "sizeVisuals", new[] { waste });
+            SetField(issue, "metalVisuals", new[] { metal });
+            SetField(issue, "nonWasteVisuals", new GameObject[0]);
+            SetField(issue, "metalSize", 1);
+            issue.SetType(IssueType.Organic);
+            issue.SetSize(1);
+            Assert.IsTrue(waste.activeSelf);
+
+            issue.SetType(IssueType.Metal);
+            Assert.IsTrue(metal.activeSelf);
+            Assert.IsTrue(metal.GetComponent<Renderer>().HasPropertyBlock(), "The metal model wears the tint.");
+
+            issue.SetType(IssueType.Organic);
+            issue.SetSize(1);
+            Assert.IsTrue(waste.activeSelf);
+            Assert.IsFalse(waste.GetComponent<Renderer>().HasPropertyBlock(),
+                "The model shown again was never tinted while metal.");
+        }
+
         /// <summary>
         ///     A 16-waypoint route that detours right through column 3 between rows 1 and 5. With
         ///     <paramref name="shortcut" /> the straight run up column 1 is also laid, cutting it to 12.

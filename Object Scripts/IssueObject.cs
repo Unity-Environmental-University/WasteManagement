@@ -530,8 +530,9 @@ namespace _project.Scripts.Object_Scripts
             if (type == IssueType.Metal)
             {
                 // Metal comes in one size and one look, and the visuals must follow the new type.
-                SetVisualOverride(metalTint);
+                // Swap to the metal model first, so the tint never lands on the model being left.
                 SetSize(metalSize);
+                SetVisualOverride(metalTint);
                 return;
             }
 
