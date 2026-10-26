@@ -19,6 +19,8 @@ namespace _project.Scripts.Tests
     {
         private Mouse _panTestMouse;
         private Pointer _previousPointer;
+        private (InputSettings.BackgroundBehavior background,
+            InputSettings.EditorInputBehaviorInPlayMode editor, bool runInBackground)? _previousFocusSettings;
 
         [TearDown]
         public void RestoreInputDevices()
@@ -29,6 +31,28 @@ namespace _project.Scripts.Tests
                 _previousPointer.MakeCurrent();
             _panTestMouse = null;
             _previousPointer = null;
+
+            if (_previousFocusSettings is { } previous)
+            {
+                InputSystem.settings.backgroundBehavior = previous.background;
+                InputSystem.settings.editorInputBehaviorInPlayMode = previous.editor;
+                Application.runInBackground = previous.runInBackground;
+                _previousFocusSettings = null;
+            }
+        }
+
+        // Queued mouse events only reach the pan action while the Game view has focus, which a
+        // batch run or a backgrounded Editor never has. All three overrides are needed; any two
+        // still leave the action idle.
+        private void RouteInputToGameRegardlessOfFocus()
+        {
+            var settings = InputSystem.settings;
+            _previousFocusSettings ??= (settings.backgroundBehavior, settings.editorInputBehaviorInPlayMode,
+                Application.runInBackground);
+            settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            settings.editorInputBehaviorInPlayMode =
+                InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            Application.runInBackground = true;
         }
 
         [Test]
@@ -556,6 +580,7 @@ namespace _project.Scripts.Tests
             SetField(controller, "mainCamera", mainCamera);
             SetField(controller, "secondaryCamera", camera);
             SetField(controller, "recenterDuration", 0f);
+            RouteInputToGameRegardlessOfFocus();
             _previousPointer = Pointer.current;
             _panTestMouse = InputSystem.AddDevice<Mouse>();
             return (controller, board, camera);
