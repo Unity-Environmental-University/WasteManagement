@@ -39,13 +39,10 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(unheldCount + 1, IssueObject.ActiveUnheldCount);
         }
 
-        [TestCase(true, true)]
-        [TestCase(true, false)]
-        [TestCase(false, true)]
-        [TestCase(false, false)]
-        public void HeldIssue_RebasesTemporarySpeedDuration_WhenRouteChanges(bool shorten, bool flush)
+        [Test]
+        public void HeldIssue_RebasesTemporarySpeedDuration_WhenRouteChanges(
+            [Values] bool shorten, [Values] bool flush, [Values(1f, 4f)] float speed)
         {
-            const float speed = 4f;
             var fixture = CreateDetourPathFixture(shortcut: !shorten);
             Assert.AreEqual(shorten ? 16 : 12, fixture.Path.Count);
 

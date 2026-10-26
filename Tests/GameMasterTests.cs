@@ -25,6 +25,9 @@ namespace _project.Scripts.Tests
         [TearDown]
         public void RestoreInputDevices()
         {
+            // Derived teardowns run before the base one: destroy the controllers first, as the
+            // suite always has, so none of them sees the devices and settings change under it.
+            DestroyCreatedObjects();
             if (_panTestMouse != null && _panTestMouse.added)
                 InputSystem.RemoveDevice(_panTestMouse);
             if (_previousPointer != null && _previousPointer.added)

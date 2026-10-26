@@ -103,7 +103,9 @@ namespace _project.Scripts.Tests
         public void ApplyPostWaveGrowth_UtilityStinkSources_ReduceGrowth()
         {
             var populationManager = CreatePopulationManager();
-            CreateStinkSource(4f);
+            // Base stink and a utility source both count toward the penalty.
+            populationManager.StinkValue = 1f;
+            CreateStinkSource(3f);
 
             var result = populationManager.ApplyPostWaveGrowth(0);
 
