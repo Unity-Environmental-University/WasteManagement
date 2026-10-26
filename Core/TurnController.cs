@@ -29,6 +29,9 @@ namespace _project.Scripts.Core
         private Coroutine _waveCoroutine;
         private static TurnController Instance { get; set; }
 
+        /// <summary>True while a wave is underway: not between waves, on the post-round summary, or after a loss.</summary>
+        public bool IsWaveRunning => currentPhase == GamePhase.Tower && !_waitingForPostRoundContinue && !_gameLost;
+
         private void Awake()
         {
             if (Instance && Instance != this)

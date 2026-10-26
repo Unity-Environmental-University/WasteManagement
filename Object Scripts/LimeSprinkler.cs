@@ -73,7 +73,7 @@ namespace _project.Scripts.Object_Scripts
             // Only while waste is flowing, and only once there's a pit in reach.
             if (_limedPits.Count == 0) return;
             var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
-            if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
+            if (!turnController || !turnController.IsWaveRunning) return;
 
             _drainTimer += Time.deltaTime;
             if (_drainTimer < DrainTickSeconds) return;

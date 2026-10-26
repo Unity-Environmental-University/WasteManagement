@@ -181,6 +181,29 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Lime_DrainsOnlyWhileAWaveIsRunning_NotOnThePostRoundSummary()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.turnController.currentPhase = GamePhase.Tower;
+            var board = CreateBoard();
+            var pit = CreateCesspit(board, new Vector2Int(3, 3));
+            pit.fullness = 8f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+
+            SetField(sprinkler, "_drainTimer", 1f);
+            sprinkler.SendMessage("Update");
+            Assert.Less(pit.fullness, 8f, "Lime breaks the pit down during the wave.");
+
+            // The wave is over and the summary is up, though the phase hasn't flipped back yet.
+            var before = pit.fullness;
+            SetField(gm.turnController, "_waitingForPostRoundContinue", true);
+            SetField(sprinkler, "_drainTimer", 1f);
+            sprinkler.SendMessage("Update");
+            Assert.AreEqual(before, pit.fullness, 0.0001f);
+        }
+
+        [Test]
         public void Lime_DrainingAFullPit_StopsItsRunawaysOnlyOnceWellUnderTheBrim()
         {
             var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
