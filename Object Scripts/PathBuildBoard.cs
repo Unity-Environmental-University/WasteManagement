@@ -459,6 +459,8 @@ namespace _project.Scripts.Object_Scripts
             {
                 UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, placedPipeColor);
                 RefreshNeighborPipeGeometry(placedPiece.cells);
+                if (Application.isPlaying)
+                    PipePlacementPuff.Play(this, placedPiece.cells, PipeSurfaceHeight);
             }
             HidePreviewVisual();
             RefreshVisuals();

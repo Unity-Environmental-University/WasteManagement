@@ -112,6 +112,8 @@ namespace _project.Scripts.Object_Scripts
             gm.CompletePlacement(placed);
             gm.turnController.infrastructureValue += pending.InfraValue;
             gm.interfaceManager?.RefreshStinkMeter();
+            if (Application.isPlaying && placed)
+                PipePlacementPuff.Play(placed);
             RefreshInteractionState();
             if (Debugging) Debug.Log($"[SpecialInteract] Placed {pending.PlaceableType} at {name}.");
         }
