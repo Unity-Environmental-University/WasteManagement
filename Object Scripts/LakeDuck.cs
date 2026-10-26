@@ -42,6 +42,7 @@ namespace _project.Scripts.Object_Scripts
         private float _reactionUntil;
         private float _previousHealth;
         private bool _reactionUpset;
+        private bool _hurtPending;
         private Vector3 _leftWingRest;
         private Vector3 _rightWingRest;
         private AudioClip _quack;
@@ -66,14 +67,20 @@ namespace _project.Scripts.Object_Scripts
 
             // A little hysteresis keeps the duck from changing its mind at the boundary.
             var retreat = _retreating ? lake.health < 80f : lake.health < 50f;
+            var dropped = lake.health < _previousHealth;
+            _previousHealth = lake.health;
             if (retreat != _retreating)
             {
                 _retreating = retreat;
-                React(retreat);
+                _hurtPending = false;
+                React(retreat, retreat && dropped);
             }
-            else if (lake.health < _previousHealth && _clock >= _reactionUntil)
-                React(true);
-            _previousHealth = lake.health;
+            else if (dropped || _hurtPending)
+            {
+                // Damage mid-reaction waits for that reaction to finish instead of going unnoticed.
+                _hurtPending = _clock < _reactionUntil;
+                if (!_hurtPending) React(true, true);
+            }
 
             var target = _retreating ? shoreSpot : swimmingSpot + new Vector3(
                 Mathf.Sin(_clock * 0.32f) * swimRadius, 0f,
@@ -88,7 +95,7 @@ namespace _project.Scripts.Object_Scripts
             var paddling = !_retreating || direction.sqrMagnitude > 0.1f;
             AnimatePose(paddling);
 
-            if (_clock >= _nextQuack && _clock >= _reactionUntil) React(_retreating);
+            if (_clock >= _nextQuack && _clock >= _reactionUntil) React(_retreating, false);
         }
 
         private void AnimatePose(bool paddling)
@@ -125,15 +132,15 @@ namespace _project.Scripts.Object_Scripts
             wing.localRotation = Quaternion.Euler(flap * 25f, 0f, side * (flap * 65f - paddle));
         }
 
-        private void React(bool upset)
+        private void React(bool upset, bool hurt)
         {
             _reactionUpset = upset;
             _reactionStarted = _clock;
             _reactionUntil = _clock + Mathf.Max(0.1f, reactionDuration);
-            Quack(upset);
+            Quack(hurt);
         }
 
-        private void Quack(bool upset)
+        private void Quack(bool hurt)
         {
             _quackUntil = _clock + 0.65f;
             _nextQuack = _clock + (_retreating ? 9f : 16f);
@@ -141,8 +148,6 @@ namespace _project.Scripts.Object_Scripts
             if (!_bubble) return;
 
             // Hurt by the lake getting worse: shouting. Sulking on the shore: muttering. Otherwise chipper.
-            // React runs before Update records this frame's health, so a drop still shows here.
-            var hurt = upset && lake && lake.health < _previousHealth;
             if (hurt)
                 _bubble.Say(UpsetQuacks[Random.Range(0, UpsetQuacks.Length)], UpsetInk, BubbleDuration, true);
             else if (_retreating)

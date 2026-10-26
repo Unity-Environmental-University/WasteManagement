@@ -29,6 +29,29 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void DamageDuringAReaction_StillGetsShoutedOnceItEnds()
+        {
+            var lake = CreatePrimitive("Lake").AddComponent<LakeController>();
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<LakeDuck>(
+                "Assets/_project/LakeDuck/Lake Duck.prefab");
+            var duck = Track(Object.Instantiate(prefab.gameObject)).GetComponent<LakeDuck>();
+            duck.SendMessage("Start");
+            var bubble = duck.GetComponentInChildren<SpeechBubble>(true) ?? Object.FindAnyObjectByType<SpeechBubble>();
+            Track(bubble.gameObject);
+
+            // Mid-reaction (say, a happy quack), the lake takes a hit too small to send the duck ashore.
+            SetField(duck, "_reactionUntil", float.MaxValue);
+            lake.health -= 10f;
+            duck.SendMessage("Update");
+            Assert.IsFalse(bubble.IsShowing, "It doesn't interrupt the reaction already playing.");
+
+            SetField(duck, "_reactionUntil", 0f);
+            duck.SendMessage("Update");
+            Assert.IsTrue(bubble.IsShowing);
+            StringAssert.IsMatch("QUACK!!|Quack\\?!", bubble.Text, "The hit is still shouted about.");
+        }
+
+        [Test]
         public void SpeechBubble_PopsAwayAfterItsTime()
         {
             var anchor = CreateGameObject("Anchor").transform;
