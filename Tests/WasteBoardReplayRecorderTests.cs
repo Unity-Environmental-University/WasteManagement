@@ -80,6 +80,31 @@ namespace _project.Scripts.Tests
             Assert.AreNotEqual(before, SnapshotSignature(sifter));
         }
 
+        [Test]
+        public void PathData_RecordsWhichLayerThePieceIsOn()
+        {
+            var flags = BindingFlags.Static | BindingFlags.NonPublic;
+            var snapshot = typeof(WasteBoardReplayRecorder).GetMethod("Snapshot", flags,
+                null, new[] { typeof(PathBuildBoard.PlacedPathPiece) }, null);
+            var pathData = typeof(WasteBoardReplayRecorder).GetMethod("PathData", flags);
+            Assert.IsNotNull(snapshot);
+            Assert.IsNotNull(pathData);
+
+            string Layer(bool isolated)
+            {
+                var piece = new PathBuildBoard.PlacedPathPiece
+                {
+                    id = 1, length = 1, isolated = isolated, cells = { new Vector2Int(2, 2) }
+                };
+                var data = (Dictionary<string, string>)pathData.Invoke(null,
+                    new[] { snapshot.Invoke(null, new object[] { piece }), false });
+                return data["layer"];
+            }
+
+            Assert.AreEqual("isolated", Layer(true));
+            Assert.AreEqual("regular", Layer(false), "Crossing pieces in one cell stay distinguishable.");
+        }
+
         private Dictionary<string, string> SnapshotData(MonoBehaviour behaviour)
         {
             var snapshot = Snapshot(behaviour);
