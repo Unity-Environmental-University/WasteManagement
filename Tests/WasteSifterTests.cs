@@ -250,6 +250,47 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Minigame_ClosedInTheFrameOfTheLastSort_StillEndsCleared()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            var junk = CreateJunk("Caught Junk");
+            Enter(sifter, junk);
+            Assert.IsTrue(IsHeld(junk));
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            foreach (var piece in pieces) Sort(piece);
+            // Escape lands before LateUpdate gets to finish the round.
+            controller.CloseMiniGame();
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsFalse(controller.IsRunning);
+            CollectionAssert.IsEmpty(GetField<HashSet<IssueObject>>(sifter, "_heldIssues"),
+                "Sorting the last piece cleared the screen, so nothing it caught is still held.");
+        }
+
+        [Test]
+        public void Minigame_JunkLandingAfterTheLastSort_KeepsTheRoundGoing()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            foreach (var piece in pieces) Sort(piece);
+            sifter.debrisAccumulation = 50f;
+            controller.SendMessage("Update");
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsTrue(controller.IsRunning, "The new junk still has to be sorted.");
+            Assert.AreEqual(2, CountActive(pieces));
+            Assert.AreEqual(50f, sifter.debrisAccumulation, 0.001f, "Nothing new was cleared unsorted.");
+        }
+
+        [Test]
         public void Minigame_PiecesTrackTheDebrisCaughtSinceTheLastVisit()
         {
             var controller = CreateMinigame(4, out var pieces);

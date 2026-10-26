@@ -127,7 +127,11 @@ namespace _project.Scripts.Core
 
         private void LateUpdate()
         {
-            if (_endQueued) EndMiniGame(true);
+            if (!_endQueued) return;
+
+            // Junk that landed after the last sort is still waiting on the panel: keep playing.
+            if (_debris.Count is 0) EndMiniGame(true);
+            else _endQueued = false;
         }
 
         public void StartMiniGame(WasteSifter sifter)
@@ -226,10 +230,13 @@ namespace _project.Scripts.Core
             return false;
         }
 
-        /// <summary>Leaves the round unfinished: the sifter keeps what's left, and the next round resumes it.</summary>
+        /// <summary>
+        ///     Leaves the round unfinished: the sifter keeps what's left, and the next round resumes it.
+        ///     A round whose last piece is already sorted still ends cleared.
+        /// </summary>
         public void CloseMiniGame()
         {
-            if (_isRunning) EndMiniGame(false);
+            if (_isRunning) EndMiniGame(_endQueued && _debris.Count is 0);
         }
 
         private void EndMiniGame(bool cleared)
