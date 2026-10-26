@@ -273,10 +273,13 @@ namespace _project.Scripts.Core
         }
 
         // A splitter may go down before any pipe: the route divides at whichever cell it sits on
-        // once pipes are laid through it.
+        // once pipes are laid through it. It still can't sit where isolated pipe crosses regular pipe.
         public GameObject Place(Transform location)
         {
             var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
+            if (board && board.TryWorldToCell(location.position, out var cell) && board.IsPipeCrossing(cell))
+                return null;
+
             var rotation = location.rotation;
             if (board && board.TryGetPathFacingRotation(location.position, out var pathRotation))
                 rotation = pathRotation;

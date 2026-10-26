@@ -228,11 +228,13 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     True where isolated pipe dead-ends head-on into regular pipe, so the end gets a drain
-        ///     valve. Pipe merely running alongside regular pipe never does, nor pipe leaving a splitter.
+        ///     valve. Pipe merely running alongside regular pipe never does, nor pipe leaving or ending in
+        ///     a splitter, which already joins the two lines.
         /// </summary>
         public bool CanDrainInto(Vector2Int isolatedCell, Vector2Int regularCell)
         {
-            if (!HasPipe(regularCell, false) || HasPipe(regularCell, true) || IsSplitterCell(regularCell)) return false;
+            if (!HasPipe(regularCell, false) || HasPipe(regularCell, true) || IsSplitterCell(regularCell) ||
+                IsSplitterCell(isolatedCell)) return false;
             if (!TryGetPlacedPieceAt(isolatedCell, true, out var piece)) return false;
 
             // Head-on: the regular pipe lies straight past the end of the isolated piece.

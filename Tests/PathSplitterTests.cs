@@ -781,6 +781,24 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitterShopItem_RefusesAPipeCrossing()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 4, 0, 6);
+            PlaceHorizontal(fixture.Board, 2, 2, 4, true);
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+            var prefab = CreateGameObject("Path Splitter Prefab");
+            prefab.AddComponent<PathSplitter>();
+            var item = new PathSplitterShopItem("Path Splitter", string.Empty, 1, prefab, null, 1);
+
+            Assert.IsTrue(fixture.Board.IsPipeCrossing(new Vector2Int(4, 2)));
+            Assert.IsNull(item.Place(GetCell(fixture.Board, 4, 2).transform),
+                "A splitter on a crossing would catch both lines at once.");
+            Assert.IsNotNull(Track(item.Place(GetCell(fixture.Board, 4, 4).transform)));
+        }
+
+        [Test]
         public void IsolatedPipe_DeadEndingIntoRegularPipe_DrainsIntoIt()
         {
             var fixture = CreatePathFixture();
@@ -811,6 +829,10 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(new Vector2Int(1, 9), cells[^1], "...and rides it on to the end.");
             Assert.IsFalse(fixture.Path.GetRouteCells(0).Any(cell => cell.x > 1),
                 "Nothing flows from the main line back up into isolated pipe.");
+
+            AddSplitter(fixture, new Vector2Int(2, 6));
+            Assert.IsFalse(fixture.Board.CanDrainInto(new Vector2Int(2, 6), new Vector2Int(1, 6)),
+                "Nor does pipe ending in a splitter, which already joins the lines.");
         }
 
         [Test]
