@@ -271,6 +271,21 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void ReceptacleBranch_LastCellFlowsIntoTheReceptacle_NotTowardTheLake()
+        {
+            var fixture = CreateReceptacleFixture(out _);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var lastCell = new Vector2Int(fixture.Board.Columns - 1, 4);
+            var offsets = new List<Vector3>();
+
+            Assert.IsTrue(fixture.Path.CollectFlowOffsets(fixture.Board.GetCellTopPosition(lastCell), offsets));
+            Assert.AreEqual(2, offsets.Count, "In from the left, out into the receptacle.");
+            var outward = offsets.OrderByDescending(offset => offset.x).First();
+            Assert.Greater(outward.x, 0f, "The last pipe leads on into the receptacle beside it...");
+            Assert.AreEqual(0f, outward.z, 0.001f, "...not off toward the lake end.");
+        }
+
+        [Test]
         public void MetalPinnedToAReceptacleBranch_IsCollectedThereAndSparesTheLake()
         {
             var fixture = CreateReceptacleFixture(out var receptacle);

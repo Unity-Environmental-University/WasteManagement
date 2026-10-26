@@ -461,7 +461,7 @@ namespace _project.Scripts.Object_Scripts
 
                 found = true;
                 var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
-                GetRouteNeighbors(route.Cells, route.Complete, index, out var previous, out var next);
+                GetRouteNeighbors(route, index, out var previous, out var next);
                 if (previous.HasValue) offsets.Add(previous.Value - current);
                 if (next.HasValue) offsets.Add(next.Value - current);
             }
@@ -486,7 +486,7 @@ namespace _project.Scripts.Object_Scripts
                 var index = route.Cells.IndexOf(cell);
                 if (index < 0) continue;
 
-                GetRouteNeighbors(route.Cells, route.Complete, index, out _, out var next);
+                GetRouteNeighbors(route, index, out _, out var next);
                 var offset = next - current;
                 if (route.ForkIndex != index) main ??= offset;
                 else if (route.Output == 1) branch ??= offset;
@@ -495,19 +495,20 @@ namespace _project.Scripts.Object_Scripts
         }
 
         // Where a route comes from and goes to around one of its cells: the neighboring cells, or
-        // the start and end points at the route's ends. Null when the route has nothing on that side.
-        private void GetRouteNeighbors(List<Vector2Int> route, bool complete, int index,
-            out Vector3? previous, out Vector3? next)
+        // the start point and the route's own end (the lake, or its receptacle) at the route's ends.
+        // Null when the route has nothing on that side.
+        private void GetRouteNeighbors(Route route, int index, out Vector3? previous, out Vector3? next)
         {
+            var cells = route.Cells;
             previous = index > 0
-                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1], PathKind)
+                ? pathBuildBoard.GetPathWaypointPosition(cells[index - 1], PathKind)
                 : startPoint
                     ? startPoint.position
                     : null;
-            next = index < route.Count - 1
-                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1], PathKind)
-                : complete && endPoint
-                    ? endPoint.position
+            next = index < cells.Count - 1
+                ? pathBuildBoard.GetPathWaypointPosition(cells[index + 1], PathKind)
+                : route.Complete && (route.Receptacle || endPoint)
+                    ? GetEndPosition(route)
                     : null;
         }
 
@@ -522,20 +523,19 @@ namespace _project.Scripts.Object_Scripts
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
 
             foreach (var route in _previewRoutes)
-                if (TryGetFlowSign(route.Cells, route.Complete, cell, axis, out sign))
+                if (TryGetFlowSign(route, cell, axis, out sign))
                     return true;
             return false;
         }
 
-        private bool TryGetFlowSign(List<Vector2Int> route, bool complete, Vector2Int cell, Vector3 axis,
-            out float sign)
+        private bool TryGetFlowSign(Route route, Vector2Int cell, Vector3 axis, out float sign)
         {
             sign = 0f;
-            var index = route.IndexOf(cell);
+            var index = route.Cells.IndexOf(cell);
             if (index < 0) return false;
 
             var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
-            GetRouteNeighbors(route, complete, index, out var previous, out var next);
+            GetRouteNeighbors(route, index, out var previous, out var next);
 
             // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
             var along = Vector3.Dot((next ?? current) - (previous ?? current), axis);
