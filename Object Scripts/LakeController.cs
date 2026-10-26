@@ -44,7 +44,7 @@ namespace _project.Scripts.Object_Scripts
             if (issue.GetPath() && issue.GetPath().RecyclingDestination &&
                 !issue.IsDirectDestination && !issue.IsBlockingPipe) return;
             // A receptacle keeps what it accepts; anything else piped to it is dumped here anyway.
-            if (issue.EndReceptacle && issue.EndReceptacle.Accepts(issue)) return;
+            if (issue.EndReceptacle && issue.EndReceptacle.IsUnlocked && issue.EndReceptacle.Accepts(issue)) return;
 
             var damage = issue.ProcessCost * 5;
             health -= damage;

@@ -305,6 +305,34 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void MetalHeadedForAReceptacleThatLocks_PollutesTheLakeInstead()
+        {
+            var fixture = CreateReceptacleFixture(out var receptacle);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var splitter = PathSplitter.Live.Single(s => s.transform.position == CellTop(fixture, 1, 4));
+            splitter.SetRule(IssueType.Metal, SplitterRule.BranchOnly);
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+
+            var lake = CreateGameObject("Lake").AddComponent<LakeController>();
+            var metal = CreatePrimitive("Metal Issue").AddComponent<IssueObject>();
+            metal.SetType(IssueType.Metal);
+            metal.SetPath(fixture.Path);
+            Assert.IsTrue(splitter.RouteIssue(metal));
+
+            SetField(receptacle, "unlockLevel", 3);
+            receptacle.SendMessage("ApplyLevel", 2);
+            Assert.IsFalse(receptacle.IsUnlocked);
+
+            while (metal.GetWaypointIndex() < fixture.Path.GetWaypointCount(metal.GetRouteIndex()))
+                AdvanceIssueOneWaypoint(metal, fixture.Board);
+            metal.SendMessage("Update");
+
+            Assert.AreEqual(0, receptacle.DeliveredCount, "A locked receptacle collects nothing.");
+            Assert.AreEqual(100f - metal.ProcessCost * 5, lake.health, 0.001f);
+        }
+
+        [Test]
         public void RejoinedSubBranch_BecomesPartOfThePipeItRejoins()
         {
             var fixture = CreateNestedSplitPathFixture();

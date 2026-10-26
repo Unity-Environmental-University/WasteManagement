@@ -81,7 +81,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void Receive(IssueObject issue)
         {
-            if (issue.EndReceptacle != this || !Accepts(issue)) return;
+            if (issue.EndReceptacle != this || !IsUnlocked || !Accepts(issue)) return;
 
             DeliveredCount++;
             RefreshLabel();
