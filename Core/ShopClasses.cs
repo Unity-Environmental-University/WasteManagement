@@ -52,7 +52,9 @@ namespace _project.Scripts.Core
         public static bool TryGetPipeBoard(Transform location, out PathBuildBoard board)
         {
             board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
-            return location && board && board.TryWorldToCell(location.position, out var cell) && board.IsOccupied(cell);
+            // Nothing sits where isolated pipe crosses regular pipe: it would catch both lines at once.
+            return location && board && board.TryWorldToCell(location.position, out var cell) &&
+                   board.IsOccupied(cell) && !board.IsPipeCrossing(cell);
         }
     }
 
@@ -468,9 +470,10 @@ namespace _project.Scripts.Core
     public class PathPiecePlaceable : ITypedPathPiece
     {
         public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length,
-            Sprite displaySprite, int infraValue, PathKind pathKind = PathKind.Pipe)
+            Sprite displaySprite, int infraValue, PathKind pathKind = PathKind.Pipe, bool isolated = false)
         {
             PathKind = pathKind;
+            Isolated = isolated;
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
@@ -486,6 +489,13 @@ namespace _project.Scripts.Core
         public Sprite DisplaySprite { get; }
         public bool RemoveAfterPurchase => true;
         public PathKind PathKind { get; }
+
+        /// <summary>
+        ///     Isolated pipe joins only other isolated pipe (and a splitter's cell, so a splitter can
+        ///     feed it); it runs alongside ordinary pipe without merging into it.
+        /// </summary>
+        public bool Isolated { get; }
+
         public int Length { get; }
         public PathPieceOrientation Orientation { get; private set; } = PathPieceOrientation.Horizontal;
         public PlaceableType PlaceableType => PlaceableType.Path;

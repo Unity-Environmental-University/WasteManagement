@@ -7,6 +7,8 @@ namespace _project.Scripts.Object_Scripts
     ///     Pipe-art connections forced by ordered pathfinder routes. Each route cell opens only
     ///     toward its previous/next route cell, plus the optional outside-board start/end anchors,
     ///     so nearby branches can't turn a route tile into the wrong corner or junction model.
+    ///     Routes and keys are <see cref="PipeLayer" /> nodes, so pipe crossing in one cell keeps
+    ///     separate connections per layer.
     /// </summary>
     internal sealed class PriorityRouteConnections
     {
@@ -24,7 +26,7 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public HashSet<Vector2Int> Set(IReadOnlyList<Vector2Int> routeCells, Vector2Int? startOutsideCell,
             Vector2Int? endOutsideCell, IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells,
-            IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> branchEndOpenings = null)
+            IEnumerable<(Vector2Int node, Vector2Int outsideCell)> branchEndOpenings = null)
         {
             var nextConnections = new Dictionary<Vector2Int, PipeConnections>();
             AddRoute(nextConnections, routeCells);
@@ -41,9 +43,9 @@ namespace _project.Scripts.Object_Scripts
             }
 
             if (branchEndOpenings != null)
-                foreach (var (cell, outsideCell) in branchEndOpenings)
-                    if (nextConnections.ContainsKey(cell))
-                        AddOpening(nextConnections, cell, outsideCell);
+                foreach (var (node, outsideCell) in branchEndOpenings)
+                    if (nextConnections.ContainsKey(node))
+                        AddOpening(nextConnections, node, outsideCell);
 
             var changedCells = new HashSet<Vector2Int>();
             foreach (var pair in nextConnections)
@@ -84,8 +86,9 @@ namespace _project.Scripts.Object_Scripts
         private static void AddEdge(IDictionary<Vector2Int, PipeConnections> connections,
             Vector2Int from, Vector2Int to)
         {
-            var forward = PipeShapes.GetConnectionDirection(to - from);
-            var backward = PipeShapes.GetConnectionDirection(from - to);
+            var step = PipeLayer.Cell(to) - PipeLayer.Cell(from);
+            var forward = PipeShapes.GetConnectionDirection(step);
+            var backward = PipeShapes.GetConnectionDirection(-step);
             if (forward == PipeConnections.None || backward == PipeConnections.None) return;
 
             connections.TryAdd(from, PipeConnections.None);
@@ -97,7 +100,7 @@ namespace _project.Scripts.Object_Scripts
         private static void AddOpening(IDictionary<Vector2Int, PipeConnections> connections,
             Vector2Int cell, Vector2Int outsideCell)
         {
-            var direction = PipeShapes.GetConnectionDirection(outsideCell - cell);
+            var direction = PipeShapes.GetConnectionDirection(outsideCell - PipeLayer.Cell(cell));
             if (direction != PipeConnections.None)
                 connections[cell] |= direction;
         }

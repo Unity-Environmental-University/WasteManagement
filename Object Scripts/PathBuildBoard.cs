@@ -59,6 +59,13 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color validPreviewColor = new(0.35f, 0.8f, 1f, 1f);
         [SerializeField] private Color invalidPreviewColor = new(1f, 0.35f, 0.35f, 1f);
         [SerializeField] private Color placedPipeColor = new(0.8f, 0.8f, 0.8f, 1f);
+
+        [Tooltip("Tint for isolated pipe, so a line that won't join the main pipe reads apart from it.")]
+        [SerializeField] private Color isolatedPipeColor = new(0.74f, 0.78f, 0.84f, 1f);
+
+        [Tooltip("Isolated pipe's tube diameter as a fraction of the cell pitch. Regular pipe fills the whole cell.")]
+        [SerializeField, Range(0.1f, 0.8f)]
+        private float isolatedPipeWidth = 0.34f;
         [SerializeField] private Color breakPreviewColor = new(1f, 0.55f, 0.2f, 1f);
 
         [Tooltip("Height used only for the untextured fallback box drawn when no pipe model is available.")]
@@ -82,6 +89,8 @@ namespace _project.Scripts.Object_Scripts
         // Grid and placed pieces
         private PathBuildCell[,] _cells;
         private PieceOccupancy _occupancy; // Null until the grid is built
+        private readonly HashSet<Vector2Int> _openDrains = new();
+        private bool _isolatedPipeStale;
         private readonly List<PlacedPathPiece> _placedPieces = new();
         private readonly Dictionary<int, GameObject> _placedVisuals = new();
         private int _nextPieceId = 1;
@@ -162,6 +171,17 @@ namespace _project.Scripts.Object_Scripts
 
         internal float PipeSeamOverlap => pipeSeamOverlap;
 
+        internal float IsolatedPipeRadius => PipeCellPitch * isolatedPipeWidth * 0.5f;
+
+        /// <summary>Local height issues ride at inside a regular pipe channel.</summary>
+        internal float ChannelFlowHeight => cellHeight * 0.5f + PipeSurfaceHeight * entityRideHeightFraction;
+
+        /// <summary>
+        ///     Height of the isolated pipe's center above the board's local origin: just clear of the
+        ///     channel walls, so it can bridge over regular pipe where the two cross.
+        /// </summary>
+        internal float IsolatedPipeCenterHeight => cellHeight * 0.5f + PipeSurfaceHeight + IsolatedPipeRadius * 1.15f;
+
         /// <summary>
         ///     Height of a placed pipe above the cell surface. Derived from the scaled model so
         ///     waypoints keep tracking the channel as the cell size or art changes.
@@ -171,6 +191,102 @@ namespace _project.Scripts.Object_Scripts
 
         private static PathKind KindOf(IPathPiecePlaceable piece) =>
             piece is ITypedPathPiece typed ? typed.PathKind : PathKind.Pipe;
+
+        private static bool IsIsolated(IPathPiecePlaceable piece) => piece is PathPiecePlaceable { Isolated: true };
+
+        /// <summary>True while the armed piece is isolated pipe.</summary>
+        public bool ActivePieceIsIsolated => IsIsolated(ActivePiece);
+
+        /// <summary>True when the cell holds pipe on the given layer (isolated or regular).</summary>
+        public bool HasPipe(Vector2Int cell, bool isolated) =>
+            _occupancy != null && _occupancy.Get(cell, PathKind.Pipe, isolated) > 0;
+
+        /// <summary>True where isolated pipe crosses regular pipe in one cell.</summary>
+        public bool IsPipeCrossing(Vector2Int cell) => HasPipe(cell, false) && HasPipe(cell, true);
+
+        /// <summary>
+        ///     Whether flow can pass from one <see cref="PipeLayer" /> node to its neighbor. Each layer
+        ///     joins only itself, except where either cell holds a splitter, or where isolated pipe
+        ///     drains into regular pipe (see <see cref="DrainsInto" />), which is one-way.
+        /// </summary>
+        internal bool ArePipesLinked(Vector2Int fromNode, Vector2Int toNode)
+        {
+            var fromIsolated = PipeLayer.IsIsolated(fromNode);
+            if (fromIsolated == PipeLayer.IsIsolated(toNode)) return true;
+
+            var from = PipeLayer.Cell(fromNode);
+            var to = PipeLayer.Cell(toNode);
+            return IsSplitterCell(from) || IsSplitterCell(to) || (fromIsolated && DrainsInto(from, to));
+        }
+
+        /// <summary>
+        ///     True where isolated pipe empties into regular pipe: a drain end (see
+        ///     <see cref="CanDrainInto" />) whose valve the player has opened. Nothing flows back up.
+        /// </summary>
+        public bool DrainsInto(Vector2Int isolatedCell, Vector2Int regularCell) =>
+            _openDrains.Contains(isolatedCell) && CanDrainInto(isolatedCell, regularCell);
+
+        /// <summary>
+        ///     True where isolated pipe dead-ends head-on into regular pipe, so the end gets a drain
+        ///     valve. Pipe merely running alongside regular pipe never does, nor pipe leaving a splitter.
+        /// </summary>
+        public bool CanDrainInto(Vector2Int isolatedCell, Vector2Int regularCell)
+        {
+            if (!HasPipe(regularCell, false) || HasPipe(regularCell, true) || IsSplitterCell(regularCell)) return false;
+            if (!TryGetPlacedPieceAt(isolatedCell, true, out var piece)) return false;
+
+            // Head-on: the regular pipe lies straight past the end of the isolated piece.
+            var step = regularCell - isolatedCell;
+            var axis = piece.orientation == PathPieceOrientation.Horizontal ? Vector2Int.right : Vector2Int.up;
+            if (step != axis && step != -axis) return false;
+
+            // A dead end: no other isolated pipe carries on from this cell.
+            foreach (var offset in CellNeighborOffsets)
+            {
+                var next = isolatedCell + offset;
+                if (HasPipe(next, true) && !piece.cells.Contains(next)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>The regular pipe a drain end at <paramref name="isolatedCell" /> faces, if it is one.</summary>
+        public bool TryGetDrainTarget(Vector2Int isolatedCell, out Vector2Int regularCell)
+        {
+            foreach (var offset in CellNeighborOffsets)
+            {
+                regularCell = isolatedCell + offset;
+                if (CanDrainInto(isolatedCell, regularCell)) return true;
+            }
+
+            regularCell = default;
+            return false;
+        }
+
+        public bool IsDrainOpen(Vector2Int isolatedCell) =>
+            _openDrains.Contains(isolatedCell) && TryGetDrainTarget(isolatedCell, out _);
+
+        /// <summary>
+        ///     Opens or closes the drain valve at an isolated pipe end. Drains start closed, so isolated
+        ///     pipe only empties into regular pipe where the player chose to let it.
+        /// </summary>
+        public void SetDrainOpen(Vector2Int isolatedCell, bool open)
+        {
+            if (!TryGetDrainTarget(isolatedCell, out var regularCell)) return;
+            if (open ? !_openDrains.Add(isolatedCell) : !_openDrains.Remove(isolatedCell)) return;
+
+            RefreshNeighborPipeGeometry(new[] { isolatedCell, regularCell });
+            RefreshVisuals();
+            NotifyPathLayoutChanged();
+        }
+
+        private bool IsSplitterCell(Vector2Int cell) => UtilityRemoval.FindSplitterAt(this, cell);
+
+        private Color PlacedColor(PlacedPathPiece piece) =>
+            piece == null ? placedPipeColor
+            : piece.pathKind == PathKind.RecyclingBelt ? ConveyorVisual.BeltColor
+            : piece.isolated ? isolatedPipeColor
+            : placedPipeColor;
 
         /// <summary>
         ///     Initializes the grid by attempting to bind existing cells or building new ones.
@@ -182,7 +298,7 @@ namespace _project.Scripts.Object_Scripts
                 BuildGridIfNeeded();
 
             RefreshVisuals();
-            PathSplitter.AvailabilityChanged += RefreshWaypointPaths;
+            PathSplitter.AvailabilityChanged += HandleSplittersChanged;
             Receptacle.AvailabilityChanged += RefreshWaypointPaths;
             NotifyPathLayoutChanged();
         }
@@ -193,6 +309,7 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void Update()
         {
+            RedrawStaleIsolatedPipe();
             BindInventory();
 
             var selectedPiece = ActivePiece;
@@ -301,7 +418,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDestroy()
         {
-            PathSplitter.AvailabilityChanged -= RefreshWaypointPaths;
+            PathSplitter.AvailabilityChanged -= HandleSplittersChanged;
             Receptacle.AvailabilityChanged -= RefreshWaypointPaths;
             if (_placementInventory is not null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
@@ -319,6 +436,7 @@ namespace _project.Scripts.Object_Scripts
             _placedPieces.Clear();
             _placedVisuals.Clear();
             _priorityRoutes.Clear();
+            _openDrains.Clear();
             _nextPieceId = 1;
             _highlightedPieceId = 0;
             BuildGridIfNeeded();
@@ -344,7 +462,7 @@ namespace _project.Scripts.Object_Scripts
                 if (!cell) continue;
 
                 var coordinate = new Vector2Int(column, row);
-                var pieceId = _occupancy.Get(coordinate, PathKind.Pipe);
+                var pieceId = _occupancy.GetTop(coordinate, PathKind.Pipe);
                 var beltId = _occupancy.Get(coordinate, PathKind.RecyclingBelt);
                 var cellColor = emptyColor;
                 if (beltId > 0)
@@ -378,7 +496,9 @@ namespace _project.Scripts.Object_Scripts
             var footprint = GetFootprint(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), selectedPiece.Length,
                 selectedPiece.Orientation);
             var kind = KindOf(selectedPiece);
-            var previewColor = CanPlaceFootprint(footprint, kind) ? validPreviewColor : invalidPreviewColor;
+            var previewColor = CanPlaceFootprint(footprint, kind, ActivePieceIsIsolated, selectedPiece.Orientation)
+                ? validPreviewColor
+                : invalidPreviewColor;
             if (kind == PathKind.RecyclingBelt)
             {
                 if (_previewVisual) _previewVisual.SetActive(false);
@@ -389,7 +509,8 @@ namespace _project.Scripts.Object_Scripts
             else
             {
                 _conveyorPreview?.Hide();
-                UpdatePipeVisual(GetPreviewVisual(), footprint, selectedPiece.Orientation, previewColor);
+                UpdatePipeVisual(GetPreviewVisual(), footprint, selectedPiece.Orientation, previewColor,
+                    ActivePieceIsIsolated);
             }
         }
 
@@ -431,7 +552,8 @@ namespace _project.Scripts.Object_Scripts
             var footprint = GetFootprint(new Vector2Int(anchorCell.Column, anchorCell.Row), piece.Length,
                 piece.Orientation);
             var kind = KindOf(piece);
-            if (!CanPlaceFootprint(footprint, kind))
+            var isolated = IsIsolated(piece);
+            if (!CanPlaceFootprint(footprint, kind, isolated, piece.Orientation))
                 return null;
 
             var placedPiece = new PlacedPathPiece
@@ -440,12 +562,13 @@ namespace _project.Scripts.Object_Scripts
                 pathKind = kind,
                 length = piece.Length,
                 orientation = piece.Orientation,
-                infraValue = piece.InfraValue
+                infraValue = piece.InfraValue,
+                isolated = isolated
             };
 
             foreach (var cell in footprint)
             {
-                _occupancy.Set(cell, kind, placedPiece.id);
+                _occupancy.Set(cell, kind, isolated, placedPiece.id);
                 placedPiece.cells.Add(cell);
             }
 
@@ -459,7 +582,8 @@ namespace _project.Scripts.Object_Scripts
             }
             else
             {
-                UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, placedPipeColor);
+                UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, PlacedColor(placedPiece),
+                    isolated);
                 RefreshNeighborPipeGeometry(placedPiece.cells);
                 if (Application.isPlaying)
                     PipePlacementPuff.Play(this, placedPiece.cells, PipeSurfaceHeight);
@@ -484,7 +608,8 @@ namespace _project.Scripts.Object_Scripts
             if (cell == null || _occupancy == null || !IsInBounds(cell.Column, cell.Row))
                 return false;
 
-            var pieceId = _occupancy.Get(new Vector2Int(cell.Column, cell.Row), kind);
+            // Where isolated pipe crosses regular pipe, the isolated pipe on top goes first.
+            var pieceId = _occupancy.GetTop(new Vector2Int(cell.Column, cell.Row), kind);
             if (pieceId <= 0) return false;
 
             var pieceIndex = _placedPieces.FindIndex(piece => piece.id == pieceId);
@@ -495,7 +620,7 @@ namespace _project.Scripts.Object_Scripts
             infraValue = piece.infraValue;
 
             foreach (var occupied in piece.cells)
-                _occupancy.Clear(occupied, kind, piece.id);
+                _occupancy.Clear(occupied, kind, piece.isolated, piece.id);
 
             if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
             {
@@ -511,11 +636,40 @@ namespace _project.Scripts.Object_Scripts
             return true;
         }
 
+        /// <summary>
+        ///     A splitter placed on or lifted off a pipe end changes whether that end is a drain, so
+        ///     isolated pipe is redrawn with or without its valve. The redraw waits for the next
+        ///     <see cref="Update" />: splitters also announce themselves while a scene is unloading,
+        ///     and building pipe parts then would leave them behind.
+        /// </summary>
+        private void HandleSplittersChanged()
+        {
+            _isolatedPipeStale = true;
+            RefreshWaypointPaths();
+        }
+
+        /// <summary>Redraws isolated pipe if a splitter changed since the last redraw.</summary>
+        public void RedrawStaleIsolatedPipe()
+        {
+            if (!_isolatedPipeStale) return;
+
+            _isolatedPipeStale = false;
+            ForgetStaleDrains();
+            foreach (var piece in _placedPieces)
+                if (piece.isolated && _placedVisuals.TryGetValue(piece.id, out var visual) && visual)
+                    UpdatePipeVisual(visual, piece.cells, piece.orientation, PlacedColor(piece), true);
+        }
+
         private void NotifyPathLayoutChanged()
         {
+            ForgetStaleDrains();
             PathLayoutChanged?.Invoke();
             RefreshWaypointPaths();
         }
+
+        // An end that stopped being a drain (removed, extended, or its target gone) forgets its
+        // valve, so pipe laid there again starts closed.
+        private void ForgetStaleDrains() => _openDrains.RemoveWhere(cell => !TryGetDrainTarget(cell, out _));
 
         private void RefreshWaypointPaths()
         {
@@ -759,8 +913,9 @@ namespace _project.Scripts.Object_Scripts
         /// <param name="footprint">The list of grid cells the piece occupies.</param>
         /// <param name="orientation">The orientation of the piece.</param>
         /// <param name="color">The color to apply to the visual.</param>
+        /// <param name="isolated">Draws the slim metal isolated pipe instead of the channel tiles.</param>
         private void UpdatePipeVisual(GameObject visual, List<Vector2Int> footprint, PathPieceOrientation orientation,
-            Color color)
+            Color color, bool isolated = false)
         {
             if (!visual)
                 return;
@@ -768,16 +923,29 @@ namespace _project.Scripts.Object_Scripts
             if (footprint == null || footprint.Count == 0)
             {
                 ReleaseVisualTiles(visual);
+                IsolatedPipeVisual.Clear(visual);
                 visual.SetActive(false);
                 return;
             }
 
             visual.transform.SetLocalPositionAndRotation(Vector3.zero, Quaternion.identity);
             visual.transform.localScale = Vector3.one;
+            var additionalCells = new HashSet<Vector2Int>(footprint);
+
+            if (isolated)
+            {
+                // The preview visual switches between pipe types, so drop any channel tiles first.
+                ReleaseVisualTiles(visual);
+                IsolatedPipeVisual.Build(this, visual, footprint, orientation,
+                    cell => GetVisualConnections(cell, true, additionalCells, orientation));
+                SetVisualColor(visual, color);
+                visual.SetActive(true);
+                return;
+            }
+
+            IsolatedPipeVisual.Clear(visual);
 
             var tileMap = TilePool.GetTileMap(visual);
-
-            var additionalCells = new HashSet<Vector2Int>(footprint);
 
             // Return tiles whose cells dropped out of the footprint before rebuilding the rest.
             List<Vector2Int> staleCells = null;
@@ -796,7 +964,7 @@ namespace _project.Scripts.Object_Scripts
             {
                 if (!GetCell(cell)) continue;
 
-                var connections = GetVisualConnections(cell, additionalCells, orientation);
+                var connections = GetVisualConnections(cell, false, additionalCells, orientation);
                 var tile = TilePool.AcquireTile(visual.transform, tileMap, cell);
                 tilesChanged |= TileShaper.ConfigureTile(tile, cell, connections, orientation);
             }
@@ -816,17 +984,14 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void RefreshNeighborPipeGeometry(IEnumerable<Vector2Int> cells)
         {
+            // Route art hands over layered nodes; either pipe layer may react to a cell changing.
             var affectedIds = new HashSet<int>();
-            foreach (var cell in cells)
+            foreach (var node in cells)
             {
-                var pieceId = _occupancy.Get(cell, PathKind.Pipe);
-                if (pieceId > 0) affectedIds.Add(pieceId);
-
+                var cell = PipeLayer.Cell(node);
+                AddPipeIds(cell, affectedIds);
                 foreach (var offset in CellNeighborOffsets)
-                {
-                    var neighborId = _occupancy.Get(cell + offset, PathKind.Pipe);
-                    if (neighborId > 0) affectedIds.Add(neighborId);
-                }
+                    AddPipeIds(cell + offset, affectedIds);
             }
 
             foreach (var pieceId in affectedIds)
@@ -836,8 +1001,16 @@ namespace _project.Scripts.Object_Scripts
 
                 var piece = _placedPieces[pieceIndex];
                 if (_placedVisuals.TryGetValue(pieceId, out var visual) && visual)
-                    UpdatePipeVisual(visual, piece.cells, piece.orientation, placedPipeColor);
+                    UpdatePipeVisual(visual, piece.cells, piece.orientation, PlacedColor(piece), piece.isolated);
             }
+        }
+
+        private void AddPipeIds(Vector2Int cell, HashSet<int> ids)
+        {
+            var pipeId = _occupancy.Get(cell, PathKind.Pipe);
+            if (pipeId > 0) ids.Add(pipeId);
+            var isolatedId = _occupancy.Get(cell, PathKind.Pipe, true);
+            if (isolatedId > 0) ids.Add(isolatedId);
         }
 
         /// <summary>Returns a visual's tiles to the pool. Call before destroying the visual.</summary>
@@ -859,37 +1032,61 @@ namespace _project.Scripts.Object_Scripts
             }
         }
 
-        private PipeConnections GetVisualConnections(Vector2Int cell, HashSet<Vector2Int> additionalCells,
-            PathPieceOrientation orientation)
+        private PipeConnections GetVisualConnections(Vector2Int cell, bool isolated,
+            HashSet<Vector2Int> additionalCells, PathPieceOrientation orientation)
         {
             // The ordered route produced by WaypointPath is authoritative. Using its exact
             // previous/next edges prevents nearby branches from changing a route tile into the
             // wrong corner or junction model.
-            if (_priorityRoutes.TryGet(cell, out var priorityConnections))
-                return priorityConnections;
+            // Isolated tube also stays joined along its own piece, so pipe laid past where a route
+            // turns off reads as a capped tee rather than a loose length.
+            if (_priorityRoutes.TryGet(PipeLayer.Node(cell, isolated), out var priorityConnections))
+                return isolated ? priorityConnections | GetPieceConnections(cell, additionalCells) : priorityConnections;
 
             var connections = PipeConnections.None;
-            if (HasVisualConnection(cell, cell + Vector2Int.right, additionalCells, orientation))
+            if (HasVisualConnection(cell, isolated, cell + Vector2Int.right, additionalCells, orientation))
                 connections |= PipeConnections.East;
-            if (HasVisualConnection(cell, cell + Vector2Int.up, additionalCells, orientation))
+            if (HasVisualConnection(cell, isolated, cell + Vector2Int.up, additionalCells, orientation))
                 connections |= PipeConnections.North;
-            if (HasVisualConnection(cell, cell + Vector2Int.left, additionalCells, orientation))
+            if (HasVisualConnection(cell, isolated, cell + Vector2Int.left, additionalCells, orientation))
                 connections |= PipeConnections.West;
-            if (HasVisualConnection(cell, cell + Vector2Int.down, additionalCells, orientation))
+            if (HasVisualConnection(cell, isolated, cell + Vector2Int.down, additionalCells, orientation))
                 connections |= PipeConnections.South;
             return connections;
         }
 
-        private bool HasVisualConnection(Vector2Int cell, Vector2Int neighbor,
+        private static PipeConnections GetPieceConnections(Vector2Int cell, HashSet<Vector2Int> pieceCells)
+        {
+            var connections = PipeConnections.None;
+            if (pieceCells == null) return connections;
+            if (pieceCells.Contains(cell + Vector2Int.right)) connections |= PipeConnections.East;
+            if (pieceCells.Contains(cell + Vector2Int.up)) connections |= PipeConnections.North;
+            if (pieceCells.Contains(cell + Vector2Int.left)) connections |= PipeConnections.West;
+            if (pieceCells.Contains(cell + Vector2Int.down)) connections |= PipeConnections.South;
+            return connections;
+        }
+
+        private bool HasVisualConnection(Vector2Int cell, bool isolated, Vector2Int neighbor,
             HashSet<Vector2Int> currentCells, PathPieceOrientation currentOrientation)
         {
             if (!IsInBounds(neighbor.x, neighbor.y)) return false;
-            if (_priorityRoutes.Contains(neighbor)) return false;
+            if (isolated && currentCells != null && currentCells.Contains(neighbor)) return true;
+            if (_priorityRoutes.Contains(PipeLayer.Node(neighbor, isolated))) return false;
 
             // Cells belonging to the same placed/previewed segment always connect. Different
             // pieces connect only at compatible endpoints; mere side adjacency is not a junction.
             if (currentCells != null && currentCells.Contains(neighbor)) return true;
-            if (!TryGetPlacedPieceAt(neighbor, out var neighborPiece)) return false;
+
+            // Each layer joins only itself; a splitter at either cell, or isolated pipe draining
+            // into regular pipe, is the only way between them.
+            if (!TryGetPlacedPieceAt(neighbor, isolated, out var neighborPiece))
+            {
+                if (isolated ? DrainsInto(cell, neighbor) : DrainsInto(neighbor, cell)) return true;
+                if (!IsSplitterCell(cell) && !IsSplitterCell(neighbor)) return false;
+                if (!TryGetPlacedPieceAt(neighbor, !isolated, out neighborPiece) ||
+                    _priorityRoutes.Contains(PipeLayer.Node(neighbor, !isolated)))
+                    return false;
+            }
 
             if (!IsEndpoint(cell, currentCells, currentOrientation) ||
                 !IsEndpoint(neighbor, neighborPiece.cells, neighborPiece.orientation))
@@ -911,7 +1108,7 @@ namespace _project.Scripts.Object_Scripts
         public void SetPriorityVisualPath(IReadOnlyList<Vector2Int> routeCells,
             Vector3? startWorldPosition = null, Vector3? endWorldPosition = null,
             IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells = null,
-            IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> branchEndOpenings = null)
+            IEnumerable<(Vector2Int node, Vector2Int outsideCell)> branchEndOpenings = null)
         {
             Vector2Int? startOutsideCell = startWorldPosition.HasValue
                 ? ClampToOutsideRing(WorldToCellUnclamped(startWorldPosition.Value))
@@ -933,10 +1130,10 @@ namespace _project.Scripts.Object_Scripts
                 RefreshNeighborPipeGeometry(changedCells);
         }
 
-        private bool TryGetPlacedPieceAt(Vector2Int cell, out PlacedPathPiece piece)
+        private bool TryGetPlacedPieceAt(Vector2Int cell, bool isolated, out PlacedPathPiece piece)
         {
             piece = null;
-            var pieceId = _occupancy.Get(cell, PathKind.Pipe);
+            var pieceId = _occupancy.Get(cell, PathKind.Pipe, isolated);
             if (pieceId <= 0) return false;
 
             piece = _placedPieces.Find(candidate => candidate.id == pieceId);
@@ -966,15 +1163,29 @@ namespace _project.Scripts.Object_Scripts
         }
 
         /// <summary>
-        ///     Checks if all cells in the footprint are valid (in bounds and unoccupied).
+        ///     Checks if all cells in the footprint are valid: in bounds and free on the piece's layer.
+        ///     Pipe may cross the other pipe layer, but only at right angles and never under a splitter,
+        ///     which would otherwise join the two.
         /// </summary>
         /// <param name="footprint">The list of grid cells to check.</param>
         /// <returns>True if all cells are available for placement, otherwise false.</returns>
-        private bool CanPlaceFootprint(List<Vector2Int> footprint, PathKind kind = PathKind.Pipe)
+        private bool CanPlaceFootprint(List<Vector2Int> footprint, PathKind kind, bool isolated,
+            PathPieceOrientation orientation)
         {
             foreach (var cell in footprint)
-                if (!IsInBounds(cell.x, cell.y) || IsOccupied(cell, kind))
+            {
+                if (!IsInBounds(cell.x, cell.y)) return false;
+                if (kind != PathKind.Pipe)
+                {
+                    if (IsOccupied(cell, kind)) return false;
+                    continue;
+                }
+
+                if (HasPipe(cell, isolated)) return false;
+                if (TryGetPlacedPieceAt(cell, !isolated, out var crossed) &&
+                    (crossed.orientation == orientation || IsSplitterCell(cell)))
                     return false;
+            }
 
             return true;
         }
@@ -1006,7 +1217,7 @@ namespace _project.Scripts.Object_Scripts
                 !IsInBounds(_hoveredCell.Column, _hoveredCell.Row) || _highlightedSplitter)
                 return 0;
 
-            return _occupancy.Get(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), ActivePathKind);
+            return _occupancy.GetTop(new Vector2Int(_hoveredCell.Column, _hoveredCell.Row), ActivePathKind);
         }
 
         private void RefreshPlacedVisualColors(int breakPreviewPieceId)
@@ -1014,8 +1225,7 @@ namespace _project.Scripts.Object_Scripts
             if (breakPreviewPieceId == _highlightedPieceId) return;
 
             var oldPiece = _placedPieces.Find(p => p.id == _highlightedPieceId);
-            SetPlacedVisualColor(_highlightedPieceId, oldPiece?.pathKind == PathKind.RecyclingBelt
-                ? ConveyorVisual.BeltColor : placedPipeColor);
+            SetPlacedVisualColor(_highlightedPieceId, PlacedColor(oldPiece));
             SetPlacedVisualColor(breakPreviewPieceId, breakPreviewColor);
             _highlightedPieceId = breakPreviewPieceId;
         }
@@ -1071,10 +1281,15 @@ namespace _project.Scripts.Object_Scripts
         ///     Returns a world-space waypoint position for the given cell — centered on the pipe's
         ///     top surface so entities travel along the pipe rather than inside the grid.
         /// </summary>
-        public Vector3 GetPathWaypointPosition(Vector2Int position, PathKind kind = PathKind.Pipe)
+        public Vector3 GetPathWaypointPosition(Vector2Int position, PathKind kind = PathKind.Pipe,
+            bool isolated = false)
         {
             if (kind == PathKind.RecyclingBelt)
                 return GetCellTopPosition(position) + transform.up * CellWorldPitch.x * .24f;
+            // Issues travel through the middle of the isolated tube.
+            if (isolated)
+                return transform.TransformPoint(GetLocalPosition(position.x, position.y) +
+                                                Vector3.up * IsolatedPipeCenterHeight);
             var basePos = GetCellWorldPosition(position);
             // The kit's pipes are open-topped channels, so issues sit part-way up the walls
             // rather than on top of them.
@@ -1105,7 +1320,7 @@ namespace _project.Scripts.Object_Scripts
             if (!TryWorldToCell(worldPosition, out var cell))
                 return false;
 
-            var pieceId = _occupancy.Get(cell, PathKind.Pipe);
+            var pieceId = _occupancy.GetTop(cell, PathKind.Pipe);
             if (pieceId <= 0)
                 return false;
 
@@ -1209,6 +1424,9 @@ namespace _project.Scripts.Object_Scripts
 
             /// <summary>The infrastructure value contributed by this piece.</summary>
             public int infraValue;
+
+            /// <summary>Isolated pipe joins only other isolated pipe; see <see cref="ArePipesLinked" />.</summary>
+            public bool isolated;
 
             /// <summary>The grid cells occupied by this piece.</summary>
             public List<Vector2Int> cells = new();
