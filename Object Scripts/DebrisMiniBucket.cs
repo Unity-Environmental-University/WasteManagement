@@ -9,6 +9,10 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private DebrisHandler.DebrisType type;
         [SerializeField] private float scaleMultiplier = 1.2f;
 
+        // Hover sets an absolute scale off this, so a missed exit (the window closing mid-drag)
+        // can't leave the bucket enlarged or compound across rounds.
+        private Vector3 _restScale;
+
         private static SifterMiniGameController Controller
         {
             get
@@ -16,6 +20,11 @@ namespace _project.Scripts.Object_Scripts
                 var master = GameMaster.Instance;
                 return master ? master.sifterMiniController : null;
             }
+        }
+
+        private void Awake()
+        {
+            _restScale = transform.localScale;
         }
 
         private void OnEnable()
@@ -28,38 +37,25 @@ namespace _project.Scripts.Object_Scripts
         {
             var controller = Controller;
             if (controller) controller.UnregisterBucket(this);
+            transform.localScale = _restScale;
         }
 
         public void OnDrop(PointerEventData eventData)
         {
             var handler = eventData.pointerDrag?.GetComponent<DebrisHandler>();
-            if (handler)
-            {
-                handler.HandleBucketDrop(type);
-                DecreaseSize();
-            }
+            if (handler) handler.HandleBucketDrop(type);
+            transform.localScale = _restScale;
         }
 
         public void OnPointerEnter(PointerEventData eventData)
         {
             if (eventData.pointerDrag)
-                IncreaseSize();
+                transform.localScale = _restScale * scaleMultiplier;
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (eventData.pointerDrag)
-                DecreaseSize();
-        }
-
-        private void IncreaseSize()
-        {
-            transform.localScale *= scaleMultiplier;
-        }
-
-        private void DecreaseSize()
-        {
-            transform.localScale /= scaleMultiplier;
+            transform.localScale = _restScale;
         }
     }
 }

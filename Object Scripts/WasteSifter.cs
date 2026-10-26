@@ -54,7 +54,15 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
-            if (!gateAnimator) gateAnimator = GetComponentInChildren<Animator>(true);
+            // Older sifters only had the gate animator; never let the fallback pick up the blades.
+            if (!gateAnimator)
+                foreach (var animator in GetComponentsInChildren<Animator>(true))
+                    if (animator != bladesAnimator)
+                    {
+                        gateAnimator = animator;
+                        break;
+                    }
+
             if (bladesAnimator) bladesAnimator.Play(BladesSpinningAnimation, 0, 0f);
             SetSifting(!IsBlocked, true);
         }

@@ -3,6 +3,7 @@ using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace _project.Scripts.Tests
@@ -304,6 +305,58 @@ namespace _project.Scripts.Tests
             var fresh = CreateJunk("Fresh Junk");
             Enter(sifter, fresh);
             Assert.IsTrue(IsHeld(fresh), "With debris back under the limit the screen catches junk again.");
+        }
+
+        [Test]
+        public void Minigame_PanelSwitchedOffFromOutside_CountsOnlyWhatWasSorted()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            Sort(pieces[0]);
+            GetField<GameObject>(controller, "minigamePanel").SetActive(false);
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsFalse(controller.IsRunning);
+            Assert.AreEqual(75f, sifter.debrisAccumulation, 0.001f, "Pieces hidden with the panel weren't sorted.");
+            controller.StartMiniGame(sifter);
+            Assert.AreEqual(3, CountActive(pieces), "The round resumes where it was left.");
+        }
+
+        [Test]
+        public void MinigameBucket_GrowsWhileHovered_WithoutCompounding_AndRestsWhenHidden()
+        {
+            var bucket = CreateGameObject("Bucket").AddComponent<DebrisMiniBucket>();
+            var hover = new PointerEventData(null) { pointerDrag = CreateGameObject("Dragged Piece") };
+
+            bucket.OnPointerEnter(hover);
+            bucket.OnPointerEnter(hover);
+            Assert.Less(Vector3.Distance(Vector3.one * 1.2f, bucket.transform.localScale), 0.0001f,
+                "A second enter without an exit doesn't grow it again.");
+
+            // The window closing mid-drag never sends the exit.
+            bucket.gameObject.SetActive(false);
+            Assert.Less(Vector3.Distance(Vector3.one, bucket.transform.localScale), 0.0001f);
+        }
+
+        [Test]
+        public void Sifter_WithOnlyABladesAnimator_DoesNotDriveTheBladesAsItsGate()
+        {
+            var host = CreateGameObject("Sifter");
+            host.SetActive(false);
+            var blades = new GameObject("Blades").AddComponent<Animator>();
+            blades.transform.SetParent(host.transform, false);
+            var gate = new GameObject("Gate").AddComponent<Animator>();
+            gate.transform.SetParent(host.transform, false);
+            var sifter = host.AddComponent<WasteSifter>();
+            SetField(sifter, "bladesAnimator", blades);
+
+            host.SetActive(true);
+
+            Assert.AreSame(gate, GetField<Animator>(sifter, "gateAnimator"));
         }
 
         private SifterMiniGameController CreateMinigame(int pieceCount, out DebrisHandler[] pieces)

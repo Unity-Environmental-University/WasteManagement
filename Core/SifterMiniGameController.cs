@@ -105,7 +105,16 @@ namespace _project.Scripts.Core
         {
             if (!_debris.Remove(handler)) return;
 
-            // Only sorting disables a piece mid-round: the round's end drops the roster first.
+            // Something outside the round switched the panel or a parent off. Walk away instead of
+            // counting every piece that went with it as sorted, and leave the panel alone: it can't
+            // change state while Unity is still deactivating it.
+            if (!minigamePanel || !minigamePanel.activeInHierarchy)
+            {
+                AbandonRound();
+                return;
+            }
+
+            // Otherwise only sorting disables a piece mid-round: the round's end drops the roster first.
             var index = System.Array.IndexOf(_roster, handler);
             if (index >= 0 && _activeProgress != null) _activeProgress.Sorted[index] = true;
             if (_activeSifter) _activeSifter.SortDebrisPiece(_roster.Length);
@@ -239,6 +248,15 @@ namespace _project.Scripts.Core
                 _progress.Remove(_activeSifter);
             }
 
+            _activeSifter = null;
+            _activeProgress = null;
+        }
+
+        private void AbandonRound()
+        {
+            _isRunning = false;
+            _endQueued = false;
+            _debris.Clear();
             _activeSifter = null;
             _activeProgress = null;
         }
