@@ -239,6 +239,115 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Rebuild_EndsASplitterBranchAtAnUnlockedReceptacle()
+        {
+            var fixture = CreateReceptacleFixture(out var receptacle);
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsNull(fixture.Path.GetRouteReceptacle(0), "The main route always runs to the lake.");
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 4), out var branch));
+            Assert.AreSame(receptacle, fixture.Path.GetRouteReceptacle(branch));
+
+            // Flow runs level out of the last pipe into the receptacle.
+            var lastWaypoint = fixture.Path.GetWaypointCount(branch) - 1;
+            var end = fixture.Path.GetPosition(branch, lastWaypoint);
+            var lastPipe = fixture.Path.GetPosition(branch, lastWaypoint - 1);
+            Assert.AreEqual(receptacle.transform.position.x, end.x, 0.001f);
+            Assert.AreEqual(receptacle.transform.position.z, end.z, 0.001f);
+            Assert.AreEqual(lastPipe.y, end.y, 0.001f);
+        }
+
+        [Test]
+        public void Rebuild_IgnoresALockedReceptacle()
+        {
+            var fixture = CreateReceptacleFixture(out var receptacle);
+            SetField(receptacle, "unlockLevel", 3);
+            receptacle.SendMessage("ApplyLevel", 2);
+            Assert.IsFalse(receptacle.IsUnlocked);
+
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 4), out _),
+                "A dead-end spur to a locked receptacle is no branch.");
+        }
+
+        [Test]
+        public void ReceptacleBranch_LastCellFlowsIntoTheReceptacle_NotTowardTheLake()
+        {
+            var fixture = CreateReceptacleFixture(out _);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var lastCell = new Vector2Int(fixture.Board.Columns - 1, 4);
+            var offsets = new List<Vector3>();
+
+            Assert.IsTrue(fixture.Path.CollectFlowOffsets(fixture.Board.GetCellTopPosition(lastCell), offsets));
+            Assert.AreEqual(2, offsets.Count, "In from the left, out into the receptacle.");
+            var outward = offsets.OrderByDescending(offset => offset.x).First();
+            Assert.Greater(outward.x, 0f, "The last pipe leads on into the receptacle beside it...");
+            Assert.AreEqual(0f, outward.z, 0.001f, "...not off toward the lake end.");
+        }
+
+        [Test]
+        public void MetalPinnedToAReceptacleBranch_IsCollectedThereAndSparesTheLake()
+        {
+            var fixture = CreateReceptacleFixture(out var receptacle);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var splitter = PathSplitter.Live.Single(s => s.transform.position == CellTop(fixture, 1, 4));
+            splitter.SetRule(IssueType.Metal, SplitterRule.BranchOnly);
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+
+            var lake = CreateGameObject("Lake").AddComponent<LakeController>();
+            var metal = CreatePrimitive("Metal Issue").AddComponent<IssueObject>();
+            metal.SetType(IssueType.Metal);
+            metal.SetPath(fixture.Path);
+            Assert.IsTrue(splitter.RouteIssue(metal));
+
+            var junk = CreatePrimitive("Junk Issue").AddComponent<IssueObject>();
+            junk.SetType(IssueType.Organic);
+            junk.SetPath(fixture.Path);
+            Assert.IsTrue(junk.TrySetRoute(metal.GetRouteIndex()));
+
+            foreach (var issue in new[] { metal, junk })
+            {
+                while (issue.GetWaypointIndex() < fixture.Path.GetWaypointCount(issue.GetRouteIndex()))
+                    AdvanceIssueOneWaypoint(issue, fixture.Board);
+                issue.SendMessage("Update");
+            }
+
+            Assert.AreSame(receptacle, metal.EndReceptacle);
+            Assert.AreEqual(1, receptacle.DeliveredCount, "Only the metal is collected.");
+            Assert.Less(lake.health, 100f, "Waste dumped at the metal receptacle still pollutes the lake.");
+            Assert.AreEqual(100f - junk.ProcessCost * 5, lake.health, 0.001f, "The metal itself spares the lake.");
+        }
+
+        [Test]
+        public void MetalHeadedForAReceptacleThatLocks_PollutesTheLakeInstead()
+        {
+            var fixture = CreateReceptacleFixture(out var receptacle);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            var splitter = PathSplitter.Live.Single(s => s.transform.position == CellTop(fixture, 1, 4));
+            splitter.SetRule(IssueType.Metal, SplitterRule.BranchOnly);
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+
+            var lake = CreateGameObject("Lake").AddComponent<LakeController>();
+            var metal = CreatePrimitive("Metal Issue").AddComponent<IssueObject>();
+            metal.SetType(IssueType.Metal);
+            metal.SetPath(fixture.Path);
+            Assert.IsTrue(splitter.RouteIssue(metal));
+
+            SetField(receptacle, "unlockLevel", 3);
+            receptacle.SendMessage("ApplyLevel", 2);
+            Assert.IsFalse(receptacle.IsUnlocked);
+
+            while (metal.GetWaypointIndex() < fixture.Path.GetWaypointCount(metal.GetRouteIndex()))
+                AdvanceIssueOneWaypoint(metal, fixture.Board);
+            metal.SendMessage("Update");
+
+            Assert.AreEqual(0, receptacle.DeliveredCount, "A locked receptacle collects nothing.");
+            Assert.AreEqual(100f - metal.ProcessCost * 5, lake.health, 0.001f);
+        }
+
+        [Test]
         public void RejoinedSubBranch_BecomesPartOfThePipeItRejoins()
         {
             var fixture = CreateNestedSplitPathFixture();
@@ -596,6 +705,31 @@ namespace _project.Scripts.Tests
             PlaceHorizontal(fixture.Board, 4, 7, 2);
             AddSplitter(fixture, new Vector2Int(1, 2));
             AddSplitter(fixture, new Vector2Int(3, 4));
+            return fixture;
+        }
+
+        private Receptacle AddReceptacle(PathFixture fixture, int row)
+        {
+            var receptacle = CreateGameObject("Metal Receptacle").AddComponent<Receptacle>();
+            receptacle.transform.position =
+                fixture.Board.GetPathWaypointPosition(new Vector2Int(fixture.Board.Columns, row));
+            SetField(receptacle, "unlockLevel", 1);
+            SetField(fixture.Path, "receptacles", new[] { receptacle });
+            return receptacle;
+        }
+
+        /// <summary>
+        ///     A straight main route up column 1 with a splitter at (1,4) whose right-hand spur runs
+        ///     to the board's right edge, where a metal receptacle sits just outside it.
+        /// </summary>
+        private PathFixture CreateReceptacleFixture(out Receptacle receptacle)
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            var lastColumn = fixture.Board.Columns - 1;
+            PlaceHorizontal(fixture.Board, 2, 4, lastColumn - 1);
+            AddSplitter(fixture, new Vector2Int(1, 4));
+            receptacle = AddReceptacle(fixture, 4);
             return fixture;
         }
 

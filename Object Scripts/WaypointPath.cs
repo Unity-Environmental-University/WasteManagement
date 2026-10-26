@@ -48,6 +48,12 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Optional end point appended after the last placed piece.")] [SerializeField]
         private Transform endPoint;
 
+        [Tooltip("Alternate endpoints (metal acceptors and the like). Once unlocked, a splitter branch " +
+                 "whose pipe touches one ends there instead of at the end point. The main route always " +
+                 "runs to the end point.")]
+        [SerializeField]
+        private Receptacle[] receptacles = System.Array.Empty<Receptacle>();
+
         [Header("Live Build Preview")]
         [Tooltip("Draw the route the pathfinder can currently follow while the player builds.")]
         [SerializeField]
@@ -91,6 +97,13 @@ namespace _project.Scripts.Object_Scripts
 
         // Board cells holding an enabled splitter, as seen by the last route search.
         private readonly List<Vector2Int> _splitterCells = new();
+
+        // Cells a branch may end on: the end point's neighbors plus every unlocked receptacle's.
+        private readonly List<Vector2Int> _branchGoals = new();
+
+        // The receptacle each receptacle goal cell ends at. End point cells are absent, and win
+        // when a cell touches both.
+        private readonly Dictionary<Vector2Int, Receptacle> _receptacleGoals = new();
 
         // Cells visited by BFS but NOT part of the final path. Used only for gizmo
         // visualization so the player can see which placed pieces were ignored.
@@ -328,6 +341,12 @@ namespace _project.Scripts.Object_Scripts
             return GetRouteWaypoints(routeIndex)[waypointIndex];
         }
 
+        /// <summary>The receptacle a route delivers to, or null when it runs to the end point.</summary>
+        public Receptacle GetRouteReceptacle(int routeIndex)
+        {
+            return routeIndex >= 0 && routeIndex < _routes.Count ? _routes[routeIndex].Receptacle : null;
+        }
+
         /// <summary>A route's cells, or empty when there is no such route.</summary>
         public IReadOnlyList<Vector2Int> GetRouteCells(int routeIndex)
         {
@@ -442,7 +461,7 @@ namespace _project.Scripts.Object_Scripts
 
                 found = true;
                 var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
-                GetRouteNeighbors(route.Cells, route.Complete, index, out var previous, out var next);
+                GetRouteNeighbors(route, index, out var previous, out var next);
                 if (previous.HasValue) offsets.Add(previous.Value - current);
                 if (next.HasValue) offsets.Add(next.Value - current);
             }
@@ -467,7 +486,7 @@ namespace _project.Scripts.Object_Scripts
                 var index = route.Cells.IndexOf(cell);
                 if (index < 0) continue;
 
-                GetRouteNeighbors(route.Cells, route.Complete, index, out _, out var next);
+                GetRouteNeighbors(route, index, out _, out var next);
                 var offset = next - current;
                 if (route.ForkIndex != index) main ??= offset;
                 else if (route.Output == 1) branch ??= offset;
@@ -476,19 +495,20 @@ namespace _project.Scripts.Object_Scripts
         }
 
         // Where a route comes from and goes to around one of its cells: the neighboring cells, or
-        // the start and end points at the route's ends. Null when the route has nothing on that side.
-        private void GetRouteNeighbors(List<Vector2Int> route, bool complete, int index,
-            out Vector3? previous, out Vector3? next)
+        // the start point and the route's own end (the lake, or its receptacle) at the route's ends.
+        // Null when the route has nothing on that side.
+        private void GetRouteNeighbors(Route route, int index, out Vector3? previous, out Vector3? next)
         {
+            var cells = route.Cells;
             previous = index > 0
-                ? pathBuildBoard.GetPathWaypointPosition(route[index - 1], PathKind)
+                ? pathBuildBoard.GetPathWaypointPosition(cells[index - 1], PathKind)
                 : startPoint
                     ? startPoint.position
                     : null;
-            next = index < route.Count - 1
-                ? pathBuildBoard.GetPathWaypointPosition(route[index + 1], PathKind)
-                : complete && endPoint
-                    ? endPoint.position
+            next = index < cells.Count - 1
+                ? pathBuildBoard.GetPathWaypointPosition(cells[index + 1], PathKind)
+                : route.Complete && (route.Receptacle || endPoint)
+                    ? GetEndPosition(route)
                     : null;
         }
 
@@ -503,20 +523,19 @@ namespace _project.Scripts.Object_Scripts
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
 
             foreach (var route in _previewRoutes)
-                if (TryGetFlowSign(route.Cells, route.Complete, cell, axis, out sign))
+                if (TryGetFlowSign(route, cell, axis, out sign))
                     return true;
             return false;
         }
 
-        private bool TryGetFlowSign(List<Vector2Int> route, bool complete, Vector2Int cell, Vector3 axis,
-            out float sign)
+        private bool TryGetFlowSign(Route route, Vector2Int cell, Vector3 axis, out float sign)
         {
             sign = 0f;
-            var index = route.IndexOf(cell);
+            var index = route.Cells.IndexOf(cell);
             if (index < 0) return false;
 
             var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
-            GetRouteNeighbors(route, complete, index, out var previous, out var next);
+            GetRouteNeighbors(route, index, out var previous, out var next);
 
             // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
             var along = Vector3.Dot((next ?? current) - (previous ?? current), axis);
@@ -612,8 +631,9 @@ namespace _project.Scripts.Object_Scripts
 
             _routes.Add(new Route(_pathCells, _waypoints) { Complete = true });
             CollectSplitterCells(_splitterCells);
-            AddSplitterBranches(_routes, _branchRoutes, goals, false);
-            if (_routes.Count == 1) AddFirstForkBranch(goals);
+            var branchGoals = CollectBranchGoals(goals);
+            AddSplitterBranches(_routes, _branchRoutes, branchGoals, false);
+            if (_routes.Count == 1) AddFirstForkBranch(branchGoals);
 
             for (var i = 1; i < _routes.Count; i++)
             {
@@ -621,7 +641,7 @@ namespace _project.Scripts.Object_Scripts
                 route.Waypoints.Add(startPoint.position);
                 foreach (var cell in route.Cells)
                     route.Waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
-                route.Waypoints.Add(endPoint.position);
+                route.Waypoints.Add(GetEndPosition(route));
             }
 
             IsValid = true;
@@ -672,11 +692,12 @@ namespace _project.Scripts.Object_Scripts
             var main = new Route { Complete = complete };
             main.Cells.AddRange(previewCells);
             _previewRoutes.Add(main);
-            AddSplitterBranches(_previewRoutes, null, goals, true);
+            AddSplitterBranches(_previewRoutes, null, CollectBranchGoals(goals), true);
 
             if (!recyclingDestination)
                 pathBuildBoard.SetPriorityVisualPath(previewCells, startPoint.position,
-                    complete ? endPoint.position : null, GetBranchCells(_previewRoutes));
+                    complete ? endPoint.position : null, GetBranchCells(_previewRoutes),
+                    GetBranchEndOpenings(_previewRoutes));
 
             if (!showLivePreview || !tube) return;
 
@@ -724,6 +745,20 @@ namespace _project.Scripts.Object_Scripts
                 yield return routes[i].Cells;
         }
 
+        // A branch that runs all the way out on its own (to a receptacle, say) opens its last pipe
+        // toward where it ends, the way the main route opens toward the end point.
+        private IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> GetBranchEndOpenings(List<Route> routes)
+        {
+            for (var i = 1; i < routes.Count; i++)
+            {
+                var route = routes[i];
+                if (!route.Complete || route.JoinIndex >= 0 || route.Cells.Count == 0) continue;
+
+                var end = pathBuildBoard.WorldToCellUnclamped(GetEndPosition(route));
+                yield return (route.Cells[^1], pathBuildBoard.ClampToOutsideRing(end));
+            }
+        }
+
         /// <summary>
         ///     Displays only the distinct portion of a branch: from its splitter to the cell where it
         ///     rejoins earlier pipe, so the stream visibly leaves and rejoins the route it splits from.
@@ -735,7 +770,7 @@ namespace _project.Scripts.Object_Scripts
             for (var i = route.ForkIndex; i <= lastIndex; i++)
                 points.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(route.Cells[i], PathKind)));
             if (route.JoinIndex < 0 && route.Complete)
-                points.Add(GetPreviewPosition(endPoint.position));
+                points.Add(GetPreviewPosition(GetEndPosition(route)));
         }
 
         private Vector3 GetPreviewUp()
@@ -1063,6 +1098,7 @@ namespace _project.Scripts.Object_Scripts
 
                 branch.Cells.AddRange(continuation);
                 branch.Complete = goals.Contains(continuation[^1]);
+                if (branch.Complete) _receptacleGoals.TryGetValue(continuation[^1], out branch.Receptacle);
                 return branch;
             }
 
@@ -1091,6 +1127,7 @@ namespace _project.Scripts.Object_Scripts
                     for (var c = joinIndex; c < route.Cells.Count; c++)
                         branch.Cells.Add(route.Cells[c]);
                     branch.Complete = route.Complete;
+                    branch.Receptacle = route.Receptacle;
                     return true;
                 }
 
@@ -1119,6 +1156,42 @@ namespace _project.Scripts.Object_Scripts
         // ============================================================
         // ANCHOR RESOLUTION
         // ============================================================
+
+        /// <summary>
+        ///     Every cell a branch may end on: <paramref name="endGoals" /> plus the cells touching
+        ///     each unlocked receptacle, which are remembered so a branch knows where it ends.
+        /// </summary>
+        private List<Vector2Int> CollectBranchGoals(List<Vector2Int> endGoals)
+        {
+            _branchGoals.Clear();
+            _branchGoals.AddRange(endGoals);
+            _receptacleGoals.Clear();
+            if (receptacles == null) return _branchGoals;
+
+            foreach (var receptacle in receptacles)
+            {
+                if (!receptacle || !receptacle.IsUnlocked) continue;
+                foreach (var cell in GetOccupiedEndpointNeighbors(receptacle.transform))
+                    if (!_branchGoals.Contains(cell))
+                    {
+                        _branchGoals.Add(cell);
+                        _receptacleGoals[cell] = receptacle;
+                    }
+            }
+
+            return _branchGoals;
+        }
+
+        private Vector3 GetEndPosition(Route route)
+        {
+            if (!route.Receptacle) return endPoint.position;
+
+            // Flow carries on level out of the last pipe into the bin's side, rather than sinking
+            // to its ground-level marker below the pipe.
+            var end = route.Receptacle.transform.position;
+            if (route.Cells.Count > 0) end.y = pathBuildBoard.GetPathWaypointPosition(route.Cells[^1], PathKind).y;
+            return end;
+        }
 
         /// <summary>
         ///     Returns occupied cells that share an edge with the endpoint marker square.
@@ -1196,6 +1269,9 @@ namespace _project.Scripts.Object_Scripts
 
             // Which splitter outlet feeds this branch (1 or 2), matching PathSplitter's output index.
             public int Output = 1;
+
+            // The receptacle a complete route ends at, or null when it ends at the end point.
+            public Receptacle Receptacle;
 
             public Route() : this(new List<Vector2Int>(), new List<Vector3>())
             {
