@@ -414,17 +414,12 @@ namespace _project.Scripts.Object_Scripts
                 _ => IssueType.Organic
             });
 
-            // Awake() rolled a random size and picked a model from sizeVisuals before AssignType ever
-            // ran — re-apply now that the type (and therefore which visual set) is actually known.
-            // Junk doesn't come in sizes: pin it, which re-applies the visuals on its own. SetType
-            // has already done the same for metal.
-            if (type == IssueType.NonWaste)
-            {
-                _junkModel = RollJunkModel();
-                SetSize(nonWasteSize);
-            }
-            else if (type != IssueType.Metal)
-                ApplySizeVisualModel();
+            // SetType has already re-applied the visuals Awake() picked before the type was known.
+            // Junk doesn't come in sizes: pin it, and roll a fresh model every time.
+            if (type != IssueType.NonWaste) return;
+
+            _junkModel = RollJunkModel();
+            SetSize(nonWasteSize);
         }
 
         /// <summary>
@@ -530,12 +525,20 @@ namespace _project.Scripts.Object_Scripts
 
         public void SetType(IssueType t)
         {
+            var previous = type;
             type = t;
-            if (type != IssueType.Metal) return;
+            if (type == IssueType.Metal)
+            {
+                // Metal comes in one size and one look, and the visuals must follow the new type.
+                SetVisualOverride(metalTint);
+                SetSize(metalSize);
+                return;
+            }
 
-            // Metal comes in one size and one look, and the visuals must follow the new type.
-            SetVisualOverride(metalTint);
-            SetSize(metalSize);
+            // Leaving metal drops its tint; the caller sets any new size.
+            if (previous == IssueType.Metal) ClearVisualOverride();
+            if (type == IssueType.NonWaste && previous != IssueType.NonWaste) _junkModel = RollJunkModel();
+            ApplySizeVisualModel();
         }
 
         public WaypointPath GetPath()
@@ -702,6 +705,16 @@ namespace _project.Scripts.Object_Scripts
                 _visualOverrideMaterial = material;
 
             ApplyVisualOverride();
+        }
+
+        private void ClearVisualOverride()
+        {
+            if (!_visualOverrideColor.HasValue) return;
+
+            _visualOverrideColor = null;
+            foreach (var visualRenderer in GetVisualRenderers())
+                if (visualRenderer)
+                    visualRenderer.SetPropertyBlock(null);
         }
 
         private void ApplyVisualOverride()

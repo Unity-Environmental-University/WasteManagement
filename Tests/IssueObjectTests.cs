@@ -290,6 +290,29 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(junk.Length, seen.Count, "Boot, tire and alligator all turn up.");
         }
 
+        [Test]
+        public void SetType_LeavingMetalDropsItsTint_AndJunkShowsAJunkModel()
+        {
+            var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
+            var junk = new[] { "Boot", "Tire" }
+                .Select(name =>
+                {
+                    var model = CreateGameObject(name);
+                    model.transform.SetParent(issue.transform, false);
+                    return model;
+                }).ToArray();
+            SetField(issue, "nonWasteVisuals", junk);
+
+            issue.SetType(IssueType.Metal);
+            Assert.IsTrue(GetField<Color?>(issue, "_visualOverrideColor").HasValue);
+
+            // The recycling demo spawner sets junk directly instead of through AssignType.
+            issue.SetType(IssueType.NonWaste);
+            Assert.IsFalse(GetField<Color?>(issue, "_visualOverrideColor").HasValue,
+                "Junk doesn't keep the metal tint.");
+            Assert.AreEqual(1, junk.Count(model => model.activeSelf), "Exactly one junk model shows.");
+        }
+
         /// <summary>
         ///     A 16-waypoint route that detours right through column 3 between rows 1 and 5. With
         ///     <paramref name="shortcut" /> the straight run up column 1 is also laid, cutting it to 12.
