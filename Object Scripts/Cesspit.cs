@@ -107,6 +107,13 @@ namespace _project.Scripts.Object_Scripts
                 StartRunaways();
         }
 
+        /// <summary>Breaks down <paramref name="amount" /> of what the pit holds (lime does this).</summary>
+        public void Drain(float amount)
+        {
+            if (amount <= 0f || fullness <= 0f) return;
+            SetFullness(fullness - amount);
+        }
+
         private void SetFullness(float newFullness)
         {
             fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
@@ -115,7 +122,15 @@ namespace _project.Scripts.Object_Scripts
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
 
             if (IsFull)
+            {
                 StartRunaways();
+            }
+            else if (_spawningRunaways)
+            {
+                // Drained back under the brim: the pit stops overflowing.
+                PauseRunaways();
+                _spawningRunaways = false;
+            }
         }
 
         public void OnPointerClick(PointerEventData eventData)

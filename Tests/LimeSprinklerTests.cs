@@ -1,3 +1,4 @@
+using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
@@ -126,6 +127,57 @@ namespace _project.Scripts.Tests
             var board = CreateBoard();
 
             Assert.IsFalse(CreateSprinkler(board, new Vector2Int(3, 3)).TryApplyTo(null));
+        }
+
+        [Test]
+        public void Reach_GrowsWithTheTownLevel_AndRemovalGivesBackEverythingItTook()
+        {
+            var board = CreateBoard();
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.turnController.currentLevel = 1;
+            var near = CreateCesspit(board, new Vector2Int(3, 3));
+            var middle = CreateCesspit(board, new Vector2Int(2, 2));
+            var far = CreateCesspit(board, new Vector2Int(0, 0));
+            var sprinkler = CreateSprinkler(board, new Vector2Int(4, 4));
+            sprinkler.SetSlot(null);
+
+            Assert.AreEqual(3, sprinkler.AreaSize);
+            Assert.AreEqual(BaseStink - Reduction, near.CurrentStink, 0.0001f);
+            Assert.AreEqual(BaseStink, middle.CurrentStink, 0.0001f, "3x3 doesn't reach two cells out.");
+
+            gm.turnController.currentLevel = 2;
+            sprinkler.SendMessage("HandleLevelChanged", 2);
+            Assert.AreEqual(5, sprinkler.AreaSize);
+            Assert.AreEqual(BaseStink - Reduction, middle.CurrentStink, 0.0001f);
+            Assert.AreEqual(BaseStink - Reduction, near.CurrentStink, 0.0001f, "Growing never doubles up.");
+            Assert.AreEqual(BaseStink, far.CurrentStink, 0.0001f);
+
+            gm.turnController.currentLevel = 3;
+            sprinkler.SendMessage("HandleLevelChanged", 3);
+            Assert.AreEqual(9, sprinkler.AreaSize);
+            Assert.AreEqual(BaseStink - Reduction, far.CurrentStink, 0.0001f, "9x9 reaches four cells out.");
+
+            sprinkler.Remove();
+            foreach (var pit in new[] { near, middle, far })
+                Assert.AreEqual(BaseStink, pit.CurrentStink, 0.0001f, pit.name);
+        }
+
+        [Test]
+        public void Lime_BreaksDownCoveredCesspits_AndLeavesOthersAlone()
+        {
+            var board = CreateBoard();
+            var covered = CreateCesspit(board, new Vector2Int(3, 3));
+            var outside = CreateCesspit(board, new Vector2Int(7, 7));
+            covered.fullness = outside.fullness = 8f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+
+            sprinkler.DrainCoveredCesspits(3f);
+            Assert.AreEqual(5f, covered.fullness, 0.0001f);
+            Assert.AreEqual(8f, outside.fullness, 0.0001f);
+
+            sprinkler.DrainCoveredCesspits(100f);
+            Assert.AreEqual(0f, covered.fullness, 0.0001f, "A pit never drains below empty.");
         }
 
         private PathBuildBoard CreateBoard()
