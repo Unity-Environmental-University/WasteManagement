@@ -423,6 +423,22 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitter_SavedSharesOver100_TrimTheThirdOutlet()
+        {
+            var host = CreateGameObject("Splitter");
+            host.SetActive(false);
+            var splitter = host.AddComponent<PathSplitter>();
+            SetField(splitter, "mainSharePercent", 80);
+            SetField(splitter, "thirdSharePercent", 50);
+
+            host.SetActive(true);
+
+            Assert.AreEqual(80, splitter.MainSharePercent);
+            Assert.AreEqual(20, splitter.ThirdSharePercent);
+            Assert.AreEqual(0, splitter.BranchSharePercent, "The branch never goes negative.");
+        }
+
+        [Test]
         public void SplitRatioTriangle_CornersAndOutsideDragStayNormalized()
         {
             var triangle = CreateGameObject("Triangle").AddComponent<SplitRatioTriangle>();

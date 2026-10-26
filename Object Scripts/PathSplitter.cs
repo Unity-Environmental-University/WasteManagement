@@ -246,8 +246,15 @@ namespace _project.Scripts.Object_Scripts
                 : new Vector2Int(0, local.z > 0f ? 1 : -1);
         }
 
+        // Each share field has its own 0-100 slider, so Inspector or prefab values can add up past 100
+        // and leave the branch a negative share; trim the third outlet to fit, as SetShares does.
+        private void OnValidate() => ClampThirdShare();
+
+        private void ClampThirdShare() => thirdSharePercent = Mathf.Clamp(thirdSharePercent, 0, 100 - mainSharePercent);
+
         private void Awake()
         {
+            ClampThirdShare();
             if (!TryGetComponent<Collider>(out var trigger))
             {
                 var box = gameObject.AddComponent<BoxCollider>();
