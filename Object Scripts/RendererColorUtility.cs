@@ -7,8 +7,8 @@ namespace _project.Scripts.Object_Scripts
     /// </summary>
     internal static class RendererColorUtility
     {
-        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        internal static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        internal static readonly int ColorId = Shader.PropertyToID("_Color");
 
         public static void SetColor(Renderer renderer, Color color, ref MaterialPropertyBlock propertyBlock)
         {

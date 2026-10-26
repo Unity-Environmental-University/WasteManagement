@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Metal issues from town level 3: a piece of metal breaks a clear sifter's screen open in one hit and stays wedged there, never merges or clogs pipe, and fills a cesspit at 15× its normal deposit
 - Lake duck: a cosmetic resident whose mood follows the lake's health, with a speech bubble for every quack
 - Construction dust puff when a pipe piece or shop item is placed
+- Three-way path splitters: a second branch outlet, a ratio triangle in the `PathSplitterPanel` once both branches have pipe, numbered and color-coded outlets that match their live preview streams, a THIRD switch per issue type, and a sort preset
 
 ### Changed
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
@@ -21,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - Junk flushed from an upstream sifter adds only a quarter of its load to the next sifter, so one overflow no longer cascades down the line
 - Sifter blades spin while it sifts and stop while it is clogged; minigame buckets grow while a dragged piece hovers them
 - Lime sprinkler: its square grows with the town level (3×3, 5×5, 9×9) and slowly breaks down the contents of covered cesspits during waves; a pit drained well back under full (90% by default) stops overflowing
+- Splitters can be tuned during the tower phase as well as setup; a new rule applies to the next issue routed
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor
