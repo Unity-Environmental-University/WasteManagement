@@ -398,22 +398,35 @@ namespace _project.Scripts.Object_Scripts
             return modelBounds.HasValue && modelBounds.Value.IntersectRay(ray, out distance);
         }
 
-        /// <summary>Unavailable pinned outlets fall back to the main route; no issues are lost.</summary>
+        /// <summary>
+        ///     Unavailable pinned outlets fall back to the main route; no issues are lost. While output 2
+        ///     is still being built and output 3 already works, output 3 is the splitter's one branch and
+        ///     takes output 2's traffic too, so a finished loop beside an unfinished stub isn't starved.
+        /// </summary>
         public int ChooseOutput(IssueType issueType, bool hasThird = true, bool hasBranch = true)
         {
+            var thirdStandsIn = !hasBranch && hasThird;
             switch (GetRule(issueType))
             {
                 case SplitterRule.MainOnly: return 0;
-                case SplitterRule.BranchOnly: return hasBranch ? 1 : 0;
+                case SplitterRule.BranchOnly: return hasBranch ? 1 : thirdStandsIn ? 2 : 0;
                 case SplitterRule.ThirdOnly: return hasThird ? 2 : 0;
             }
-            var total = mainSharePercent + (hasBranch ? BranchSharePercent : 0) + (hasThird ? thirdSharePercent : 0);
+
+            int Share(int output) => output switch
+            {
+                1 => hasBranch ? BranchSharePercent : 0,
+                2 => hasThird ? thirdSharePercent + (thirdStandsIn ? BranchSharePercent : 0) : 0,
+                _ => mainSharePercent
+            };
+
+            var total = Share(0) + Share(1) + Share(2);
             if (total == 0) return 0;
             var winner = -1;
-            for (var i = 0; i < (hasThird ? 3 : 2); i++)
+            for (var i = 0; i < 3; i++)
             {
-                var share = SharePercent(i);
-                if (share == 0 || (i == 1 && !hasBranch)) continue;
+                var share = Share(i);
+                if (share == 0) continue;
                 _credits[i] += share;
                 if (winner < 0 || _credits[i] > _credits[winner]) winner = i;
             }

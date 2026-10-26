@@ -366,6 +366,37 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitter_FinishedLoopBesideAnUnfinishedStub_StillGetsTheBranchTraffic()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            // A dead-end stub to the right, searched first, and a finished loop to the left that rejoins at (1,8).
+            PlaceHorizontal(fixture.Board, 2, 2, 1);
+            PlaceVertical(fixture.Board, 0, 2, 7);
+            var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out _),
+                "The stub keeps output 2's number while it's unfinished.");
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out var loop, 2));
+
+            var counts = new int[3];
+            for (var i = 0; i < 100; i++)
+            {
+                var issue = CreateGameObject($"Issue {i}").AddComponent<IssueObject>();
+                issue.SetPath(fixture.Path);
+                Assert.IsTrue(splitter.RouteIssue(issue));
+                counts[issue.GetRouteIndex() == loop ? 2 : issue.GetRouteIndex() == 0 ? 0 : 1]++;
+            }
+
+            CollectionAssert.AreEqual(new[]
+            {
+                splitter.MainSharePercent, 0, splitter.BranchSharePercent + splitter.ThirdSharePercent
+            }, counts, "The loop takes the stub's share as well as its own.");
+            splitter.SetRule(IssueType.Organic, SplitterRule.BranchOnly);
+            Assert.AreEqual(2, splitter.ChooseOutput(IssueType.Organic, true, false));
+        }
+
+        [Test]
         public void PathSplitter_ColorsEachOutletLikeTheRouteItFeeds()
         {
             var fixture = CreateSplitPathFixture();
