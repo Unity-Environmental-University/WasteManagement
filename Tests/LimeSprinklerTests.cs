@@ -180,6 +180,22 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0f, covered.fullness, 0.0001f, "A pit never drains below empty.");
         }
 
+        [Test]
+        public void Lime_DrainingAFullPit_StopsItsRunawaysOnlyOnceWellUnderTheBrim()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.turnController.currentLevel = 3;
+            var pit = CreateCesspit(CreateBoard(), new Vector2Int(3, 3));
+            pit.SendMessage("SetFullness", pit.maxFullness);
+            Assert.IsTrue(GetField<bool>(pit, "_spawningRunaways"));
+
+            pit.Drain(0.5f);
+            Assert.IsTrue(GetField<bool>(pit, "_spawningRunaways"), "Just under the brim it keeps overflowing.");
+
+            pit.Drain(1f);
+            Assert.IsFalse(GetField<bool>(pit, "_spawningRunaways"));
+        }
+
         private PathBuildBoard CreateBoard()
         {
             return CreateGameObject("Path Board").AddComponent<PathBuildBoard>();

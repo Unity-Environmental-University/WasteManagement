@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - Sifter minigame: each sorted piece drains its share of the screen's debris, so a partial sort can reopen a clogged screen; unsorted pieces and progress survive closing the window, per sifter, and the piece count follows the debris caught since the last visit
 - Junk flushed from an upstream sifter adds only a quarter of its load to the next sifter, so one overflow no longer cascades down the line
 - Sifter blades spin while it sifts and stop while it is clogged; minigame buckets grow while a dragged piece hovers them
-- Lime sprinkler: its square grows with the town level (3×3, 5×5, 9×9) and slowly breaks down the contents of covered cesspits during waves; a pit drained back under full stops overflowing
+- Lime sprinkler: its square grows with the town level (3×3, 5×5, 9×9) and slowly breaks down the contents of covered cesspits during waves; a pit drained well back under full (90% by default) stops overflowing
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor

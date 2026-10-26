@@ -24,6 +24,12 @@ namespace _project.Scripts.Object_Scripts
         [Min(1f)]
         private float metalDamageMultiplier = 15f;
 
+        [Tooltip("Once full, a pit keeps overflowing until lime drains it below this share of its capacity, " +
+                 "so a pit hovering at the brim doesn't restart its runaway timer every frame.")]
+        [SerializeField]
+        [Range(0f, 1f)]
+        private float overflowStopsBelow = 0.9f;
+
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 10f;
@@ -125,9 +131,9 @@ namespace _project.Scripts.Object_Scripts
             {
                 StartRunaways();
             }
-            else if (_spawningRunaways)
+            else if (_spawningRunaways && FullnessRatio < overflowStopsBelow)
             {
-                // Drained back under the brim: the pit stops overflowing.
+                // Drained well back under the brim: the pit stops overflowing.
                 PauseRunaways();
                 _spawningRunaways = false;
             }

@@ -52,6 +52,10 @@ namespace _project.Scripts.Object_Scripts
         // after the square has grown.
         private readonly HashSet<Cesspit> _limedPits = new();
 
+        // Draining refreshes each pit's bar and the stink meter, so it's applied in ticks, not per frame.
+        private const float DrainTickSeconds = 0.25f;
+        private float _drainTimer;
+
         private void OnEnable()
         {
             LiveComponentRegistry.Register(this);
@@ -71,12 +75,18 @@ namespace _project.Scripts.Object_Scripts
             var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
             if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
 
-            DrainCoveredCesspits(fullnessDrainPerSecond * Time.deltaTime);
+            _drainTimer += Time.deltaTime;
+            if (_drainTimer < DrainTickSeconds) return;
+
+            DrainCoveredCesspits(fullnessDrainPerSecond * _drainTimer);
+            _drainTimer = 0f;
         }
 
         /// <summary>Breaks down <paramref name="amount" /> of every cesspit standing in this sprinkler's square.</summary>
         public void DrainCoveredCesspits(float amount)
         {
+            // Pits buried or removed since they were limed.
+            _limedPits.RemoveWhere(pit => !pit);
             var cells = GetSurroundingCells();
             foreach (var pit in _limedPits)
                 if (pit && Covers(pit, cells))
