@@ -8,19 +8,8 @@ using UnityEngine.TestTools;
 
 namespace _project.Scripts.Tests
 {
-    public class IssueBlockHighlightTests
+    public class IssueBlockHighlightTests : PlayModeTestBase
     {
-        private readonly List<Object> _created = new();
-
-        [TearDown]
-        public void TearDown()
-        {
-            foreach (var created in _created)
-                if (created)
-                    Object.DestroyImmediate(created);
-            _created.Clear();
-        }
-
         [Test]
         public void Show_BuildsOneGhostPerMesh_UnderItsOwnSourceTransform()
         {
@@ -180,42 +169,8 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(73f, ghost.GetBlendShapeWeight(0), 0.001f);
         }
 
-        private static void InvokeLateUpdate(IssueBlockHighlight highlight)
-        {
-            // The sync runs in LateUpdate, which no test-runner frame drives here.
-            typeof(IssueBlockHighlight)
-                .GetMethod("LateUpdate", System.Reflection.BindingFlags.NonPublic |
-                                         System.Reflection.BindingFlags.Instance)
-                .Invoke(highlight, null);
-        }
-
-        private GameObject CreateSkinnedVisual(string name, out Mesh mesh)
-        {
-            var root = CreatePrimitive(name);
-            Object.DestroyImmediate(root.GetComponent<MeshFilter>());
-            Object.DestroyImmediate(root.GetComponent<MeshRenderer>());
-            Object.DestroyImmediate(root.GetComponent<Collider>());
-
-            var vertices = new[]
-            {
-                new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
-                new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, -0.5f)
-            };
-            mesh = new Mesh { vertices = vertices, triangles = new[] { 0, 2, 1, 1, 2, 3 } };
-            mesh.RecalculateNormals();
-            mesh.AddBlendShapeFrame("squash", 100f, new[]
-            {
-                Vector3.up, Vector3.up, Vector3.up, Vector3.up
-            }, null, null);
-            _created.Add(mesh);
-
-            var skinned = root.AddComponent<SkinnedMeshRenderer>();
-            skinned.sharedMesh = mesh;
-            return root;
-        }
-
         [Test]
-        public void GhostRenderers_IgnoreRaycastAndCastNoShadows()
+        public void GhostRenderers_AreUnshadowedRaycastIgnoredOutlineShells()
         {
             var root = CreatePrimitive("Visual");
 
@@ -230,19 +185,8 @@ namespace _project.Scripts.Tests
                 Assert.AreEqual(LayerMask.NameToLayer("Ignore Raycast"), ghostRenderer.gameObject.layer);
                 Assert.AreEqual(ShadowCastingMode.Off, ghostRenderer.shadowCastingMode);
                 Assert.IsFalse(ghostRenderer.receiveShadows);
+                StringAssert.Contains("IssueBlockOutline", ghostRenderer.sharedMaterial.shader.name);
             }
-        }
-
-        [Test]
-        public void GhostMaterial_UsesTheIssueBlockOutlineShader()
-        {
-            var root = CreatePrimitive("Visual");
-
-            var highlight = CreateHighlight();
-            highlight.Show(root.GetComponentsInChildren<Renderer>(true));
-
-            var ghostRenderer = CollectGhosts(root.transform)[0];
-            StringAssert.Contains("IssueBlockOutline", ghostRenderer.sharedMaterial.shader.name);
         }
 
         [Test]
@@ -352,20 +296,41 @@ namespace _project.Scripts.Tests
                 : ghostRenderer.GetComponent<MeshFilter>().sharedMesh;
         }
 
-        private IssueBlockHighlight CreateHighlight()
+        private IssueBlockHighlight CreateHighlight() =>
+            CreateGameObject("Issue").AddComponent<IssueBlockHighlight>();
+
+        private static void InvokeLateUpdate(IssueBlockHighlight highlight)
         {
-            var gameObject = new GameObject("Issue");
-            _created.Add(gameObject);
-            return gameObject.AddComponent<IssueBlockHighlight>();
+            // The sync runs in LateUpdate, which no test-runner frame drives here.
+            typeof(IssueBlockHighlight)
+                .GetMethod("LateUpdate", System.Reflection.BindingFlags.NonPublic |
+                                         System.Reflection.BindingFlags.Instance)
+                .Invoke(highlight, null);
         }
 
-        private GameObject CreatePrimitive(string name, Transform parent = null)
+        private GameObject CreateSkinnedVisual(string name, out Mesh mesh)
         {
-            var primitive = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            primitive.name = name;
-            primitive.transform.SetParent(parent, false);
-            _created.Add(primitive);
-            return primitive;
+            var root = CreatePrimitive(name);
+            Object.DestroyImmediate(root.GetComponent<MeshFilter>());
+            Object.DestroyImmediate(root.GetComponent<MeshRenderer>());
+            Object.DestroyImmediate(root.GetComponent<Collider>());
+
+            var vertices = new[]
+            {
+                new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(-0.5f, 0.5f, -0.5f), new Vector3(0.5f, 0.5f, -0.5f)
+            };
+            mesh = new Mesh { vertices = vertices, triangles = new[] { 0, 2, 1, 1, 2, 3 } };
+            mesh.RecalculateNormals();
+            mesh.AddBlendShapeFrame("squash", 100f, new[]
+            {
+                Vector3.up, Vector3.up, Vector3.up, Vector3.up
+            }, null, null);
+            Track(mesh);
+
+            var skinned = root.AddComponent<SkinnedMeshRenderer>();
+            skinned.sharedMesh = mesh;
+            return root;
         }
     }
 }

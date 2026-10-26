@@ -7,26 +7,17 @@ using UnityEngine;
 
 namespace _project.Scripts.Tests
 {
-    public class WasteBoardReplayRecorderTests
+    public class WasteBoardReplayRecorderTests : PlayModeTestBase
     {
-        private readonly List<GameObject> _created = new();
         private PathBuildBoard _board;
         private WasteBoardReplayRecorder _recorder;
 
         [SetUp]
         public void SetUp()
         {
-            _board = Create("Board").AddComponent<PathBuildBoard>();
-            _recorder = Create("Recorder").AddComponent<WasteBoardReplayRecorder>();
+            _board = CreateGameObject("Board").AddComponent<PathBuildBoard>();
+            _recorder = CreateGameObject("Recorder").AddComponent<WasteBoardReplayRecorder>();
             SetField(_recorder, "_board", _board);
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            foreach (var go in _created)
-                if (go)
-                    Object.DestroyImmediate(go);
         }
 
         [Test]
@@ -120,23 +111,9 @@ namespace _project.Scripts.Tests
 
         private T Place<T>(Vector2Int cell) where T : MonoBehaviour
         {
-            var component = Create(typeof(T).Name).AddComponent<T>();
+            var component = CreateGameObject(typeof(T).Name).AddComponent<T>();
             component.transform.position = _board.GetCellTopPosition(cell);
             return component;
-        }
-
-        private GameObject Create(string name)
-        {
-            var go = new GameObject(name);
-            _created.Add(go);
-            return go;
-        }
-
-        private static void SetField<T>(object target, string fieldName, T value)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field);
-            field.SetValue(target, value);
         }
     }
 }

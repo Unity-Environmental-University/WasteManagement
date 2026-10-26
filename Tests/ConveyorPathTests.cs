@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -9,9 +8,8 @@ using UnityEngine.TestTools;
 
 namespace _project.Scripts.Tests
 {
-    public class ConveyorPathTests
+    public class ConveyorPathTests : PlayModeTestBase
     {
-        private readonly List<GameObject> _objects = new();
         private PathBuildBoard _board;
         private WaypointPath _pipe;
         private WaypointPath _belt;
@@ -19,24 +17,16 @@ namespace _project.Scripts.Tests
         [SetUp]
         public void SetUp()
         {
-            var host = Make("Typed board");
+            var host = CreateGameObject("Typed board");
             host.SetActive(false);
             _board = host.AddComponent<PathBuildBoard>();
-            Set(_board, "columns", 4);
-            Set(_board, "rows", 4);
-            Set(_board, "cellSize", 1f);
-            Set(_board, "cellGap", 0f);
+            SetField(_board, "columns", 4);
+            SetField(_board, "rows", 4);
+            SetField(_board, "cellSize", 1f);
+            SetField(_board, "cellGap", 0f);
             host.SetActive(true);
             _pipe = MakePath("Pipe route", new Vector2Int(1, -1), new Vector2Int(1, 4), false);
             _belt = MakePath("Belt route", new Vector2Int(-1, 1), new Vector2Int(4, 1), true);
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            for (var i = _objects.Count - 1; i >= 0; i--)
-                if (_objects[i]) Object.DestroyImmediate(_objects[i]);
-            _objects.Clear();
         }
 
         [Test]
@@ -112,8 +102,8 @@ namespace _project.Scripts.Tests
             PlaceForkedRoute(PathKind.Pipe, completeBranch);
             PlaceForkedRoute(PathKind.RecyclingBelt, completeBranch);
             var pipe = MakePath("Forked pipe route", new Vector2Int(-1, 1), new Vector2Int(4, 1), false);
-            Set(pipe, "showLivePreview", true);
-            Set(_belt, "showLivePreview", true);
+            SetField(pipe, "showLivePreview", true);
+            SetField(_belt, "showLivePreview", true);
             MakeSplitter();
 
             Assert.IsTrue(pipe.Rebuild());
@@ -140,7 +130,7 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(pipe.Rebuild());
             Assert.IsTrue(pipe.HasAlternateRoute);
             Assert.IsTrue(_belt.Rebuild());
-            var recyclingHost = Make("Recycling issue");
+            var recyclingHost = CreateGameObject("Recycling issue");
             recyclingHost.AddComponent<SphereCollider>();
             var recyclingIssue = recyclingHost.AddComponent<IssueObject>();
             recyclingIssue.SetPath(_belt);
@@ -154,7 +144,7 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, recyclingIssue.GetRouteIndex());
             for (var route = 0; route <= 1; route++)
             {
-                var pipeIssue = Make("Pipe issue").AddComponent<IssueObject>();
+                var pipeIssue = CreateGameObject("Pipe issue").AddComponent<IssueObject>();
                 pipeIssue.SetPath(pipe);
                 Assert.IsTrue(splitter.RouteIssue(pipeIssue));
                 Assert.AreEqual(route, pipeIssue.GetRouteIndex(),
@@ -171,9 +161,7 @@ namespace _project.Scripts.Tests
 
             yield return null;
 
-            var colors = (Dictionary<GameObject, Color>)typeof(PathBuildBoard)
-                .GetField("_appliedVisualColors", BindingFlags.Instance | BindingFlags.NonPublic)
-                .GetValue(_board);
+            var colors = GetField<Dictionary<GameObject, Color>>(_board, "_appliedVisualColors");
             Assert.AreEqual(1, colors.Count, "Only the current preview should remain cached.");
             foreach (var visual in colors.Keys)
                 Assert.IsTrue(visual, "Destroyed previews must not remain in the color cache.");
@@ -212,7 +200,7 @@ namespace _project.Scripts.Tests
 
         private PathSplitter MakeSplitter()
         {
-            var host = Make("Pipe splitter");
+            var host = CreateGameObject("Pipe splitter");
             host.transform.position = _board.GetCellTopPosition(new Vector2Int(0, 1));
             return host.AddComponent<PathSplitter>();
         }
@@ -220,46 +208,27 @@ namespace _project.Scripts.Tests
         private void Place(int x, int y, PathKind kind, bool vertical) =>
             Assert.IsNotNull(_board.TryPlace(Cell(x, y), Piece(kind, vertical)));
 
-        private static PathPiecePlaceable Piece(PathKind kind, bool vertical)
-        {
-            var piece = new PathPiecePlaceable("Test segment", "", 1, 2, null, 0, kind);
-            if (vertical) piece.ToggleOrientation();
-            return piece;
-        }
+        private static PathPiecePlaceable Piece(PathKind kind, bool vertical) => Pipe(2, vertical, kind);
 
-        private PathBuildCell Cell(int x, int y)
-        {
-            foreach (var cell in _board.GetComponentsInChildren<PathBuildCell>())
-                if (cell.Column == x && cell.Row == y) return cell;
-            throw new System.Exception("Test cell not found.");
-        }
+        private PathBuildCell Cell(int x, int y) => GetCell(_board, x, y);
 
         private WaypointPath MakePath(string name, Vector2Int start, Vector2Int end, bool recycling)
         {
-            var host = Make(name);
+            var host = CreateGameObject(name);
             host.SetActive(false);
             var path = host.AddComponent<WaypointPath>();
-            var a = Make(name + " start").transform;
-            var b = Make(name + " end").transform;
+            var a = CreateGameObject(name + " start").transform;
+            var b = CreateGameObject(name + " end").transform;
             a.position = new Vector3(start.x - 1.5f, 0, start.y - 1.5f);
             b.position = new Vector3(end.x - 1.5f, 0, end.y - 1.5f);
-            Set(path, "pathBuildBoard", _board);
-            Set(path, "startPoint", a);
-            Set(path, "endPoint", b);
-            Set(path, "recyclingDestination", recycling);
-            Set(path, "showLivePreview", false);
+            SetField(path, "pathBuildBoard", _board);
+            SetField(path, "startPoint", a);
+            SetField(path, "endPoint", b);
+            SetField(path, "recyclingDestination", recycling);
+            SetField(path, "showLivePreview", false);
             host.SetActive(true);
             return path;
         }
 
-        private GameObject Make(string name)
-        {
-            var obj = new GameObject(name);
-            _objects.Add(obj);
-            return obj;
-        }
-
-        private static void Set(object target, string field, object value) =>
-            target.GetType().GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(target, value);
     }
 }
