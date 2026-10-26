@@ -12,6 +12,8 @@ namespace _project.Scripts.Object_Scripts
     {
         private static readonly int OpeningAnimation = Animator.StringToHash(
             "Base Layer.sifterOpening");
+        private static readonly int BladesSpinningAnimation = Animator.StringToHash(
+            "Base Layer.sifterBladesSpinning");
 
         public HealthBar healthBar;
         public float maxHealth;
@@ -21,8 +23,16 @@ namespace _project.Scripts.Object_Scripts
         
         [SerializeField] private int siftPower = 1;
 
+        [Header("Overflow Recovery")]
+        [Tooltip("Debris load from junk flushed by an upstream sifter. Fresh junk still adds its full load.")]
+        [SerializeField, Range(0f, 1f)] private float flushedDebrisMultiplier = 0.25f;
+
         [Header("Comminutor Visual")]
         [SerializeField] private ComminutorRotor comminutorRotor;
+
+        [Header("Animation")]
+        [SerializeField] private Animator gateAnimator;
+        [SerializeField] private Animator bladesAnimator;
 
         [Header("Stink")]
         [SerializeField] private float stinkReduction = 0.5f;
@@ -30,7 +40,6 @@ namespace _project.Scripts.Object_Scripts
         private SpecialInteractController _slot;
         private int _infraValue;
         private bool _isHovered;
-        private Animator _animator;
         private bool _isSifting;
         private Coroutine _closeAnimation;
         private readonly HashSet<IssueObject> _heldIssues = new();
@@ -45,7 +54,8 @@ namespace _project.Scripts.Object_Scripts
 
         private void Awake()
         {
-            _animator = GetComponentInChildren<Animator>(true);
+            if (!gateAnimator) gateAnimator = GetComponentInChildren<Animator>(true);
+            if (bladesAnimator) bladesAnimator.Play(BladesSpinningAnimation, 0, 0f);
             SetSifting(!IsBlocked, true);
         }
 
@@ -108,6 +118,34 @@ namespace _project.Scripts.Object_Scripts
             _heldIssues.Clear();
         }
 
+        /// <summary>
+        ///     How many of a minigame's <paramref name="pieceCount" /> pieces the debris amounts to. Each
+        ///     piece stands for an even share of a full screen, so a full screen is every piece, a
+        ///     quarter-full one with four pieces is one, and any debris at all is at least one.
+        /// </summary>
+        public int DebrisPieces(int pieceCount)
+        {
+            if (pieceCount <= 0 || maxDebrisAccumulation <= 0f || debrisAccumulation <= 0f) return 0;
+
+            // The small allowance keeps float dust from rounding an exact share up a whole piece.
+            var pieces = Mathf.CeilToInt(debrisAccumulation / maxDebrisAccumulation * pieceCount - 0.01f);
+            return Mathf.Clamp(pieces, 1, pieceCount);
+        }
+
+        /// <summary>
+        ///     One minigame piece sorted out of the screen: it takes its share of a full screen with it,
+        ///     so three of four pieces off a full screen leaves a quarter. Dropping back under the limit
+        ///     closes the gates and the screen starts sifting again.
+        /// </summary>
+        public void SortDebrisPiece(int pieceCount)
+        {
+            if (pieceCount <= 0) return;
+
+            var wasBlocked = IsBlocked;
+            debrisAccumulation = Mathf.Max(0f, debrisAccumulation - maxDebrisAccumulation / pieceCount);
+            if (wasBlocked && !IsBlocked) SetSifting(true);
+        }
+
         public void ClearDebris()
         {
             debrisAccumulation = 0f;
@@ -130,7 +168,9 @@ namespace _project.Scripts.Object_Scripts
 
             _isSifting = isSifting;
             if (comminutorRotor) comminutorRotor.SetRunning(isSifting);
-            if (!_animator) return;
+            // A clogged screen jams the blades where they stand; clearing it picks the spin back up.
+            if (bladesAnimator) bladesAnimator.speed = isSifting ? 1f : 0f;
+            if (!gateAnimator) return;
 
             if (_closeAnimation != null)
             {
@@ -138,13 +178,13 @@ namespace _project.Scripts.Object_Scripts
                 _closeAnimation = null;
             }
 
-            _animator.enabled = true;
+            gateAnimator.enabled = true;
             if (isSifting)
             {
                 if (force)
                 {
                     SetOpeningFrame(0f);
-                    _animator.enabled = false;
+                    gateAnimator.enabled = false;
                 }
                 else
                 {
@@ -154,16 +194,16 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            _animator.speed = 1f;
+            gateAnimator.speed = 1f;
             SetOpeningFrame(0f);
         }
 
         private IEnumerator CloseSifter()
         {
-            _animator.speed = 1f;
+            gateAnimator.speed = 1f;
             SetOpeningFrame(1f);
-            var duration = _animator.GetCurrentAnimatorStateInfo(0).length;
-            _animator.speed = 0f;
+            var duration = gateAnimator.GetCurrentAnimatorStateInfo(0).length;
+            gateAnimator.speed = 0f;
             var elapsed = 0f;
 
             while (elapsed < duration)
@@ -174,15 +214,15 @@ namespace _project.Scripts.Object_Scripts
             }
 
             SetOpeningFrame(0f);
-            _animator.speed = 1f;
-            _animator.enabled = false;
+            gateAnimator.speed = 1f;
+            gateAnimator.enabled = false;
             _closeAnimation = null;
         }
 
         private void SetOpeningFrame(float normalizedTime)
         {
-            _animator.Play(OpeningAnimation, 0, Mathf.Clamp01(normalizedTime));
-            _animator.Update(0f);
+            gateAnimator.Play(OpeningAnimation, 0, Mathf.Clamp01(normalizedTime));
+            gateAnimator.Update(0f);
         }
 
         /// <summary>A sifter that is damaged or holding debris stays put.</summary>
@@ -227,7 +267,12 @@ namespace _project.Scripts.Object_Scripts
                 // flushed along with the rest.
                 issue.SetHeldBySifter(true);
                 _heldIssues.Add(issue);
-                AccumulateDebris(issue.SiftCost);
+                // A downstream screen can absorb an upstream flush without immediately repeating it.
+                // Apply once per capture, not to issue size or its destination damage.
+                var debrisLoad = issue.WasFlushedFromSifter
+                    ? issue.SiftCost * Mathf.Clamp01(flushedDebrisMultiplier)
+                    : issue.SiftCost;
+                AccumulateDebris(debrisLoad);
                 return;
             }
 

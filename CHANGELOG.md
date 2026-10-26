@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
 - Junk issues each show one of the assigned junk models at random, instead of every piece showing the model for its pinned size
+- Sifter minigame: each sorted piece drains its share of the screen's debris, so a partial sort can reopen a clogged screen; unsorted pieces and progress survive closing the window, per sifter, and the piece count follows the debris caught since the last visit
+- Junk flushed from an upstream sifter adds only a quarter of its load to the next sifter, so one overflow no longer cascades down the line
+- Sifter blades spin while it sifts and stop while it is clogged; minigame buckets grow while a dragged piece hovers them
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor

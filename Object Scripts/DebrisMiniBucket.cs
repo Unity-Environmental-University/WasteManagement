@@ -4,9 +4,10 @@ using UnityEngine.EventSystems;
 
 namespace _project.Scripts.Object_Scripts
 {
-    public class DebrisMiniBucket : MonoBehaviour, IDropHandler
+    public class DebrisMiniBucket : MonoBehaviour, IDropHandler, IPointerEnterHandler, IPointerExitHandler
     {
         [SerializeField] private DebrisHandler.DebrisType type;
+        [SerializeField] private float scaleMultiplier = 1.2f;
 
         private static SifterMiniGameController Controller
         {
@@ -33,7 +34,32 @@ namespace _project.Scripts.Object_Scripts
         {
             var handler = eventData.pointerDrag?.GetComponent<DebrisHandler>();
             if (handler)
+            {
                 handler.HandleBucketDrop(type);
+                DecreaseSize();
+            }
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (eventData.pointerDrag)
+                IncreaseSize();
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (eventData.pointerDrag)
+                DecreaseSize();
+        }
+
+        private void IncreaseSize()
+        {
+            transform.localScale *= scaleMultiplier;
+        }
+
+        private void DecreaseSize()
+        {
+            transform.localScale /= scaleMultiplier;
         }
     }
 }
