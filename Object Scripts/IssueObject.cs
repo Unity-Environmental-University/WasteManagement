@@ -166,6 +166,12 @@ namespace _project.Scripts.Object_Scripts
         public bool IsDirectDestination { get; private set; }
 
         /// <summary>
+        ///     The receptacle this issue's route delivered it to, set as it reaches the end of the pipe;
+        ///     null for issues that end in the lake (including pipe bursts).
+        /// </summary>
+        public Receptacle EndReceptacle { get; private set; }
+
+        /// <summary>
         ///     True once a debris-blocked sifter has let this NonWaste issue through its open gates
         ///     instead of screening it out. Unscreened junk wrecks a cesspit — see Cesspit.OnTriggerEnter.
         /// </summary>
@@ -932,6 +938,7 @@ namespace _project.Scripts.Object_Scripts
             if (Debugging)
                 Debug.Log($"[IssueObject] Reached end — type: {type}");
 
+            EndReceptacle = path ? path.GetRouteReceptacle(_routeIndex) : null;
             OnReachedEnd?.Invoke(this);
             Destroy(gameObject);
         }
