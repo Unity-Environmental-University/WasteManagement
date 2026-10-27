@@ -84,6 +84,76 @@ namespace _project.Scripts.Tests
             Assert.Greater(flushedPit.fullness, plainPit.fullness * 5f);
         }
 
+        [Test]
+        public void Metal_BreaksTheSifterOpenAndStaysStuckUntilItIsCleared()
+        {
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            var junk = CreateJunk("Held Junk");
+            var metal = CreateMetal("Metal");
+
+            Enter(sifter, junk);
+            Assert.IsTrue(IsHeld(junk));
+
+            Enter(sifter, metal);
+
+            Assert.AreEqual(sifter.maxDebrisAccumulation, sifter.debrisAccumulation, 0.001f,
+                "One piece of metal breaks the screen open outright.");
+            Assert.IsFalse(IsHeld(junk), "The broken screen lets go of what it was holding.");
+            Assert.IsTrue(junk.WasFlushedFromSifter);
+            Assert.IsTrue(IsHeld(metal), "The metal stays wedged in the screen.");
+            Assert.AreEqual(2, metal.ProcessCost, 0.001f, "The screen doesn't grind metal down.");
+
+            sifter.ClearDebris();
+            Assert.AreEqual(0f, sifter.debrisAccumulation, 0.001f);
+        }
+
+        [Test]
+        public void Metal_PassesAnAlreadyBrokenSifterUntouched()
+        {
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+            var metal = CreateMetal("Metal");
+            var size = metal.ProcessCost;
+
+            Enter(sifter, metal);
+
+            Assert.IsFalse(IsHeld(metal));
+            Assert.AreEqual(size, metal.ProcessCost, 0.001f);
+        }
+
+        [Test]
+        public void Metal_DoesFarMoreDamageToACesspitThanWaste()
+        {
+            var waste = CreateGameObject("Waste");
+            waste.tag = "IssueObject";
+            waste.AddComponent<SphereCollider>();
+            var wasteIssue = waste.AddComponent<IssueObject>();
+            wasteIssue.SetType(IssueType.Organic);
+            wasteIssue.SetSize(2);
+            var metal = CreateMetal("Metal");
+
+            var wastePit = CreateGameObject("Waste Cesspit").AddComponent<Cesspit>();
+            var metalPit = CreateGameObject("Metal Cesspit").AddComponent<Cesspit>();
+            wastePit.maxFullness = metalPit.maxFullness = 1000f;
+
+            Enter(wastePit, wasteIssue);
+            Enter(metalPit, metal);
+
+            Assert.Greater(metalPit.fullness, wastePit.fullness * 10f);
+        }
+
+        private IssueObject CreateMetal(string name)
+        {
+            var go = CreateGameObject(name);
+            go.tag = "IssueObject";
+            go.AddComponent<SphereCollider>();
+            var issue = go.AddComponent<IssueObject>();
+            issue.SetType(IssueType.Metal);
+            return issue;
+        }
+
         private IssueObject CreateJunk(string name)
         {
             var go = CreateGameObject(name);

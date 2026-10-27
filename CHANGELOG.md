@@ -10,9 +10,11 @@ All notable changes to this project will be documented in this file.
 - Planning-view panning: a `PAN VIEW` tool on the `PathToolBar` drags the card-phase camera across the board within a board-scaled limit, and `RECENTER` glides it home and hands the pointer back to the cursor
 - `ROTATE` switch on the `PathToolBar`, replacing the rotate hint label: turns the armed pipe like the R key, so touch players can rotate too
 - Prefab-driven `PathSplitterPanel`: clicking a path splitter opens a closable window beside the stink meter with a slider for the main/branch share and, per issue type (organic, chemical, non-waste), switches to split it or send it only down the main route or only down the branch
+- Metal issues from town level 3: a piece of metal breaks a clear sifter's screen open in one hit and stays wedged there, never merges or clogs pipe, and fills a cesspit at 15× its normal deposit
 
 ### Changed
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
+- Junk issues each show one of the assigned junk models at random, instead of every piece showing the model for its pinned size
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor

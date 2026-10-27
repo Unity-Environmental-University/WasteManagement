@@ -96,6 +96,8 @@ namespace _project.Scripts.Core
             {
                 IssueType.Organic => organicProcessPower,
                 IssueType.Chemical => chemicalProcessPower,
+                // Junk and metal aren't treated here, so they cost the tower nothing.
+                IssueType.NonWaste or IssueType.Metal => 0f,
                 _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
         }
