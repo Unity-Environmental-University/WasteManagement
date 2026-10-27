@@ -3,6 +3,8 @@ using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 namespace _project.Scripts.Tests
 {
@@ -59,6 +61,64 @@ namespace _project.Scripts.Tests
 
             Assert.IsFalse(IsHeld(late), "An open sifter has nothing left to stop junk with.");
             Assert.IsTrue(late.WasFlushedFromSifter);
+        }
+
+        [Test]
+        public void UpstreamFlush_AddsQuarterLoadToDownstreamSifterWithoutCascading()
+        {
+            var upstream = CreateGameObject("Upstream Sifter").AddComponent<WasteSifter>();
+            var downstream = CreateGameObject("Downstream Sifter").AddComponent<WasteSifter>();
+            var first = CreateJunk("First Junk");
+            var second = CreateJunk("Second Junk");
+            var fullLoad = first.SiftCost + second.SiftCost;
+            upstream.maxDebrisAccumulation = downstream.maxDebrisAccumulation = fullLoad;
+
+            Enter(upstream, first);
+            Enter(upstream, second);
+            Enter(downstream, first);
+            Enter(downstream, second);
+
+            Assert.AreEqual(fullLoad, upstream.debrisAccumulation, 0.001f,
+                "Fresh junk must still fill the upstream screen normally.");
+            Assert.AreEqual(fullLoad * 0.25f, downstream.debrisAccumulation, 0.001f);
+            Assert.IsTrue(IsHeld(first));
+            Assert.IsTrue(IsHeld(second), "The next screen should contain the flush, not cascade.");
+            Assert.AreEqual(fullLoad * 0.5f, first.SiftCost, 0.001f,
+                "Overflow relief must not shrink the issue itself.");
+
+            Enter(downstream, first);
+            Assert.AreEqual(fullLoad * 0.25f, downstream.debrisAccumulation, 0.001f,
+                "Duplicate trigger entries must not add more debris.");
+        }
+
+        [Test]
+        public void DownstreamSifter_StillClogsWhenReducedFlushExceedsRemainingCapacity()
+        {
+            var sifter = CreateGameObject("Nearly Full Sifter").AddComponent<WasteSifter>();
+            var junk = CreateJunk("Flushed Junk");
+            junk.FlushFromSifter();
+            sifter.maxDebrisAccumulation = junk.SiftCost;
+            sifter.debrisAccumulation = junk.SiftCost * 0.8f;
+
+            Enter(sifter, junk);
+
+            Assert.AreEqual(sifter.maxDebrisAccumulation, sifter.debrisAccumulation, 0.001f);
+            Assert.IsFalse(IsHeld(junk), "Overflow relief is not immunity to clogging.");
+        }
+
+        [Test]
+        public void ClearingDownstreamSifter_RemovesRecapturedFlush()
+        {
+            var sifter = CreateGameObject("Recovery Sifter").AddComponent<WasteSifter>();
+            var junk = CreateJunk("Flushed Junk");
+            junk.FlushFromSifter();
+            sifter.maxDebrisAccumulation = junk.SiftCost;
+            Enter(sifter, junk);
+
+            sifter.ClearDebris();
+
+            Assert.AreEqual(0f, sifter.debrisAccumulation);
+            Assert.IsEmpty(GetField<HashSet<IssueObject>>(sifter, "_heldIssues"));
         }
 
         [Test]
@@ -142,6 +202,237 @@ namespace _project.Scripts.Tests
             Enter(metalPit, metal);
 
             Assert.Greater(metalPit.fullness, wastePit.fullness * 10f);
+        }
+
+        [Test]
+        public void Minigame_SortingPiecesDrainsDebrisAndProgressSurvivesClosing()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            var otherSifter = CreateGameObject("Other Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = otherSifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = otherSifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            Assert.IsTrue(controller.IsRunning);
+            Sort(pieces[0]);
+            Sort(pieces[1]);
+
+            Assert.AreEqual(50f, sifter.debrisAccumulation, 0.001f, "Two of four pieces take half the load.");
+            var leftTypes = new[] { pieces[2].GetDebrisType(), pieces[3].GetDebrisType() };
+
+            controller.CloseMiniGame();
+            Assert.IsFalse(controller.IsRunning);
+            Assert.AreEqual(50f, sifter.debrisAccumulation, 0.001f, "Walking away keeps the progress.");
+
+            controller.StartMiniGame(otherSifter);
+            Assert.AreEqual(4, CountActive(pieces), "Another sifter has its own, untouched round.");
+            controller.CloseMiniGame();
+
+            controller.StartMiniGame(sifter);
+            Assert.AreEqual(2, CountActive(pieces), "Coming back resumes with only the unsorted pieces.");
+            Assert.IsFalse(pieces[0].gameObject.activeSelf);
+            Assert.IsFalse(pieces[1].gameObject.activeSelf);
+            Assert.AreEqual(leftTypes[0], pieces[2].GetDebrisType(), "Remaining pieces look as they did.");
+            Assert.AreEqual(leftTypes[1], pieces[3].GetDebrisType());
+
+            Sort(pieces[2]);
+            Assert.AreEqual(25f, sifter.debrisAccumulation, 0.001f);
+            Sort(pieces[3]);
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsFalse(controller.IsRunning);
+            Assert.AreEqual(0f, sifter.debrisAccumulation, 0.001f);
+
+            sifter.debrisAccumulation = 100f;
+            controller.StartMiniGame(sifter);
+            Assert.AreEqual(4, CountActive(pieces), "A cleared sifter starts its next round fresh.");
+        }
+
+        [Test]
+        public void Minigame_ClosedInTheFrameOfTheLastSort_StillEndsCleared()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            var junk = CreateJunk("Caught Junk");
+            Enter(sifter, junk);
+            Assert.IsTrue(IsHeld(junk));
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            foreach (var piece in pieces) Sort(piece);
+            // Escape lands before LateUpdate gets to finish the round.
+            controller.CloseMiniGame();
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsFalse(controller.IsRunning);
+            CollectionAssert.IsEmpty(GetField<HashSet<IssueObject>>(sifter, "_heldIssues"),
+                "Sorting the last piece cleared the screen, so nothing it caught is still held.");
+        }
+
+        [Test]
+        public void Minigame_JunkLandingAfterTheLastSort_KeepsTheRoundGoing()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            foreach (var piece in pieces) Sort(piece);
+            sifter.debrisAccumulation = 50f;
+            controller.SendMessage("Update");
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsTrue(controller.IsRunning, "The new junk still has to be sorted.");
+            Assert.AreEqual(2, CountActive(pieces));
+            Assert.AreEqual(50f, sifter.debrisAccumulation, 0.001f, "Nothing new was cleared unsorted.");
+        }
+
+        [Test]
+        public void Minigame_PiecesTrackTheDebrisCaughtSinceTheLastVisit()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            Sort(pieces[0]);
+            Sort(pieces[1]);
+            Sort(pieces[2]);
+            Assert.AreEqual(25f, sifter.debrisAccumulation, 0.001f, "Three of four pieces take three quarters.");
+            var lastType = pieces[3].GetDebrisType();
+            controller.CloseMiniGame();
+
+            // More junk lands while the player is away: a quarter-full sifter climbs back to half.
+            sifter.debrisAccumulation = 50f;
+            controller.StartMiniGame(sifter);
+            Assert.AreEqual(2, CountActive(pieces), "Half a load is two pieces, not the one left last time.");
+            Assert.IsTrue(pieces[3].gameObject.activeSelf, "The piece left behind is still there.");
+            Assert.AreEqual(lastType, pieces[3].GetDebrisType());
+
+            Sort(pieces[3]);
+            Assert.AreEqual(25f, sifter.debrisAccumulation, 0.001f, "One piece is still only a quarter's worth.");
+            Assert.IsTrue(controller.IsRunning, "The new junk still has to be sorted.");
+
+            // And junk caught with the window open shows up straight away.
+            sifter.debrisAccumulation = 75f;
+            controller.SendMessage("Update");
+            Assert.AreEqual(3, CountActive(pieces));
+
+            controller.CloseMiniGame();
+            var fresh = CreateGameObject("Fresh Sifter").AddComponent<WasteSifter>();
+            fresh.maxDebrisAccumulation = 100f;
+            fresh.debrisAccumulation = 50f;
+            controller.StartMiniGame(fresh);
+            Assert.AreEqual(2, CountActive(pieces), "A sifter opened half full starts with half the pieces.");
+        }
+
+        [Test]
+        public void SortingDebris_BelowTheLimit_ReopensTheScreen()
+        {
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            var metal = CreateMetal("Metal");
+            Enter(sifter, metal);
+            var junk = CreateJunk("Late Junk");
+            Enter(sifter, junk);
+            Assert.IsTrue(junk.WasFlushedFromSifter, "A broken screen waves junk through.");
+
+            sifter.SortDebrisPiece(4);
+
+            var fresh = CreateJunk("Fresh Junk");
+            Enter(sifter, fresh);
+            Assert.IsTrue(IsHeld(fresh), "With debris back under the limit the screen catches junk again.");
+        }
+
+        [Test]
+        public void Minigame_PanelSwitchedOffFromOutside_CountsOnlyWhatWasSorted()
+        {
+            var controller = CreateMinigame(4, out var pieces);
+            var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
+            sifter.maxDebrisAccumulation = 100f;
+            sifter.debrisAccumulation = 100f;
+
+            controller.StartMiniGame(sifter);
+            Sort(pieces[0]);
+            GetField<GameObject>(controller, "minigamePanel").SetActive(false);
+            controller.SendMessage("LateUpdate");
+
+            Assert.IsFalse(controller.IsRunning);
+            Assert.AreEqual(75f, sifter.debrisAccumulation, 0.001f, "Pieces hidden with the panel weren't sorted.");
+            controller.StartMiniGame(sifter);
+            Assert.AreEqual(3, CountActive(pieces), "The round resumes where it was left.");
+        }
+
+        [Test]
+        public void MinigameBucket_GrowsWhileHovered_WithoutCompounding_AndRestsWhenHidden()
+        {
+            var bucket = CreateGameObject("Bucket").AddComponent<DebrisMiniBucket>();
+            var hover = new PointerEventData(null) { pointerDrag = CreateGameObject("Dragged Piece") };
+
+            bucket.OnPointerEnter(hover);
+            bucket.OnPointerEnter(hover);
+            Assert.Less(Vector3.Distance(Vector3.one * 1.2f, bucket.transform.localScale), 0.0001f,
+                "A second enter without an exit doesn't grow it again.");
+
+            // The window closing mid-drag never sends the exit.
+            bucket.gameObject.SetActive(false);
+            Assert.Less(Vector3.Distance(Vector3.one, bucket.transform.localScale), 0.0001f);
+        }
+
+        [Test]
+        public void Sifter_WithOnlyABladesAnimator_DoesNotDriveTheBladesAsItsGate()
+        {
+            var host = CreateGameObject("Sifter");
+            host.SetActive(false);
+            var blades = new GameObject("Blades").AddComponent<Animator>();
+            blades.transform.SetParent(host.transform, false);
+            var gate = new GameObject("Gate").AddComponent<Animator>();
+            gate.transform.SetParent(host.transform, false);
+            var sifter = host.AddComponent<WasteSifter>();
+            SetField(sifter, "bladesAnimator", blades);
+
+            host.SetActive(true);
+
+            Assert.AreSame(gate, GetField<Animator>(sifter, "gateAnimator"));
+        }
+
+        private SifterMiniGameController CreateMinigame(int pieceCount, out DebrisHandler[] pieces)
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var controller = CreateGameObject("Sifter Minigame").AddComponent<SifterMiniGameController>();
+            gm.sifterMiniController = controller;
+
+            var panel = CreateGameObject("Minigame Panel");
+            pieces = new DebrisHandler[pieceCount];
+            for (var i = 0; i < pieceCount; i++)
+            {
+                var piece = new GameObject($"Debris {i}", typeof(RectTransform), typeof(Image));
+                piece.transform.SetParent(panel.transform, false);
+                pieces[i] = piece.AddComponent<DebrisHandler>();
+            }
+
+            SetField(controller, "minigamePanel", panel);
+            panel.SetActive(false);
+            return controller;
+        }
+
+        private static void Sort(DebrisHandler piece)
+        {
+            piece.HandleBucketDrop(piece.GetDebrisType());
+            Assert.IsFalse(piece.gameObject.activeSelf);
+        }
+
+        private static int CountActive(DebrisHandler[] pieces)
+        {
+            var active = 0;
+            foreach (var piece in pieces)
+                if (piece.gameObject.activeSelf)
+                    active++;
+            return active;
         }
 
         private IssueObject CreateMetal(string name)
