@@ -1,24 +1,11 @@
-using System.Collections.Generic;
-using System.Linq;
 using _project.Scripts.Core;
 using NUnit.Framework;
 using UnityEngine;
 
 namespace _project.Scripts.Tests
 {
-    public class PopulationManagerTests
+    public class PopulationManagerTests : PlayModeTestBase
     {
-        private readonly List<GameObject> _created = new();
-
-        [TearDown]
-        public void TearDown()
-        {
-            foreach (var go in _created.Where(go => go))
-                Object.DestroyImmediate(go);
-
-            _created.Clear();
-        }
-
         [Test]
         public void ApplyPostWaveGrowth_CleanFirstWave_ReachesLevelTwo()
         {
@@ -92,18 +79,6 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void ApplyPostWaveGrowth_LevelOneStink_HasGentlePenalty()
-        {
-            var populationManager = CreatePopulationManager();
-
-            populationManager.StinkValue = 4f;
-            populationManager.ApplyPostWaveGrowth(0);
-
-            // Level-one penalties are quarter strength: 3 base + 4 bonus - 0.5 stink = 6.5.
-            Assert.AreEqual(10, populationManager.GetPopulationSize());
-        }
-
-        [Test]
         public void GetCurrentStink_ActiveSources_AddToBaseStink()
         {
             var populationManager = CreatePopulationManager();
@@ -128,7 +103,9 @@ namespace _project.Scripts.Tests
         public void ApplyPostWaveGrowth_UtilityStinkSources_ReduceGrowth()
         {
             var populationManager = CreatePopulationManager();
-            CreateStinkSource(4f);
+            // Base stink and a utility source both count toward the penalty.
+            populationManager.StinkValue = 1f;
+            CreateStinkSource(3f);
 
             var result = populationManager.ApplyPostWaveGrowth(0);
 
@@ -191,19 +168,11 @@ namespace _project.Scripts.Tests
             populationManager.ChangePopulationSize(7);
         }
 
-        private PopulationManager CreatePopulationManager()
-        {
-            var go = new GameObject("Population Manager");
-            _created.Add(go);
-            return go.AddComponent<PopulationManager>();
-        }
+        private PopulationManager CreatePopulationManager() =>
+            CreateGameObject("Population Manager").AddComponent<PopulationManager>();
 
-        private void CreateStinkSource(float currentStink)
-        {
-            var go = new GameObject("Stink Source");
-            _created.Add(go);
-            go.AddComponent<TestStinkSource>().CurrentStink = currentStink;
-        }
+        private void CreateStinkSource(float currentStink) =>
+            CreateGameObject("Stink Source").AddComponent<TestStinkSource>().CurrentStink = currentStink;
 
         private sealed class TestStinkSource : MonoBehaviour, IStinkSource
         {

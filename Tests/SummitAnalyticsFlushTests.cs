@@ -3,8 +3,6 @@ using System.Collections;
 using System.Reflection;
 using _project.Scripts.Core;
 using NUnit.Framework;
-using UnityEngine;
-using Object = UnityEngine.Object;
 
 namespace _project.Scripts.Tests
 {
@@ -14,22 +12,14 @@ namespace _project.Scripts.Tests
     ///     clear both queues before sending, so every performance-only flush
     ///     destroyed its samples, and no web session ever reported a framerate.
     /// </summary>
-    public class SummitAnalyticsFlushTests
+    public class SummitAnalyticsFlushTests : PlayModeTestBase
     {
         private SummitAnalytics _summit;
-        private GameObject _host;
 
         [SetUp]
         public void SetUp()
         {
-            _host = new GameObject("Summit");
-            _summit = _host.AddComponent<SummitAnalytics>();
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            if (_host) Object.DestroyImmediate(_host);
+            _summit = CreateGameObject("Summit").AddComponent<SummitAnalytics>();
         }
 
         [Test]
@@ -99,20 +89,6 @@ namespace _project.Scripts.Tests
             var flush = typeof(SummitAnalytics).GetMethod("Flush", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(flush);
             flush.Invoke(_summit, null);
-        }
-
-        private static T GetField<T>(object target, string fieldName)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Field {fieldName} not found; update this test.");
-            return (T)field.GetValue(target);
-        }
-
-        private static void SetField<T>(object target, string fieldName, T value)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Field {fieldName} not found; update this test.");
-            field.SetValue(target, value);
         }
     }
 }

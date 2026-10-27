@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using _project.Scripts.Core;
@@ -16,39 +15,55 @@ using Pointer = UnityEngine.InputSystem.Pointer;
 
 namespace _project.Scripts.Tests
 {
-    public class GameMasterTests
+    public class GameMasterTests : PlayModeTestBase
     {
-        private readonly List<GameObject> _created = new();
         private Mouse _panTestMouse;
         private Pointer _previousPointer;
+        private (InputSettings.BackgroundBehavior background,
+            InputSettings.EditorInputBehaviorInPlayMode editor, bool runInBackground)? _previousFocusSettings;
 
         [TearDown]
-        public void TearDown()
+        public void RestoreInputDevices()
         {
-            foreach (var go in _created.Where(go => go))
-                Object.DestroyImmediate(go);
-
-            _created.Clear();
+            // Derived teardowns run before the base one: destroy the controllers first, as the
+            // suite always has, so none of them sees the devices and settings change under it.
+            DestroyCreatedObjects();
             if (_panTestMouse != null && _panTestMouse.added)
                 InputSystem.RemoveDevice(_panTestMouse);
             if (_previousPointer != null && _previousPointer.added)
                 _previousPointer.MakeCurrent();
             _panTestMouse = null;
             _previousPointer = null;
+
+            if (_previousFocusSettings is { } previous)
+            {
+                InputSystem.settings.backgroundBehavior = previous.background;
+                InputSystem.settings.editorInputBehaviorInPlayMode = previous.editor;
+                Application.runInBackground = previous.runInBackground;
+                _previousFocusSettings = null;
+            }
+        }
+
+        // Queued mouse events only reach the pan action while the Game view has focus, which a
+        // batch run or a backgrounded Editor never has. All three overrides are needed; any two
+        // still leave the action idle.
+        private void RouteInputToGameRegardlessOfFocus()
+        {
+            var settings = InputSystem.settings;
+            _previousFocusSettings ??= (settings.backgroundBehavior, settings.editorInputBehaviorInPlayMode,
+                Application.runInBackground);
+            settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            settings.editorInputBehaviorInPlayMode =
+                InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            Application.runInBackground = true;
         }
 
         [Test]
         public void Awake_AssignsChildPathBuildBoard_WhenFieldIsUnset()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            boardGo.AddComponent<PathBuildBoard>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
 
-            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
-
-            Assert.IsNotNull(gameMaster.pathBuildBoard);
-            Assert.AreEqual(boardGo.GetComponent<PathBuildBoard>(), gameMaster.pathBuildBoard);
+            Assert.AreEqual(board, gameMaster.pathBuildBoard);
         }
 
         [Test]
@@ -56,7 +71,7 @@ namespace _project.Scripts.Tests
         {
             var manager = CreateGameObject("Shop UI").AddComponent<ShopManager>();
             var effect = CreateGameObject("Shop Item Effect");
-            SetPrivateField(manager, "shopItemHoverEffect", effect);
+            SetField(manager, "shopItemHoverEffect", effect);
             var itemDescription = effect.AddComponent<ItemDescription>();
             var textMeshProType = System.AppDomain.CurrentDomain.GetAssemblies()
                 .Select(assembly => assembly.GetType("TMPro.TextMeshProUGUI"))
@@ -64,8 +79,8 @@ namespace _project.Scripts.Tests
             Assert.IsNotNull(textMeshProType);
             var nameText = CreateGameObject("Item Name").AddComponent(textMeshProType);
             var descriptionText = CreateGameObject("Item Description").AddComponent(textMeshProType);
-            SetPrivateField(itemDescription, "itemNameText", nameText);
-            SetPrivateField(itemDescription, "itemDescriptionText", descriptionText);
+            SetField(itemDescription, "itemNameText", nameText);
+            SetField(itemDescription, "itemDescriptionText", descriptionText);
             var textProperty = textMeshProType.GetProperty("text");
             Assert.IsNotNull(textProperty);
             effect.SetActive(false);
@@ -108,11 +123,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void PathPieceShopItem_PurchaseActivatesBoardToolAndClearsQueuedPlacementSelection()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            var board = boardGo.AddComponent<PathBuildBoard>();
-            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
             var queuedItem = new TestPlaceable();
             var pipeShopItem = new PathPieceShopItem("Short Pipe", "", 1, 2, null, 4);
 
@@ -131,11 +142,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void PathBreakShopItem_PurchaseActivatesBoardBreakToolAndClearsQueuedPlacementSelection()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            var board = boardGo.AddComponent<PathBuildBoard>();
-            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
             var queuedItem = new TestPlaceable();
             var breakShopItem = new PathBreakShopItem("Break Pipe", "", 1, null);
 
@@ -152,11 +159,7 @@ namespace _project.Scripts.Tests
         [Test]
         public void PathBuildBoard_UpdateClearsActivePathTool_WhenUtilitySelectionIsPending()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            var board = boardGo.AddComponent<PathBuildBoard>();
-            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
             var queuedItem = new TestPlaceable();
             var pipe = new PathPiecePlaceable("Short Pipe", "", 1, 2, null, 4);
 
@@ -268,7 +271,7 @@ namespace _project.Scripts.Tests
             shopRoot.SetActive(false);
 
             var shopManager = shopRoot.AddComponent<ShopManager>();
-            SetPrivateField(shopManager, "shopPanel", shopPanel);
+            SetField(shopManager, "shopPanel", shopPanel);
             gameMaster.shopManager = shopManager;
 
             shopManager.OpenShop();
@@ -283,38 +286,34 @@ namespace _project.Scripts.Tests
             var controller = CreateGameObject("Camera Controller").AddComponent<CameraController>();
             var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
             var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
-            SetPrivateField(controller, "mainCamera", mainCamera);
-            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
+            SetField(controller, "mainCamera", mainCamera);
+            SetField(controller, "secondaryCamera", secondaryCamera);
 
             controller.Shake(1f);
-            var firstShake = GetPrivateField<object>(controller, "_shakeTween");
+            var firstShake = GetField<object>(controller, "_shakeTween");
 
             controller.Shake(1f);
-            Assert.AreSame(firstShake, GetPrivateField<object>(controller, "_shakeTween"));
+            Assert.AreSame(firstShake, GetField<object>(controller, "_shakeTween"));
 
             controller.StopShake();
             Assert.IsFalse(controller.IsShaking);
 
             controller.Shake(1f);
             Assert.IsTrue(controller.IsShaking);
-            Assert.AreNotSame(firstShake, GetPrivateField<object>(controller, "_shakeTween"));
+            Assert.AreNotSame(firstShake, GetField<object>(controller, "_shakeTween"));
         }
 
         [Test]
         public void CameraController_PanStopsAtBoardScaledLimit_AndRecenterReturnsHome()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            var board = boardGo.AddComponent<PathBuildBoard>();
-            gameMasterGo.AddComponent<GameMaster>();
-            var controller = gameMasterGo.AddComponent<CameraController>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
+            var controller = gameMaster.gameObject.AddComponent<CameraController>();
             var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
             var home = new Vector3(1f, 20f, -3f);
             secondaryCamera.transform.position = home;
-            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
-            SetPrivateField(controller, "panRange", 0.5f);
-            SetPrivateField(controller, "recenterDuration", 0f);
+            SetField(controller, "secondaryCamera", secondaryCamera);
+            SetField(controller, "panRange", 0.5f);
+            SetField(controller, "recenterDuration", 0f);
 
             var pitch = board.CellWorldPitch;
             var limit = new Vector2(board.Columns * pitch.x, board.Rows * pitch.y) * 0.25f;
@@ -383,7 +382,7 @@ namespace _project.Scripts.Tests
             var stoppedPosition = fixture.Camera.transform.position;
             if (_panTestMouse.added) SendPanMouse(new Vector2(500, 300), true);
             Assert.AreEqual(stoppedPosition, fixture.Camera.transform.position);
-            Assert.IsFalse(GetPrivateField<bool>(fixture.Controller, "_isPanning"));
+            Assert.IsFalse(GetField<bool>(fixture.Controller, "_isPanning"));
         }
 
         [Test]
@@ -432,10 +431,10 @@ namespace _project.Scripts.Tests
             CreateGameObject("Event System").AddComponent<EventSystem>();
             var canvasHost = new GameObject("Input Canvas", typeof(RectTransform), typeof(Canvas),
                 typeof(GraphicRaycaster));
-            _created.Add(canvasHost);
+            Track(canvasHost);
             canvasHost.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
             var buttonHost = new GameObject("Input Button", typeof(RectTransform), typeof(Image), typeof(Button));
-            _created.Add(buttonHost);
+            Track(buttonHost);
             var buttonRect = (RectTransform)buttonHost.transform;
             buttonRect.SetParent(canvasHost.transform, false);
             buttonRect.anchorMin = Vector2.zero;
@@ -452,22 +451,18 @@ namespace _project.Scripts.Tests
             SendPanMouse(uiPosition + new Vector2(10, 0), true);
 
             Assert.AreEqual(home, fixture.Camera.transform.position);
-            Assert.IsFalse(GetPrivateField<bool>(fixture.Controller, "_isPanning"));
+            Assert.IsFalse(GetField<bool>(fixture.Controller, "_isPanning"));
         }
 
         [Test]
         public void ShopManager_SelectPanTool_ArmsPanOnlyWhileThePlanningCameraIsActive()
         {
-            var gameMasterGo = CreateGameObject("Game Master");
-            var boardGo = CreateGameObject("Path Board");
-            boardGo.transform.SetParent(gameMasterGo.transform);
-            var board = boardGo.AddComponent<PathBuildBoard>();
-            var gameMaster = gameMasterGo.AddComponent<GameMaster>();
-            var controller = gameMasterGo.AddComponent<CameraController>();
+            var (gameMaster, board) = CreateGameMasterWithBoard();
+            var controller = gameMaster.gameObject.AddComponent<CameraController>();
             var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
             var secondaryCamera = CreateGameObject("Secondary Camera").AddComponent<Camera>();
-            SetPrivateField(controller, "mainCamera", mainCamera);
-            SetPrivateField(controller, "secondaryCamera", secondaryCamera);
+            SetField(controller, "mainCamera", mainCamera);
+            SetField(controller, "secondaryCamera", secondaryCamera);
             var shopManager = CreateGameObject("Shop UI").AddComponent<ShopManager>();
 
             gameMaster.placementInventory.Add(new TestPlaceable());
@@ -549,23 +544,46 @@ namespace _project.Scripts.Tests
             Assert.IsNull(gameMaster.PendingPlacement);
         }
 
+        [Test]
+        public void PointerUi_InputGuard_IgnoresPassiveGraphicsButBlocksButtons()
+        {
+            var passiveGraphic = CreateGameObject("Passive UI Graphic");
+            passiveGraphic.AddComponent<Image>();
+            var button = CreateGameObject("Interactive UI Button");
+            button.AddComponent<Button>();
+
+            var guard = typeof(PointerUi).GetMethod("HandlesPointerInput",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.IsNotNull(guard);
+            Assert.IsFalse((bool)guard.Invoke(null, new object[] { passiveGraphic }));
+            Assert.IsTrue((bool)guard.Invoke(null, new object[] { button }));
+        }
+
+        /// <summary>A GameMaster whose Awake picks up the path board parented beneath it.</summary>
+        private (GameMaster GameMaster, PathBuildBoard Board) CreateGameMasterWithBoard()
+        {
+            var host = CreateGameObject("Game Master");
+            var boardHost = CreateGameObject("Path Board");
+            boardHost.transform.SetParent(host.transform);
+            var board = boardHost.AddComponent<PathBuildBoard>();
+            return (host.AddComponent<GameMaster>(), board);
+        }
+
         private (CameraController Controller, PathBuildBoard Board, Camera Camera) CreatePanInputFixture()
         {
-            var gmHost = CreateGameObject("Game Master");
-            var boardHost = CreateGameObject("Path Board");
-            boardHost.transform.SetParent(gmHost.transform);
-            var board = boardHost.AddComponent<PathBuildBoard>();
-            var gm = gmHost.AddComponent<GameMaster>();
+            var (gm, board) = CreateGameMasterWithBoard();
             gm.turnController.enabled = false;
-            var controller = gmHost.AddComponent<CameraController>();
+            var controller = gm.gameObject.AddComponent<CameraController>();
             var mainCamera = CreateGameObject("Main Camera").AddComponent<Camera>();
             var camera = CreateGameObject("Planning Camera").AddComponent<Camera>();
             camera.transform.position = new Vector3(0, 10, 0);
             camera.transform.rotation = Quaternion.Euler(90, 0, 0);
             camera.pixelRect = new Rect(0, 0, 800, 600);
-            SetPrivateField(controller, "mainCamera", mainCamera);
-            SetPrivateField(controller, "secondaryCamera", camera);
-            SetPrivateField(controller, "recenterDuration", 0f);
+            SetField(controller, "mainCamera", mainCamera);
+            SetField(controller, "secondaryCamera", camera);
+            SetField(controller, "recenterDuration", 0f);
+            RouteInputToGameRegardlessOfFocus();
             _previousPointer = Pointer.current;
             _panTestMouse = InputSystem.AddDevice<Mouse>();
             return (controller, board, camera);
@@ -578,26 +596,6 @@ namespace _project.Scripts.Tests
             InputSystem.Update();
         }
 
-        private GameObject CreateGameObject(string name)
-        {
-            var go = new GameObject(name);
-            _created.Add(go);
-            return go;
-        }
-
-        private static void SetPrivateField<T>(T target, string fieldName, object value)
-        {
-            var field = typeof(T).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Expected private field '{fieldName}' on {typeof(T).Name}.");
-            field.SetValue(target, value);
-        }
-
-        private static TValue GetPrivateField<TValue>(object target, string fieldName)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Expected private field '{fieldName}' on {target.GetType().Name}.");
-            return (TValue)field.GetValue(target);
-        }
 
         private sealed class TestPlaceable : IPlaceable
         {

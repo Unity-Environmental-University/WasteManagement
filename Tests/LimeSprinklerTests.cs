@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Reflection;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
@@ -12,23 +10,11 @@ namespace _project.Scripts.Tests
     ///     the pit fills up. Placement is simulated by calling the same <c>SetSlot</c> hooks
     ///     <see cref="SpecialInteractController" /> calls when an item is dropped into a slot.
     /// </summary>
-    public class LimeSprinklerTests
+    public class LimeSprinklerTests : PlayModeTestBase
     {
         private const float BaseStink = 1f;
         private const float FullStinkBonus = 2f;
         private const float Reduction = 0.5f;
-
-        private readonly List<GameObject> _created = new();
-
-        [TearDown]
-        public void TearDown()
-        {
-            foreach (var go in _created)
-                if (go)
-                    Object.DestroyImmediate(go);
-
-            _created.Clear();
-        }
 
         [Test]
         public void SetSlot_ReducesStink_OfCesspitAlreadyAdjacent()
@@ -179,20 +165,6 @@ namespace _project.Scripts.Tests
                 $"fixture cell {cell} is off-board");
             Assert.AreEqual(cell, roundTrip, $"fixture cell {cell} did not round-trip");
             return position;
-        }
-
-        private GameObject CreateGameObject(string name)
-        {
-            var go = new GameObject(name);
-            _created.Add(go);
-            return go;
-        }
-
-        private static void SetField<T>(object target, string fieldName, T value)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Missing field {fieldName} on {target.GetType().Name}");
-            field.SetValue(target, value);
         }
     }
 }

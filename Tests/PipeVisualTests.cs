@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -6,19 +5,8 @@ using UnityEngine;
 
 namespace _project.Scripts.Tests
 {
-    public class PipeVisualTests
+    public class PipeVisualTests : PlayModeTestBase
     {
-        private readonly List<GameObject> _created = new();
-
-        [TearDown]
-        public void TearDown()
-        {
-            foreach (var gameObject in _created)
-                if (gameObject)
-                    Object.DestroyImmediate(gameObject);
-            _created.Clear();
-        }
-
         [Test]
         public void HorizontalRun_UsesOpenStraightTilesAtBothEnds()
         {
@@ -28,14 +16,10 @@ namespace _project.Scripts.Tests
             var visual = board.transform.Find("PipeVisuals/Placed Pipe 1");
             Assert.IsNotNull(visual);
             Assert.AreEqual(3, visual.childCount);
-            StringAssert.Contains("brick_straightPipe",
-                visual.Find("Pipe Tile 1,1").GetComponentInChildren<MeshFilter>().sharedMesh.name);
-            StringAssert.Contains("brick_straightPipe",
-                visual.Find("Pipe Tile 2,1").GetComponentInChildren<MeshFilter>().sharedMesh.name);
-            StringAssert.Contains("brick_straightPipe",
-                visual.Find("Pipe Tile 3,1").GetComponentInChildren<MeshFilter>().sharedMesh.name);
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(
-                visual.Find("Pipe Tile 2,1").localEulerAngles.y, 90f)), Is.LessThan(0.1f));
+            AssertMesh("brick_straightPipe", Tile(board, 1, 1, 1));
+            AssertMesh("brick_straightPipe", Tile(board, 1, 2, 1));
+            AssertMesh("brick_straightPipe", Tile(board, 1, 3, 1));
+            AssertYaw(Tile(board, 1, 2, 1), 90f);
         }
 
         [Test]
@@ -44,10 +28,7 @@ namespace _project.Scripts.Tests
             var board = CreateBoard();
             Place(board, 1, 1, 3, PathPieceOrientation.Vertical);
 
-            var visual = board.transform.Find("PipeVisuals/Placed Pipe 1");
-            Assert.IsNotNull(visual);
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(
-                visual.Find("Pipe Tile 1,2").localEulerAngles.y, 180f)), Is.LessThan(0.1f));
+            AssertYaw(Tile(board, 1, 1, 2), 180f);
         }
 
         [Test]
@@ -56,9 +37,8 @@ namespace _project.Scripts.Tests
             var board = CreateBoard();
             Place(board, 1, 1, 3, PathPieceOrientation.Horizontal);
 
-            var visual = board.transform.Find("PipeVisuals/Placed Pipe 1");
-            var leftBounds = visual.Find("Pipe Tile 1,1").GetComponentInChildren<Renderer>().bounds;
-            var middleBounds = visual.Find("Pipe Tile 2,1").GetComponentInChildren<Renderer>().bounds;
+            var leftBounds = RenderBounds(Tile(board, 1, 1, 1));
+            var middleBounds = RenderBounds(Tile(board, 1, 2, 1));
 
             // Tiles must close the cell gap and overlap enough to hide the seam, but not so far
             // that a tile intrudes visibly into its neighbour's cell.
@@ -73,10 +53,9 @@ namespace _project.Scripts.Tests
             Place(board, 1, 1, 2, PathPieceOrientation.Horizontal);
             Place(board, 2, 2, 2, PathPieceOrientation.Vertical);
 
-            var straight = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 1,1");
-            var corner = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 2,1");
-            StringAssert.Contains("brick_cornerPipe",
-                corner.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var straight = Tile(board, 1, 1, 1);
+            var corner = Tile(board, 1, 2, 1);
+            AssertMesh("brick_cornerPipe", corner);
 
             // X must equal Z, or the brick texture stretches along the flow axis and horizontal
             // runs stop matching vertical ones.
@@ -96,16 +75,13 @@ namespace _project.Scripts.Tests
             Place(board, 1, 1, 2, PathPieceOrientation.Horizontal);
             Place(board, 2, 2, 2, PathPieceOrientation.Vertical);
 
-            var firstVisual = board.transform.Find("PipeVisuals/Placed Pipe 1");
-            var corner = firstVisual.Find("Pipe Tile 2,1");
-            StringAssert.Contains("brick_cornerPipe",
-                corner.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var corner = Tile(board, 1, 2, 1);
+            AssertMesh("brick_cornerPipe", corner);
 
             // Cell 2,1 opens west (its own run) and north (the vertical piece). brick_cornerPipe is
             // authored north+west, so the source-axis correction alone should orient it: any other
             // angle presents a wall where the pipe has to open.
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(corner.localEulerAngles.y, 270f + 90f)),
-                Is.LessThan(0.1f));
+            AssertYaw(corner, 270f + 90f);
         }
 
         [Test]
@@ -118,13 +94,11 @@ namespace _project.Scripts.Tests
 
             // Cell 2,1 now opens east, west and north. Substituting brick_plusPipe here would
             // leave a fourth arm pointing south into a cell nothing connects to.
-            var tee = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 2,1");
-            StringAssert.Contains("brick_Tpipe",
-                tee.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var tee = Tile(board, 1, 2, 1);
+            AssertMesh("brick_Tpipe", tee);
 
             // The tee is authored closed on the south side, so zero board rotation is correct.
-            Assert.That(Mathf.Abs(Mathf.DeltaAngle(tee.localEulerAngles.y, 0f + 90f)),
-                Is.LessThan(0.1f));
+            AssertYaw(tee, 0f + 90f);
         }
 
         [Test]
@@ -134,15 +108,13 @@ namespace _project.Scripts.Tests
             Place(board, 1, 1, 3, PathPieceOrientation.Horizontal);
             Place(board, 1, 2, 3, PathPieceOrientation.Horizontal);
 
-            var lower = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 2,1");
-            var upper = board.transform.Find("PipeVisuals/Placed Pipe 2/Pipe Tile 2,2");
-            StringAssert.Contains("brick_straightPipe",
-                lower.GetComponentInChildren<MeshFilter>().sharedMesh.name);
-            StringAssert.Contains("brick_straightPipe",
-                upper.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var lower = Tile(board, 1, 2, 1);
+            var upper = Tile(board, 2, 2, 2);
+            AssertMesh("brick_straightPipe", lower);
+            AssertMesh("brick_straightPipe", upper);
 
-            var lowerBounds = lower.GetComponentInChildren<Renderer>().bounds;
-            var upperBounds = upper.GetComponentInChildren<Renderer>().bounds;
+            var lowerBounds = RenderBounds(lower);
+            var upperBounds = RenderBounds(upper);
             Assert.That(lowerBounds.max.z, Is.LessThan(upperBounds.min.z));
         }
 
@@ -161,22 +133,19 @@ namespace _project.Scripts.Tests
                 new Vector2Int(3, 2)
             });
 
-            var lowerCorner = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 2,1");
-            var upperCorner = board.transform.Find("PipeVisuals/Placed Pipe 2/Pipe Tile 2,2");
-            StringAssert.Contains("brick_cornerPipe",
-                lowerCorner.GetComponentInChildren<MeshFilter>().sharedMesh.name);
-            StringAssert.Contains("brick_cornerPipe",
-                upperCorner.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var lowerCorner = Tile(board, 1, 2, 1);
+            var upperCorner = Tile(board, 2, 2, 2);
+            AssertMesh("brick_cornerPipe", lowerCorner);
+            AssertMesh("brick_cornerPipe", upperCorner);
 
-            var offRouteCell = board.transform.Find("PipeVisuals/Placed Pipe 2/Pipe Tile 1,2");
-            StringAssert.Contains("brick_straightPipe",
-                offRouteCell.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var offRouteCell = Tile(board, 2, 1, 2);
+            AssertMesh("brick_straightPipe", offRouteCell);
 
-            var routeStart = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 1,1");
-            var startBounds = routeStart.GetComponentInChildren<Renderer>().bounds;
-            var lowerCornerBounds = lowerCorner.GetComponentInChildren<Renderer>().bounds;
-            var upperCornerBounds = upperCorner.GetComponentInChildren<Renderer>().bounds;
-            var offRouteBounds = offRouteCell.GetComponentInChildren<Renderer>().bounds;
+            var routeStart = Tile(board, 1, 1, 1);
+            var startBounds = RenderBounds(routeStart);
+            var lowerCornerBounds = RenderBounds(lowerCorner);
+            var upperCornerBounds = RenderBounds(upperCorner);
+            var offRouteBounds = RenderBounds(offRouteCell);
             // Route tiles are scaled like every other tile now, so the join is the seam overlap
             // rather than a bespoke overscan that made route pipes fatter than their neighbours.
             Assert.That(startBounds.max.x - lowerCornerBounds.min.x, Is.GreaterThan(0f));
@@ -213,29 +182,35 @@ namespace _project.Scripts.Tests
 
             board.SetPriorityVisualPath(primary, branchRouteCells: new[] { alternate });
 
-            var fork = board.transform.Find("PipeVisuals/Placed Pipe 1/Pipe Tile 1,2");
-            StringAssert.Contains("brick_Tpipe",
-                fork.GetComponentInChildren<MeshFilter>().sharedMesh.name);
+            var fork = Tile(board, 1, 1, 2);
+            AssertMesh("brick_Tpipe", fork);
         }
 
         private PathBuildBoard CreateBoard()
         {
-            var gameObject = new GameObject("Path Board");
-            _created.Add(gameObject);
-            var board = gameObject.AddComponent<PathBuildBoard>();
+            var board = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
             board.RebuildGrid();
             return board;
         }
 
         private static void Place(PathBuildBoard board, int column, int row, int length,
-            PathPieceOrientation orientation)
-        {
-            var piece = new PathPiecePlaceable("Pipe", string.Empty, 1, length, null, 0);
-            if (orientation == PathPieceOrientation.Vertical)
-                piece.ToggleOrientation();
+            PathPieceOrientation orientation) =>
+            Assert.IsNotNull(board.TryPlace(GetCell(board, column, row),
+                Pipe(length, orientation == PathPieceOrientation.Vertical)));
 
-            var cell = board.transform.Find($"Path Cell {column},{row}").GetComponent<PathBuildCell>();
-            Assert.IsNotNull(board.TryPlace(cell, piece));
+        private static Transform Tile(PathBuildBoard board, int piece, int column, int row)
+        {
+            var tile = board.transform.Find($"PipeVisuals/Placed Pipe {piece}/Pipe Tile {column},{row}");
+            Assert.IsNotNull(tile, $"Missing tile {column},{row} of placed pipe {piece}");
+            return tile;
         }
+
+        private static void AssertMesh(string meshName, Transform tile) =>
+            StringAssert.Contains(meshName, tile.GetComponentInChildren<MeshFilter>().sharedMesh.name, tile.name);
+
+        private static void AssertYaw(Transform tile, float degrees) =>
+            Assert.That(Mathf.Abs(Mathf.DeltaAngle(tile.localEulerAngles.y, degrees)), Is.LessThan(0.1f), tile.name);
+
+        private static Bounds RenderBounds(Transform tile) => tile.GetComponentInChildren<Renderer>().bounds;
     }
 }
