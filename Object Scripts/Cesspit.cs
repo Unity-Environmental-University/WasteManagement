@@ -24,6 +24,12 @@ namespace _project.Scripts.Object_Scripts
         [Min(1f)]
         private float metalDamageMultiplier = 15f;
 
+        [Tooltip("Once full, a pit keeps overflowing until lime drains it below this share of its capacity, " +
+                 "so a pit hovering at the brim doesn't restart its runaway timer every frame.")]
+        [SerializeField]
+        [Range(0f, 1f)]
+        private float overflowStopsBelow = 0.9f;
+
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
         [SerializeField] private float runawaySpawnInterval = 10f;
@@ -107,6 +113,13 @@ namespace _project.Scripts.Object_Scripts
                 StartRunaways();
         }
 
+        /// <summary>Breaks down <paramref name="amount" /> of what the pit holds (lime does this).</summary>
+        public void Drain(float amount)
+        {
+            if (amount <= 0f || fullness <= 0f) return;
+            SetFullness(fullness - amount);
+        }
+
         private void SetFullness(float newFullness)
         {
             fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
@@ -115,7 +128,15 @@ namespace _project.Scripts.Object_Scripts
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
 
             if (IsFull)
+            {
                 StartRunaways();
+            }
+            else if (_spawningRunaways && FullnessRatio < overflowStopsBelow)
+            {
+                // Drained well back under the brim: the pit stops overflowing.
+                PauseRunaways();
+                _spawningRunaways = false;
+            }
         }
 
         public void OnPointerClick(PointerEventData eventData)
