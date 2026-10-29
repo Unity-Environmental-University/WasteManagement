@@ -31,6 +31,9 @@ namespace _project.Scripts.Object_Scripts
         private MeshRenderer _meshRenderer;
         private Mesh _mesh;
         private Material _generatedMaterial;
+        private MaterialPropertyBlock _propertyBlock;
+        private bool _exactTint;
+
 
         private AnimationCurve _widthCurve = AnimationCurve.Constant(0f, 1f, 1f);
         private float _widthMultiplier = 1f;
@@ -60,6 +63,8 @@ namespace _project.Scripts.Object_Scripts
         {
             EnsureComponents();
             _meshRenderer.sharedMaterial = IsUsable(material) ? material : GetFallbackMaterial();
+            // Re-read the new material's alpha.
+            if (_exactTint) ApplyExactTint();
             if (widthCurve != null && widthCurve.length > 0) _widthCurve = widthCurve;
             _widthMultiplier = Mathf.Max(0.001f, widthMultiplier);
         }
@@ -70,9 +75,14 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         /// <param name="up">Reference up axis used to orient each ring (usually the board's up).</param>
         /// <param name="color">Per-vertex tint multiplied into the water shader.</param>
-        public void SetPath(IReadOnlyList<Vector3> points, Vector3 up, Color color)
+        /// <param name="exactTint">
+        ///     Neutralize the material's own base tint so <paramref name="color" /> shows as-is,
+        ///     for streams that must match a UI color.
+        /// </param>
+        public void SetPath(IReadOnlyList<Vector3> points, Vector3 up, Color color, bool exactTint = false)
         {
             EnsureComponents();
+            SetExactTint(exactTint);
 
             if (points == null || points.Count < 2)
             {
@@ -219,6 +229,29 @@ namespace _project.Scripts.Object_Scripts
                 _uvs.Add(new Vector2(u, 0.5f + 0.5f * cos));
                 _colors.Add(color);
             }
+        }
+
+        private void SetExactTint(bool exact)
+        {
+            if (exact == _exactTint) return;
+            _exactTint = exact;
+            if (!exact)
+            {
+                _meshRenderer.SetPropertyBlock(null);
+                return;
+            }
+
+            ApplyExactTint();
+        }
+
+        private void ApplyExactTint()
+        {
+            var material = _meshRenderer.sharedMaterial;
+            var baseColorId = RendererColorUtility.BaseColorId;
+            var alpha = material && material.HasProperty(baseColorId) ? material.GetColor(baseColorId).a : 1f;
+            _propertyBlock ??= new MaterialPropertyBlock();
+            _propertyBlock.SetColor(baseColorId, new Color(1f, 1f, 1f, alpha));
+            _meshRenderer.SetPropertyBlock(_propertyBlock);
         }
 
         private void EnsureComponents()

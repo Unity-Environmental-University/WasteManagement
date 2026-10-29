@@ -1,5 +1,7 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
@@ -337,6 +339,154 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitter_ThreeOutputsHaveDistinctRoutesAndExactShares()
+        {
+            var fixture = CreateSplitPathFixture();
+            PlaceVertical(fixture.Board, 0, 2, 7);
+            var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out var second));
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out var third, 2));
+            Assert.AreNotEqual(second, third);
+            splitter.SetShares(20, 50);
+            var counts = new int[3];
+            for (var i = 0; i < 100; i++)
+            {
+                var issue = CreateGameObject($"Issue {i}").AddComponent<IssueObject>();
+                issue.SetPath(fixture.Path);
+                Assert.IsTrue(splitter.RouteIssue(issue));
+                var route = issue.GetRouteIndex();
+                counts[route == 0 ? 0 : route == second ? 1 : 2]++;
+                Assert.IsFalse(splitter.RouteIssue(issue), "The same issue is routed only once.");
+            }
+            CollectionAssert.AreEqual(new[] {20, 30, 50}, counts);
+            splitter.SetRule(IssueType.NonWaste, SplitterRule.ThirdOnly);
+            Assert.AreEqual(2, splitter.ChooseOutput(IssueType.NonWaste));
+            Assert.AreEqual(0, splitter.ChooseOutput(IssueType.NonWaste, false));
+        }
+
+        [Test]
+        public void PathSplitter_FinishedLoopBesideAnUnfinishedStub_StillGetsTheBranchTraffic()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            // A dead-end stub to the right, searched first, and a finished loop to the left that rejoins at (1,8).
+            PlaceHorizontal(fixture.Board, 2, 2, 1);
+            PlaceVertical(fixture.Board, 0, 2, 7);
+            var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
+            Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out _),
+                "The stub keeps output 2's number while it's unfinished.");
+            Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out var loop, 2));
+
+            var counts = new int[3];
+            for (var i = 0; i < 100; i++)
+            {
+                var issue = CreateGameObject($"Issue {i}").AddComponent<IssueObject>();
+                issue.SetPath(fixture.Path);
+                Assert.IsTrue(splitter.RouteIssue(issue));
+                counts[issue.GetRouteIndex() == loop ? 2 : issue.GetRouteIndex() == 0 ? 0 : 1]++;
+            }
+
+            CollectionAssert.AreEqual(new[]
+            {
+                splitter.MainSharePercent, 0, splitter.BranchSharePercent + splitter.ThirdSharePercent
+            }, counts, "The loop takes the stub's share as well as its own.");
+            splitter.SetRule(IssueType.Organic, SplitterRule.BranchOnly);
+            Assert.AreEqual(2, splitter.ChooseOutput(IssueType.Organic, true, false));
+        }
+
+        [Test]
+        public void PathSplitter_ColorsEachOutletLikeTheRouteItFeeds()
+        {
+            var fixture = CreateSplitPathFixture();
+            PlaceVertical(fixture.Board, 0, 2, 7);
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var cell = new Vector2Int(1, 2);
+            var host = CreateGameObject("Path Splitter");
+            host.transform.position = CellTop(fixture, cell.x, cell.y);
+            var stubs = new Dictionary<Vector2Int, Renderer>();
+            foreach (var side in new[] { Vector2Int.down, Vector2Int.up, Vector2Int.right, Vector2Int.left })
+            {
+                var stub = CreatePrimitive($"Model_Pipe {side}");
+                stub.transform.SetParent(host.transform, false);
+                stub.transform.position = Vector3.Lerp(host.transform.position,
+                    CellTop(fixture, cell.x + side.x, cell.y + side.y), 0.4f);
+                stubs[cell + side] = stub.GetComponent<Renderer>();
+            }
+
+            host.AddComponent<PathSplitter>();
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            var block = new MaterialPropertyBlock();
+            var expected = new MaterialPropertyBlock();
+            for (var output = 0; output < 3; output++)
+            {
+                var route = 0;
+                if (output > 0)
+                    Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, host.transform.position, out route, output));
+                var cells = fixture.Path.GetRouteCells(route).ToList();
+                var exit = cells[cells.IndexOf(cell) + 1];
+
+                stubs[exit].GetPropertyBlock(block);
+                expected.SetColor("_BaseColor", PathSplitter.OutputColor(output));
+                Assert.AreEqual(expected.GetColor("_BaseColor"), block.GetColor("_BaseColor"),
+                    $"The stub leading down output {output + 1}'s route wears its color.");
+            }
+
+            stubs[cell + Vector2Int.down].GetPropertyBlock(block);
+            Assert.IsTrue(block.isEmpty, "The intake keeps the model's own look.");
+        }
+
+        [Test]
+        public void PathSplitter_UnavailableOutputRenormalizesTheOtherShares()
+        {
+            var splitter = CreateGameObject("Splitter").AddComponent<PathSplitter>();
+            splitter.SetShares(20, 60);
+            var counts = new int[3];
+            for (var i = 0; i < 100; i++) counts[splitter.ChooseOutput(IssueType.Organic, false)]++;
+            CollectionAssert.AreEqual(new[] {50, 50, 0}, counts);
+            splitter.SetShares(0, 100);
+            Assert.AreEqual(0, splitter.ChooseOutput(IssueType.Organic, false));
+            splitter.SetShares(90, 90);
+            Assert.AreEqual(100, splitter.MainSharePercent + splitter.BranchSharePercent + splitter.ThirdSharePercent);
+        }
+
+        [Test]
+        public void PathSplitter_SavedSharesOver100_TrimTheThirdOutlet()
+        {
+            var host = CreateGameObject("Splitter");
+            host.SetActive(false);
+            var splitter = host.AddComponent<PathSplitter>();
+            SetField(splitter, "mainSharePercent", 80);
+            SetField(splitter, "thirdSharePercent", 50);
+
+            host.SetActive(true);
+
+            Assert.AreEqual(80, splitter.MainSharePercent);
+            Assert.AreEqual(20, splitter.ThirdSharePercent);
+            Assert.AreEqual(0, splitter.BranchSharePercent, "The branch never goes negative.");
+        }
+
+        [Test]
+        public void SplitRatioTriangle_CornersAndOutsideDragStayNormalized()
+        {
+            var triangle = CreateGameObject("Triangle").AddComponent<SplitRatioTriangle>();
+            triangle.rectTransform.sizeDelta = new Vector2(240, 180);
+            var pick = typeof(SplitRatioTriangle).GetMethod("Pick", BindingFlags.Instance | BindingFlags.NonPublic);
+            var rect = triangle.rectTransform.rect;
+            pick.Invoke(triangle, new object[] {new Vector2(rect.center.x, rect.yMax - 18)});
+            Assert.AreEqual(new Vector3(0, 0, 1), triangle.Shares);
+            pick.Invoke(triangle, new object[] {new Vector2(rect.xMin + 18, rect.yMin + 18)});
+            Assert.AreEqual(new Vector3(1, 0, 0), triangle.Shares);
+            pick.Invoke(triangle, new object[] {new Vector2(999, -999)});
+            Assert.AreEqual(new Vector3(0, 1, 0), triangle.Shares);
+            pick.Invoke(triangle, new object[] {Vector2.zero});
+            Assert.AreEqual(1, triangle.Shares.x + triangle.Shares.y + triangle.Shares.z, .00001f);
+        }
+
+        [Test]
         public void PathSplitter_DoesNothing_WhenThereIsOnlyOneCompleteRoute()
         {
             var fixture = CreatePathFixture();
@@ -368,15 +518,30 @@ namespace _project.Scripts.Tests
 
             Assert.IsTrue(panel.IsOpen);
             Assert.IsTrue(window.activeSelf);
-            var slider = panel.GetComponentInChildren<Slider>();
-            Assert.AreEqual(10f, slider.value);
+            var triangle = panel.GetComponentInChildren<SplitRatioTriangle>(true);
+            Assert.IsNotNull(triangle);
+            Assert.IsNotNull(triangle.GetComponent<CanvasRenderer>(), "Without a CanvasRenderer the triangle never draws.");
 
-            slider.value = 15f;
-            Assert.AreEqual(75, splitter.MainSharePercent);
+            // Without a second branch the panel keeps the two-way slider.
+            Assert.AreEqual(1, panel.SliderOutput);
+            Assert.IsFalse(triangle.gameObject.activeInHierarchy, "The triangle waits for a second branch.");
+            var slider = panel.GetComponentInChildren<Slider>();
+            Assert.IsNotNull(slider, "One branch splits with the slider.");
+            Assert.IsFalse(window.transform.Find("NON-WASTE Row/THIRD Button").GetComponent<Button>().interactable);
+            slider.value = 14;
+            Assert.AreEqual(70, splitter.MainSharePercent);
+            Assert.AreEqual(30, splitter.BranchSharePercent);
+            Assert.AreEqual(0, splitter.ThirdSharePercent);
+
+            window.transform.Find("NON-WASTE Row/THIRD Button").GetComponent<Button>().onClick.Invoke();
+            Assert.AreEqual(SplitterRule.ThirdOnly, splitter.GetRule(IssueType.NonWaste));
 
             window.transform.Find("NON-WASTE Row/BRANCH Button").GetComponent<Button>().onClick.Invoke();
             Assert.AreEqual(SplitterRule.BranchOnly, splitter.GetRule(IssueType.NonWaste));
             Assert.AreEqual(SplitterRule.Split, splitter.GetRule(IssueType.Organic));
+
+            window.transform.Find("METAL Row/MAIN Button").GetComponent<Button>().onClick.Invoke();
+            Assert.AreEqual(SplitterRule.MainOnly, splitter.GetRule(IssueType.Metal));
 
             window.transform.Find("Header/CLOSE Button").GetComponent<Button>().onClick.Invoke();
             Assert.IsFalse(panel.IsOpen);
@@ -389,6 +554,34 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(window.activeSelf);
         }
 
+        [Test]
+        public void PathSplitterPanel_UsesTheTriangleOnlyWhileBothBranchesHavePipe()
+        {
+            var fixture = CreateSplitPathFixture();
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<PathSplitterPanel>(
+                "Assets/_project/Prefabs/UI/PathSplitterPanel.prefab");
+            var canvas = CreateGameObject("Canvas").AddComponent<Canvas>();
+            var panel = Object.Instantiate(prefab, canvas.transform);
+            var thirdButton = panel.transform.Find("Window/NON-WASTE Row/THIRD Button").GetComponent<Button>();
+            var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
+            Assert.IsTrue(fixture.Path.Rebuild());
+
+            panel.Show(splitter);
+            Assert.AreEqual(1, panel.SliderOutput);
+            Assert.IsNotNull(panel.GetComponentInChildren<Slider>());
+            Assert.IsNull(panel.GetComponentInChildren<SplitRatioTriangle>());
+            Assert.IsFalse(thirdButton.interactable);
+
+            // Laying the second branch while the window is open swaps in the triangle.
+            PlaceVertical(fixture.Board, 0, 2, 7);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            panel.SendMessage("Update");
+
+            Assert.AreEqual(-1, panel.SliderOutput);
+            Assert.IsNotNull(panel.GetComponentInChildren<SplitRatioTriangle>());
+            Assert.IsNull(panel.GetComponentInChildren<Slider>());
+            Assert.IsTrue(thirdButton.interactable);
+        }
 #endif
 
         /// <summary>

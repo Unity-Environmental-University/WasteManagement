@@ -56,38 +56,20 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color completePreviewColor = new(0.35f, 0.9f, 1f, 0.9f);
         [SerializeField] private Color incompletePreviewColor = new(1f, 0.7f, 0.2f, 0.9f);
 
-        // The water shader multiplies these into its blue, so they read darker and cooler on screen
-        // than they look here; warm hues need a strong red to stay distinct.
-        [Tooltip("Colors for the fork-to-rejoin branches splitters create, one per splitter in route order, " +
-                 "cycling when there are more splitters than colors.")]
-        [SerializeField]
-        private Color[] branchPreviewColors =
-        {
-            new(1f, 0.60f, 0.16f, 0.9f),    // amber
-            new(0.68f, 0.52f, 0.96f, 0.9f), // violet
-            new(0.52f, 0.88f, 0.42f, 0.9f), // sage
-            new(0.92f, 0.46f, 0.56f, 0.9f), // rose
-            new(0.86f, 0.80f, 0.32f, 0.9f)  // gold
-        };
-
         [Tooltip("Tube width when the board has no authored preview LineRenderer to copy width from.")]
         [SerializeField]
         [Min(0.01f)]
         private float previewWidth = 0.12f;
 
+        [Tooltip("Lift above the board for the live path and the source-to-start streams that feed it.")]
         [SerializeField] [Min(0f)] private float previewHeightOffset = 0.2f;
-
-        [Tooltip("Lift the source-to-start streams above surrounding geometry so the Game camera can see them.")]
-        [SerializeField]
-        [Min(0f)]
-        private float originPreviewHeightOffset = 1.5f;
 
         // Upper bound on routes, so a board crowded with splitters can't multiply them without limit.
         private const int MaxRoutes = 32;
 
         // Which route a splitter sends an issue down: keyed by the route the issue is on and the
         // splitter's cell. Only Rebuild() changes it, so it always matches _routes while issues travel.
-        private readonly Dictionary<(int route, Vector2Int cell), int> _branchRoutes = new();
+        private readonly Dictionary<(int route, Vector2Int cell, int output), int> _branchRoutes = new();
 
         // One water tube per distinct splitter branch the live preview draws.
         private readonly List<PathWaterTube> _branchLivePreviews = new();
@@ -290,8 +272,8 @@ namespace _project.Scripts.Object_Scripts
             }
 
             _previewPoints.Clear();
-            _previewPoints.Add(GetOriginPreviewPosition(origin.position));
-            _previewPoints.Add(GetOriginPreviewPosition(startPoint.position));
+            _previewPoints.Add(GetPreviewPosition(origin.position));
+            _previewPoints.Add(GetPreviewPosition(startPoint.position));
             tube.SetPath(_previewPoints, GetPreviewUp(), color);
         }
 
@@ -303,8 +285,8 @@ namespace _project.Scripts.Object_Scripts
         {
             if (!origin) return;
 
-            var previewOrigin = GetOriginPreviewPosition(origin.position);
-            var target = GetOriginPreviewPosition(startPoint
+            var previewOrigin = GetPreviewPosition(origin.position);
+            var target = GetPreviewPosition(startPoint
                 ? startPoint.position
                 : _waypoints.Count > 0
                     ? _waypoints[0]
@@ -436,11 +418,11 @@ namespace _project.Scripts.Object_Scripts
         ///     Finds the branch an issue on <paramref name="routeIndex" /> takes when a splitter at
         ///     <paramref name="worldPosition" /> diverts it. False when that route doesn't fork there.
         /// </summary>
-        public bool TryGetBranchRoute(int routeIndex, Vector3 worldPosition, out int branchRouteIndex)
+        public bool TryGetBranchRoute(int routeIndex, Vector3 worldPosition, out int branchRouteIndex, int output = 1)
         {
             branchRouteIndex = -1;
             return pathBuildBoard && pathBuildBoard.TryWorldToCell(worldPosition, out var cell) &&
-                   _branchRoutes.TryGetValue((routeIndex, cell), out branchRouteIndex);
+                   _branchRoutes.TryGetValue((routeIndex, cell, output), out branchRouteIndex);
         }
 
         /// <summary>
@@ -473,7 +455,7 @@ namespace _project.Scripts.Object_Scripts
         ///     where the live routes leave it: the lane that carries on, and the branch that forks
         ///     off there. An offset already set, or with no route on that side, is left alone.
         /// </summary>
-        public void GetOutletOffsets(Vector3 worldPosition, ref Vector3? main, ref Vector3? branch)
+        public void GetOutletOffsets(Vector3 worldPosition, ref Vector3? main, ref Vector3? branch, ref Vector3? third)
         {
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return;
 
@@ -485,11 +467,11 @@ namespace _project.Scripts.Object_Scripts
                 var index = route.Cells.IndexOf(cell);
                 if (index < 0) continue;
 
-                ref var outlet = ref route.ForkIndex == index ? ref branch : ref main;
-                if (outlet.HasValue) continue;
-
                 GetRouteNeighbors(route.Cells, route.Complete, index, out _, out var next);
-                outlet = next - current;
+                var offset = next - current;
+                if (route.ForkIndex != index) main ??= offset;
+                else if (route.Output == 1) branch ??= offset;
+                else third ??= offset;
             }
         }
 
@@ -704,13 +686,14 @@ namespace _project.Scripts.Object_Scripts
                 _previewPoints.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(cell, PathKind)));
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
-            tube.SetPath(_previewPoints, GetPreviewUp(), complete ? completePreviewColor : incompletePreviewColor);
+            // Splitter outlet colors must match the panel exactly, so they replace the water's own tint.
+            if (complete) tube.SetPath(_previewPoints, GetPreviewUp(), PathSplitter.OutputColor(0), true);
+            else tube.SetPath(_previewPoints, GetPreviewUp(), incompletePreviewColor);
             if (_previewRoutes.Count == 1) return;
 
             // Routes that reach the same splitter from different directions share its branch once
             // they have rejoined, so each distinct stretch of pipe is drawn only once.
             var drawnBranches = new HashSet<(Vector2Int fork, Vector2Int exit, Vector2Int end)>();
-            var splitterColors = new Dictionary<Vector2Int, int>();
             var branchTubeCount = 0;
             for (var i = 1; i < _previewRoutes.Count; i++)
             {
@@ -731,13 +714,7 @@ namespace _project.Scripts.Object_Scripts
                 for (var p = 0; p < _previewPoints.Count; p++)
                     _previewPoints[p] += surfaceLift;
 
-                if (!splitterColors.TryGetValue(route.ForkCell, out var colorIndex))
-                {
-                    colorIndex = splitterColors.Count;
-                    splitterColors.Add(route.ForkCell, colorIndex);
-                }
-
-                branchTube.SetPath(_previewPoints, GetPreviewUp(), GetBranchPreviewColor(colorIndex));
+                branchTube.SetPath(_previewPoints, GetPreviewUp(), PathSplitter.OutputColor(route.Output), true);
             }
         }
 
@@ -745,13 +722,6 @@ namespace _project.Scripts.Object_Scripts
         {
             for (var i = 1; i < routes.Count; i++)
                 yield return routes[i].Cells;
-        }
-
-        private Color GetBranchPreviewColor(int colorIndex)
-        {
-            return branchPreviewColors is { Length: > 0 }
-                ? branchPreviewColors[colorIndex % branchPreviewColors.Length]
-                : incompletePreviewColor;
         }
 
         /// <summary>
@@ -776,11 +746,6 @@ namespace _project.Scripts.Object_Scripts
         private Vector3 GetPreviewPosition(Vector3 worldPosition)
         {
             return worldPosition + GetPreviewUp() * previewHeightOffset;
-        }
-
-        private Vector3 GetOriginPreviewPosition(Vector3 worldPosition)
-        {
-            return worldPosition + GetPreviewUp() * originPreviewHeightOffset;
         }
 
         private PathWaterTube GetLivePreviewTube()
@@ -1004,7 +969,7 @@ namespace _project.Scripts.Object_Scripts
         ///     goal yet still gets that branch as far as it has been built.
         /// </summary>
         private void AddSplitterBranches(List<Route> routes,
-            Dictionary<(int route, Vector2Int cell), int> branchLookup,
+            Dictionary<(int route, Vector2Int cell, int output), int> branchLookup,
             List<Vector2Int> goals, bool allowUnfinished)
         {
             if (PathKind != PathKind.Pipe) return;
@@ -1019,13 +984,19 @@ namespace _project.Scripts.Object_Scripts
                     var cell = route.Cells[forkIndex];
                     if (!_splitterCells.Contains(cell)) continue;
 
-                    var branch = FindBranchFrom(routes, routeIndex, forkIndex, goals, false);
-                    if (branch == null && allowUnfinished)
-                        branch = FindBranchFrom(routes, routeIndex, forkIndex, goals, true);
-                    if (branch == null) continue;
-
-                    if (branchLookup != null) branchLookup[(routeIndex, cell)] = routes.Count;
-                    routes.Add(branch);
+                    var usedExits = new HashSet<Vector2Int>();
+                    for (var output = 1; output <= 2 && routes.Count < MaxRoutes; output++)
+                    {
+                        // Search partial and complete exits in the same direction order so the
+                        // numbered outlets stay stable when an unfinished branch is completed.
+                        var branch = FindBranchFrom(routes, routeIndex, forkIndex, goals, true, usedExits);
+                        if (branch == null) break;
+                        usedExits.Add(branch.Cells[forkIndex + 1]);
+                        if (!allowUnfinished && !branch.Complete) continue;
+                        branch.Output = output;
+                        if (branchLookup != null) branchLookup[(routeIndex, cell, output)] = routes.Count;
+                        routes.Add(branch);
+                    }
                 }
             }
         }
@@ -1044,7 +1015,7 @@ namespace _project.Scripts.Object_Scripts
                 var branch = FindBranchFrom(_routes, 0, forkIndex, goals, false);
                 if (branch == null) continue;
 
-                _branchRoutes[(0, main.Cells[forkIndex])] = _routes.Count;
+                _branchRoutes[(0, main.Cells[forkIndex], 1)] = _routes.Count;
                 _routes.Add(branch);
                 return;
             }
@@ -1057,7 +1028,7 @@ namespace _project.Scripts.Object_Scripts
         ///     already uses, it joins that route and carries on as part of it.
         /// </summary>
         private Route FindBranchFrom(List<Route> routes, int parentIndex, int forkIndex,
-            List<Vector2Int> goals, bool allowPartial)
+            List<Vector2Int> goals, bool allowPartial, HashSet<Vector2Int> usedExits = null)
         {
             var parent = routes[parentIndex].Cells;
             var fork = parent[forkIndex];
@@ -1070,7 +1041,8 @@ namespace _project.Scripts.Object_Scripts
             foreach (var direction in Directions)
             {
                 var exit = fork + direction;
-                if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0) continue;
+                if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0 ||
+                    (usedExits != null && usedExits.Contains(exit))) continue;
                 if (!pathBuildBoard.IsOccupied(exit, PathKind)) continue;
 
                 var branch = new Route { ForkIndex = forkIndex };
@@ -1221,6 +1193,9 @@ namespace _project.Scripts.Object_Scripts
             public int JoinIndex = -1;
 
             public bool Complete;
+
+            // Which splitter outlet feeds this branch (1 or 2), matching PathSplitter's output index.
+            public int Output = 1;
 
             public Route() : this(new List<Vector2Int>(), new List<Vector3>())
             {
