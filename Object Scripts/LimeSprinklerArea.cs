@@ -16,18 +16,23 @@ namespace _project.Scripts.Object_Scripts
 
         private readonly List<Renderer> _tiles = new(9);
         private readonly List<Vector2Int> _cells = new(9);
+        private Material _material;
         private MaterialPropertyBlock _propertyBlock;
 
         /// <summary>
-        ///     Fills <paramref name="result" /> with the 3x3 block of in-bounds cells centred on
-        ///     <paramref name="center" />, in column-major order.
+        ///     Fills <paramref name="result" /> with the <paramref name="size" /> x <paramref name="size" />
+        ///     block of in-bounds cells centred on <paramref name="center" />, in column-major order.
+        ///     An even size can't centre on a cell, so its extra row and column fall on the far side.
         /// </summary>
-        public static void GetCells(PathBuildBoard board, Vector2Int center, List<Vector2Int> result)
+        public static void GetCells(PathBuildBoard board, Vector2Int center, int size, List<Vector2Int> result)
         {
             result.Clear();
+            size = Mathf.Max(1, size);
+            var low = -(size - 1) / 2;
+            var high = low + size - 1;
 
-            for (var columnOffset = -1; columnOffset <= 1; columnOffset++)
-            for (var rowOffset = -1; rowOffset <= 1; rowOffset++)
+            for (var columnOffset = low; columnOffset <= high; columnOffset++)
+            for (var rowOffset = low; rowOffset <= high; rowOffset++)
             {
                 var cell = new Vector2Int(center.x + columnOffset, center.y + rowOffset);
                 if (board.IsCellInBounds(cell)) result.Add(cell);
@@ -38,30 +43,37 @@ namespace _project.Scripts.Object_Scripts
         public static LimeSprinklerArea Create(string name, Material material)
         {
             var area = new GameObject(name).AddComponent<LimeSprinklerArea>();
-            for (var i = 0; i < 9; i++)
-            {
-                var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                tile.name = $"Tile {i}";
-                // Purely visual: the tiles must not catch clicks meant for slots, cells or pipes.
-                Destroy(tile.GetComponent<Collider>());
-                tile.transform.SetParent(area.transform, false);
-
-                var tileRenderer = tile.GetComponent<Renderer>();
-                if (material) tileRenderer.sharedMaterial = material;
-                tileRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                tileRenderer.receiveShadows = false;
-                area._tiles.Add(tileRenderer);
-            }
-
+            area._material = material;
             area.gameObject.SetActive(false);
             return area;
         }
 
+        // Tiles are added as the area grows with the town's level and kept for reuse after that.
+        private Renderer GetTile(int index)
+        {
+            while (_tiles.Count <= index)
+            {
+                var tile = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                tile.name = $"Tile {_tiles.Count}";
+                // Purely visual: the tiles must not catch clicks meant for slots, cells or pipes.
+                Destroy(tile.GetComponent<Collider>());
+                tile.transform.SetParent(transform, false);
+
+                var tileRenderer = tile.GetComponent<Renderer>();
+                if (_material) tileRenderer.sharedMaterial = _material;
+                tileRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                tileRenderer.receiveShadows = false;
+                _tiles.Add(tileRenderer);
+            }
+
+            return _tiles[index];
+        }
+
         /// <summary>
-        ///     Shows the 3x3 block around the cell under <paramref name="worldPosition" />. Hides the
-        ///     area instead when that position is off-board.
+        ///     Shows the <paramref name="areaSize" /> x <paramref name="areaSize" /> block around the cell under
+        ///     <paramref name="worldPosition" />. Hides the area instead when that position is off-board.
         /// </summary>
-        public void Show(PathBuildBoard board, Vector3 worldPosition, Color color)
+        public void Show(PathBuildBoard board, Vector3 worldPosition, int areaSize, Color color)
         {
             if (!board || !board.TryWorldToCell(worldPosition, out var center))
             {
@@ -69,7 +81,8 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            GetCells(board, center, _cells);
+            GetCells(board, center, areaSize, _cells);
+            if (_cells.Count > 0) GetTile(_cells.Count - 1);
 
             var boardTransform = board.transform;
             var size = board.CellWorldSize;

@@ -183,6 +183,7 @@ namespace _project.Scripts.Object_Scripts
 
             RefreshVisuals();
             PathSplitter.AvailabilityChanged += RefreshWaypointPaths;
+            Receptacle.AvailabilityChanged += RefreshWaypointPaths;
             NotifyPathLayoutChanged();
         }
 
@@ -301,6 +302,7 @@ namespace _project.Scripts.Object_Scripts
         private void OnDestroy()
         {
             PathSplitter.AvailabilityChanged -= RefreshWaypointPaths;
+            Receptacle.AvailabilityChanged -= RefreshWaypointPaths;
             if (_placementInventory is not null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
         }
@@ -459,6 +461,8 @@ namespace _project.Scripts.Object_Scripts
             {
                 UpdatePipeVisual(placedVisual, placedPiece.cells, placedPiece.orientation, placedPipeColor);
                 RefreshNeighborPipeGeometry(placedPiece.cells);
+                if (Application.isPlaying)
+                    PipePlacementPuff.Play(this, placedPiece.cells, PipeSurfaceHeight);
             }
             HidePreviewVisual();
             RefreshVisuals();
@@ -906,7 +910,8 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         public void SetPriorityVisualPath(IReadOnlyList<Vector2Int> routeCells,
             Vector3? startWorldPosition = null, Vector3? endWorldPosition = null,
-            IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells = null)
+            IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells = null,
+            IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> branchEndOpenings = null)
         {
             Vector2Int? startOutsideCell = startWorldPosition.HasValue
                 ? ClampToOutsideRing(WorldToCellUnclamped(startWorldPosition.Value))
@@ -915,7 +920,8 @@ namespace _project.Scripts.Object_Scripts
                 ? ClampToOutsideRing(WorldToCellUnclamped(endWorldPosition.Value))
                 : null;
 
-            var changedCells = _priorityRoutes.Set(routeCells, startOutsideCell, endOutsideCell, branchRouteCells);
+            var changedCells = _priorityRoutes.Set(routeCells, startOutsideCell, endOutsideCell, branchRouteCells,
+                branchEndOpenings);
             if (changedCells.Count > 0)
                 RefreshNeighborPipeGeometry(changedCells);
         }

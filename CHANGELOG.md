@@ -10,9 +10,20 @@ All notable changes to this project will be documented in this file.
 - Planning-view panning: a `PAN VIEW` tool on the `PathToolBar` drags the card-phase camera across the board within a board-scaled limit, and `RECENTER` glides it home and hands the pointer back to the cursor
 - `ROTATE` switch on the `PathToolBar`, replacing the rotate hint label: turns the armed pipe like the R key, so touch players can rotate too
 - Prefab-driven `PathSplitterPanel`: clicking a path splitter opens a closable window beside the stink meter with a slider for the main/branch share and, per issue type (organic, chemical, non-waste), switches to split it or send it only down the main route or only down the branch
+- Metal issues from town level 3: a piece of metal breaks a clear sifter's screen open in one hit and stays wedged there, never merges or clogs pipe, and fills a cesspit at 15× its normal deposit
+- Lake duck: a cosmetic resident whose mood follows the lake's health, with a speech bubble for every quack
+- Construction dust puff when a pipe piece or shop item is placed
+- Three-way path splitters: a second branch outlet, a ratio triangle in the `PathSplitterPanel` once both branches have pipe, numbered and color-coded outlets that match their live preview streams, a THIRD switch per issue type, and a sort preset
+- Receptacles: level-gated alternate endpoints (a metal acceptor, for example). A splitter branch whose pipe touches one ends there; it collects the issue type it accepts, and anything else piped to it still pollutes the lake
 
 ### Changed
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
+- Junk issues each show one of the assigned junk models at random, instead of every piece showing the model for its pinned size
+- Sifter minigame: each sorted piece drains its share of the screen's debris, so a partial sort can reopen a clogged screen; unsorted pieces and progress survive closing the window, per sifter, and the piece count follows the debris caught since the last visit
+- Junk flushed from an upstream sifter adds only a quarter of its load to the next sifter, so one overflow no longer cascades down the line
+- Sifter blades spin while it sifts and stop while it is clogged; minigame buckets grow while a dragged piece hovers them
+- Lime sprinkler: its square grows with the town level (3×3, 5×5, 9×9) and slowly breaks down the contents of covered cesspits during waves; a pit drained well back under full (90% by default) stops overflowing
+- Splitters can be tuned during the tower phase as well as setup; a new rule applies to the next issue routed
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor

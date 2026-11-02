@@ -9,13 +9,22 @@ namespace _project.Scripts.Object_Scripts
     ///     Placement-slot utility that sprinkles lime over the pipeline. The wheel motion and the
     ///     sprinkle blend shape are both driven by the limeSpreader animator controller (Base Layer
     ///     and Sprinkle layer), so nothing here touches the animation. What remains is placement
-    ///     wiring plus the stink effect, following the same shape as <see cref="WasteSifter" /> and
-    ///     <see cref="TreatmentTank" />.
+    ///     wiring plus the lime's effect on every cesspit in its square: less stink, and the pit's
+    ///     contents slowly broken down during waves. The square grows with the town's level.
     /// </summary>
     public class LimeSprinkler : MonoBehaviour, IPointerClickHandler, IRemovableUtility
     {
         [Header("Stink")]
         [SerializeField] private float limeStinkReduction = 0.5f;
+
+        [Header("Breakdown")]
+        [Tooltip("Fullness removed per second from each covered cesspit while a wave runs.")]
+        [SerializeField] [Min(0f)] private float fullnessDrainPerSecond = 0.5f;
+
+        [Header("Reach")]
+        [Tooltip("Side of the square of cells covered, by town level: element 0 at level 1, and so on. " +
+                 "Levels past the end keep the last size.")]
+        [SerializeField] private int[] areaSizeByLevel = { 3, 5, 9 };
 
         [Header("Grid")]
         [Tooltip("Board used to resolve nearby cells. Falls back to GameMaster.Instance.pathBuildBoard.")]
@@ -39,14 +48,75 @@ namespace _project.Scripts.Object_Scripts
         // Reused between calls so per-sprinkle lookups don't allocate.
         private readonly List<Vector2Int> _surroundingCells = new(9);
 
+        // Pits this sprinkler has taken stink off, so removal gives back exactly what it took even
+        // after the square has grown.
+        private readonly HashSet<Cesspit> _limedPits = new();
+
+        // Draining refreshes each pit's bar and the stink meter, so it's applied in ticks, not per frame.
+        private const float DrainTickSeconds = 0.25f;
+        private float _drainTimer;
+
         private void OnEnable()
         {
             LiveComponentRegistry.Register(this);
+            TurnController.OnLevelChanged += HandleLevelChanged;
         }
 
         private void OnDisable()
         {
             LiveComponentRegistry.Unregister(this);
+            TurnController.OnLevelChanged -= HandleLevelChanged;
+        }
+
+        private void Update()
+        {
+            // Only while waste is flowing, and only once there's a pit in reach.
+            if (_limedPits.Count == 0) return;
+            var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+            if (!turnController || !turnController.IsWaveRunning) return;
+
+            _drainTimer += Time.deltaTime;
+            if (_drainTimer < DrainTickSeconds) return;
+
+            DrainCoveredCesspits(fullnessDrainPerSecond * _drainTimer);
+            _drainTimer = 0f;
+        }
+
+        /// <summary>Breaks down <paramref name="amount" /> of every cesspit standing in this sprinkler's square.</summary>
+        public void DrainCoveredCesspits(float amount)
+        {
+            // Pits buried or removed since they were limed.
+            _limedPits.RemoveWhere(pit => !pit);
+            var cells = GetSurroundingCells();
+            foreach (var pit in _limedPits)
+                if (pit && Covers(pit, cells))
+                    pit.Drain(amount);
+        }
+
+        // A bigger town means a bigger square: pick up the pits it now reaches and redraw the overlay.
+        private void HandleLevelChanged(int level)
+        {
+            if (!_area || !_area.gameObject.activeSelf) return;
+            ApplyToNearbyCesspits();
+            ShowPlacedArea();
+        }
+
+        /// <summary>Side of the covered square at the town's current level.</summary>
+        public int AreaSize => SizeForLevel(areaSizeByLevel, CurrentLevel);
+
+        private static int CurrentLevel
+        {
+            get
+            {
+                var gm = GameMaster.Instance;
+                return gm && gm.turnController ? Mathf.Max(1, gm.turnController.currentLevel) : 1;
+            }
+        }
+
+        private static int SizeForLevel(int[] sizes, int level)
+        {
+            if (sizes == null || sizes.Length == 0) return 3;
+            return Mathf.Max(1, sizes[Mathf.Clamp(level - 1, 0, sizes.Length - 1)]);
         }
 
         private void OnDestroy()
@@ -69,10 +139,11 @@ namespace _project.Scripts.Object_Scripts
 
         public void Remove()
         {
-            // Lift the reduction this sprinkler applied to the cesspits in its block.
-            foreach (var pit in FindObjectsByType<Cesspit>())
-                if (Covers(pit))
+            // Lift the reduction this sprinkler applied to the cesspits in its square.
+            foreach (var pit in _limedPits)
+                if (pit)
                     pit.ApplyStinkReduction(-limeStinkReduction);
+            _limedPits.Clear();
 
             if (_slot) _slot.ClearOccupied(_infraValue);
             Destroy(gameObject);
@@ -85,9 +156,9 @@ namespace _project.Scripts.Object_Scripts
         #region Grid
 
         /// <summary>
-        ///     The 3x3 block of board cells centred on this sprinkler's own cell, in column-major
-        ///     order. Cells that fall off the board edge are skipped, so the result holds 9 entries
-        ///     mid-board and fewer along an edge or corner; it is empty when the sprinkler itself
+        ///     The square of board cells centred on this sprinkler's own cell (see <see cref="AreaSize" />),
+        ///     in column-major order. Cells that fall off the board edge are skipped, so the result is
+        ///     full mid-board and smaller along an edge or corner; it is empty when the sprinkler itself
         ///     sits off-board or no <see cref="PathBuildBoard" /> can be resolved.
         ///     The returned list is reused between calls — copy it if you need to hold onto it.
         /// </summary>
@@ -98,7 +169,7 @@ namespace _project.Scripts.Object_Scripts
             if (!ResolveBoard() || !board.TryWorldToCell(transform.position, out var center))
                 return _surroundingCells;
 
-            LimeSprinklerArea.GetCells(board, center, _surroundingCells);
+            LimeSprinklerArea.GetCells(board, center, AreaSize, _surroundingCells);
             return _surroundingCells;
         }
 
@@ -117,7 +188,7 @@ namespace _project.Scripts.Object_Scripts
             if (!ResolveBoard()) return;
 
             if (!_area) _area = LimeSprinklerArea.Create($"{name} Area", areaMaterial);
-            _area.Show(board, transform.position, placedAreaColor);
+            _area.Show(board, transform.position, AreaSize, placedAreaColor);
         }
 
         /// <summary>
@@ -133,7 +204,8 @@ namespace _project.Scripts.Object_Scripts
             if (!targetBoard) return;
 
             if (!_previewArea) _previewArea = LimeSprinklerArea.Create("Lime Sprinkler Preview", prefab.areaMaterial);
-            _previewArea.Show(targetBoard, worldPosition, prefab.previewAreaColor);
+            _previewArea.Show(targetBoard, worldPosition, SizeForLevel(prefab.areaSizeByLevel, CurrentLevel),
+                prefab.previewAreaColor);
         }
 
         public static void HidePlacementPreview()
@@ -146,7 +218,7 @@ namespace _project.Scripts.Object_Scripts
         #region Effect
 
         /// <summary>
-        ///     Reduces the stink of every cesspit already standing in this sprinkler's 3x3 block.
+        ///     Reduces the stink of every cesspit already standing in this sprinkler's square.
         ///     Runs once, on placement — cesspits built later pick the reduction up themselves,
         ///     via <see cref="TryApplyTo" /> from <see cref="Cesspit.SetSlot" />.
         /// </summary>
@@ -158,22 +230,23 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Applies this sprinkler's reduction to <paramref name="pit" />, if the pit stands in
-        ///     the 3x3 block. Returns false — changing nothing — when it doesn't, when the pit is
-        ///     gone, or when no board can be resolved.
+        ///     its square and hasn't had it already. Returns false — changing nothing — when it doesn't,
+        ///     when the pit is gone, or when no board can be resolved.
         /// </summary>
         public bool TryApplyTo(Cesspit pit)
         {
-            if (!pit || !Covers(pit)) return false;
+            if (!pit || _limedPits.Contains(pit) || !Covers(pit, GetSurroundingCells())) return false;
 
             pit.ApplyStinkReduction(limeStinkReduction);
+            _limedPits.Add(pit);
             return true;
         }
 
-        private bool Covers(Cesspit pit)
+        // Takes the square from GetSurroundingCells, so a caller checking many pits builds it once.
+        private bool Covers(Cesspit pit, List<Vector2Int> cells)
         {
             // Empty when the board is unresolved or this sprinkler sits off-board; checking the
             // count first also keeps the board dereference safe.
-            var cells = GetSurroundingCells();
             return cells.Count > 0 && board.TryWorldToCell(pit.transform.position, out var pitCell) &&
                    cells.Contains(pitCell);
         }

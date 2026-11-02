@@ -23,7 +23,8 @@ namespace _project.Scripts.Object_Scripts
         ///     nothing did.
         /// </summary>
         public HashSet<Vector2Int> Set(IReadOnlyList<Vector2Int> routeCells, Vector2Int? startOutsideCell,
-            Vector2Int? endOutsideCell, IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells)
+            Vector2Int? endOutsideCell, IEnumerable<IReadOnlyList<Vector2Int>> branchRouteCells,
+            IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> branchEndOpenings = null)
         {
             var nextConnections = new Dictionary<Vector2Int, PipeConnections>();
             AddRoute(nextConnections, routeCells);
@@ -38,6 +39,11 @@ namespace _project.Scripts.Object_Scripts
                 if (endOutsideCell.HasValue)
                     AddOpening(nextConnections, routeCells[^1], endOutsideCell.Value);
             }
+
+            if (branchEndOpenings != null)
+                foreach (var (cell, outsideCell) in branchEndOpenings)
+                    if (nextConnections.ContainsKey(cell))
+                        AddOpening(nextConnections, cell, outsideCell);
 
             var changedCells = new HashSet<Vector2Int>();
             foreach (var pair in nextConnections)

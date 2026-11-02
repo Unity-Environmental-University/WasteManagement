@@ -118,6 +118,15 @@ namespace _project.Scripts.Object_Scripts
 
         public DebrisType GetDebrisType() => type;
 
+        public Sprite GetSprite() => debrisImage ? debrisImage.sprite : null;
+
+        /// <summary>Puts back how this piece looked when the player last saw it on this sifter.</summary>
+        public void Restore(DebrisType savedType, Sprite savedSprite)
+        {
+            type = savedType;
+            if (savedSprite && debrisImage) debrisImage.sprite = savedSprite;
+        }
+
         public void ResetPos()
         {
             _rectTransform.anchoredPosition = _originalAnchoredPos;
