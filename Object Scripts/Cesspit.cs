@@ -24,11 +24,11 @@ namespace _project.Scripts.Object_Scripts
         [Min(1f)]
         private float metalDamageMultiplier = 15f;
 
-        [Tooltip("Once full, a pit keeps overflowing until lime drains it below this share of its capacity, " +
-                 "so a pit hovering at the brim doesn't restart its runaway timer every frame.")]
+        [Tooltip(
+            "A pit that has brimmed over stays full until it has drained to this fraction of its capacity. Without this margin, lime shaving a sliver off a full pit would let it swallow another whole issue.")]
         [SerializeField]
         [Range(0f, 1f)]
-        private float overflowStopsBelow = 0.9f;
+        private float overflowRecoveryRatio = 0.8f;
 
         [SerializeField] private GameObject runawayPrefab;
         [SerializeField] private Transform runawayDestination;
@@ -49,6 +49,12 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float minFillHeight = 0.03f;
         [SerializeField] private float maxFillHeight = 0.45f;
 
+        [Header("Overflow")]
+        [Tooltip("How far the heap of waste bulges above the rim of a full pit. Issues passing a full pit ride over it.")]
+        [SerializeField]
+        [Min(0f)]
+        private float overflowMoundHeight = 0.35f;
+
         [Header("Seal")]
         [SerializeField] private GameObject sealedVisual;
 
@@ -56,6 +62,11 @@ namespace _project.Scripts.Object_Scripts
         [FormerlySerializedAs("maxHealth")] public float maxFullness;
         [FormerlySerializedAs("health")] public float fullness;
 
+        private bool _overflowing;
+        private CesspitOverflowVisual _overflowVisual;
+        private bool _hasRimBounds;
+        private float _rimY;
+        private float _rimRadius;
         private bool _spawningRunaways;
         private Coroutine _runawayCoroutine;
         private SpecialInteractController _slot;
@@ -108,6 +119,7 @@ namespace _project.Scripts.Object_Scripts
             if (sealedVisual) sealedVisual.SetActive(IsSealed);
             UpdateFullnessBar();
             UpdateFillVisual();
+            UpdateOverflowVisual();
 
             if (IsFull)
                 StartRunaways();
@@ -122,18 +134,21 @@ namespace _project.Scripts.Object_Scripts
 
         private void SetFullness(float newFullness)
         {
+            var wasFull = IsFull;
             fullness = Mathf.Clamp(newFullness, 0f, maxFullness);
+            _overflowing = wasFull && fullness > maxFullness * overflowRecoveryRatio;
             UpdateFullnessBar();
             UpdateFillVisual();
+            UpdateOverflowVisual();
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
 
             if (IsFull)
             {
                 StartRunaways();
             }
-            else if (_spawningRunaways && FullnessRatio < overflowStopsBelow)
+            else if (_spawningRunaways)
             {
-                // Drained well back under the brim: the pit stops overflowing.
+                // IsFull holds through the recovery margin, so this runs only once the pit has recovered.
                 PauseRunaways();
                 _spawningRunaways = false;
             }
@@ -197,6 +212,7 @@ namespace _project.Scripts.Object_Scripts
             _spawningRunaways = false;
             IsSealed = true;
             if (sealedVisual) sealedVisual.SetActive(true);
+            UpdateOverflowVisual();
         }
 
         /// <summary>Demolishes this cesspit: frees its slot, leaves a debuff tile on the cell, and destroys the object.</summary>
@@ -226,11 +242,17 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnTriggerEnter(Collider other)
         {
-            if (IsFull) return;
             if (!other.gameObject.CompareTag("IssueObject")) return;
             var issue = other.GetComponent<IssueObject>();
             if (issue != null && issue.IsDirectDestination)
                 return;
+
+            if (IsFull)
+            {
+                // No room: the issue washes over the top of the heap and carries on down the line.
+                if (issue != null) RideOver(issue);
+                return;
+            }
 
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
@@ -244,7 +266,25 @@ namespace _project.Scripts.Object_Scripts
             issue.Process(processPower, "Deposited into Cesspit");
         }
 
-        public bool IsFull => maxFullness > 0f && fullness >= maxFullness;
+        private void OnTriggerExit(Collider other)
+        {
+            if (other.TryGetComponent<IssueObject>(out var issue))
+                issue.StopRidingOver(transform);
+        }
+
+        private void RideOver(IssueObject issue)
+        {
+            ResolveRimBounds();
+
+            // The hump starts where the trigger does, so the issue is still on the pipe when it begins.
+            var outerRadius = TryGetComponent<Collider>(out var trigger)
+                ? Mathf.Max(trigger.bounds.extents.x, _rimRadius)
+                : _rimRadius * 1.5f;
+            var surfaceY = IsSealed ? _rimY : _rimY + overflowMoundHeight;
+            issue.RideOver(transform, surfaceY, outerRadius, _rimRadius * 0.9f);
+        }
+
+        public bool IsFull => maxFullness > 0f && (_overflowing || fullness >= maxFullness);
 
         private string BuildHoverStats()
         {
@@ -278,6 +318,49 @@ namespace _project.Scripts.Object_Scripts
                 _fillMaterial ??= fillRenderer.material;
                 _fillMaterial.color = Color.Lerp(emptyFillColor, fullFillColor, ratio);
             }
+        }
+
+        private void UpdateOverflowVisual()
+        {
+            var show = IsFull && !IsSealed;
+            if (!_overflowVisual)
+            {
+                if (!show || !fillRenderer || _fillMaterial == null) return;
+
+                ResolveRimBounds();
+                _overflowVisual = CesspitOverflowVisual.Create(transform, _fillMaterial, _rimY, _rimRadius,
+                    overflowMoundHeight);
+            }
+
+            if (_overflowVisual.Showing != show)
+                _overflowVisual.SetShowing(show);
+        }
+
+        /// <summary>
+        ///     Measures the vessel from its visible meshes, leaving out the waste surface and the cap.
+        ///     A pit with nothing to measure falls back to the fill heights.
+        /// </summary>
+        private void ResolveRimBounds()
+        {
+            if (_hasRimBounds) return;
+            _hasRimBounds = true;
+
+            var hasBounds = false;
+            var bounds = new Bounds();
+            foreach (var vesselRenderer in GetComponentsInChildren<Renderer>())
+            {
+                if (!vesselRenderer.enabled || vesselRenderer == fillRenderer) continue;
+                if (sealedVisual && vesselRenderer.transform.IsChildOf(sealedVisual.transform)) continue;
+
+                if (hasBounds)
+                    bounds.Encapsulate(vesselRenderer.bounds);
+                else
+                    bounds = vesselRenderer.bounds;
+                hasBounds = true;
+            }
+
+            _rimY = hasBounds ? bounds.max.y : transform.position.y + maxFillHeight;
+            _rimRadius = hasBounds ? Mathf.Max(bounds.extents.x, bounds.extents.z) : 0.5f;
         }
 
         private void StartRunaways()

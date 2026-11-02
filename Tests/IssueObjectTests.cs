@@ -122,6 +122,43 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(9, issue.GetWaypointIndex(), "Releasing should not send it backward to the nearest cell.");
         }
 
+        [UnityTest]
+        public IEnumerator Issue_RidesOverAFullCesspit_ThenDropsBackOntoThePipe()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
+            fixture.Board.entityOnBoardHeight = 0.5f;
+            CreateGameObject("Game Master").AddComponent<GameMaster>().pathBuildBoard = fixture.Board;
+
+            var pitPosition = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 5));
+            var pit = CreateGameObject("Full Cesspit").AddComponent<Cesspit>();
+            pit.transform.position = pitPosition;
+            pit.gameObject.AddComponent<SphereCollider>().radius = fixture.Board.CellWorldPitch.x * 0.75f;
+            pit.maxFullness = pit.fullness = 10f;
+
+            var issue = CreateIssue("Passing Issue", fixture.Path);
+            issue.tag = "IssueObject";
+            issue.SetSize(1);
+            issue.SetMoveSpeed(fixture.Board.CellWorldPitch.x * 2f);
+            issue.transform.position = fixture.Board.GetPathWaypointPosition(new Vector2Int(1, 2));
+            var pipeY = pitPosition.y + issue.transform.localScale.y * 0.5f;
+
+            var highest = float.MinValue;
+            var pastPit = pitPosition.z + fixture.Board.CellWorldPitch.x * 2f;
+            for (var frame = 0; frame < 600 && issue && issue.transform.position.z < pastPit; frame++)
+            {
+                highest = Mathf.Max(highest, issue.transform.position.y);
+                yield return new WaitForFixedUpdate();
+            }
+
+            Assert.IsTrue(issue, "The issue should still be travelling once it has passed the pit.");
+            Assert.Greater(issue.transform.position.z, pitPosition.z);
+            Assert.AreEqual(10f, pit.fullness, 0.0001f, "A full pit takes nothing in.");
+            Assert.Greater(highest, pipeY + 0.3f, "The issue should climb over the heap.");
+            Assert.AreEqual(pipeY, issue.transform.position.y, 0.05f, "It should drop back onto the pipe afterward.");
+        }
+
         [Test]
         public void IssueVisualOverride_PersistsAfterProcessingChangesSize()
         {

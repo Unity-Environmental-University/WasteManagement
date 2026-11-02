@@ -118,6 +118,10 @@ namespace _project.Scripts.Object_Scripts
         private int _routeIndex;
         private bool _canBePoppedByClick;
         private Vector3 _directDestination;
+        private Transform _rideOverPit;
+        private float _rideOverSurfaceY;
+        private float _rideOverOuterRadius;
+        private float _rideOverInnerRadius;
         private Color? _visualOverrideColor;
         private Material _visualOverrideMaterial;
         private GameObject _activeVisual;
@@ -285,7 +289,7 @@ namespace _project.Scripts.Object_Scripts
 
             // Lift the target up so the issue rides ON TOP of the pipe instead of inside it
             // (scaled by this issue's size so bigger issues sit higher)
-            target.y += transform.localScale.y * PathHeight;
+            target.y = ApplyRideOver(target.y + transform.localScale.y * PathHeight);
 
             FaceTravelDirection(target - transform.position);
 
@@ -592,6 +596,36 @@ namespace _project.Scripts.Object_Scripts
             _routeIndex = routeIndex;
             _waypointIndex = path.FindClosestWaypointIndex(routeIndex, transform.position, _waypointIndex);
             return true;
+        }
+
+        /// <summary>
+        ///     Lifts this issue over a full cesspit on its way past: it climbs from
+        ///     <paramref name="outerRadius" /> out, and sits on <paramref name="surfaceY" /> within
+        ///     <paramref name="innerRadius" /> of the pit.
+        /// </summary>
+        public void RideOver(Transform pit, float surfaceY, float outerRadius, float innerRadius)
+        {
+            _rideOverPit = pit;
+            _rideOverSurfaceY = surfaceY;
+            _rideOverOuterRadius = outerRadius;
+            _rideOverInnerRadius = innerRadius;
+        }
+
+        public void StopRidingOver(Transform pit)
+        {
+            if (_rideOverPit == pit) _rideOverPit = null;
+        }
+
+        private float ApplyRideOver(float pathY)
+        {
+            if (!_rideOverPit) return pathY;
+
+            var offset = transform.position - _rideOverPit.position;
+            offset.y = 0f;
+            var climb = Mathf.SmoothStep(0f, 1f,
+                Mathf.InverseLerp(_rideOverOuterRadius, _rideOverInnerRadius, offset.magnitude));
+            var topY = _rideOverSurfaceY + transform.localScale.y * PathHeight;
+            return Mathf.Max(pathY, Mathf.Lerp(pathY, topY, climb));
         }
 
         private void OnTriggerEnter(Collider other)

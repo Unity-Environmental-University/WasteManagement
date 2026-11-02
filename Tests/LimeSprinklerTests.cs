@@ -204,19 +204,108 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void Lime_DrainingAFullPit_StopsItsRunawaysOnlyOnceWellUnderTheBrim()
+        public void Lime_ShavingAFullPit_DoesNotLetItSwallowAnotherIssue()
         {
+            var board = CreateBoard();
+            var pit = CreateCesspit(board, new Vector2Int(3, 3));
+            pit.fullness = 5f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+            Deposit(pit);
+            Assert.AreEqual(10f, pit.fullness, 0.0001f, "precondition: the deposit brims the pit");
+
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.IsTrue(pit.IsFull, "A sliver of drain doesn't reopen the pit.");
+
+            Deposit(pit);
+            Assert.AreEqual(9f, pit.fullness, 0.0001f, "A full pit lets the issue pass untouched.");
+
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.IsFalse(pit.IsFull, "Draining past the recovery margin reopens it.");
+
+            Deposit(pit);
+            Assert.AreEqual(10f, pit.fullness, 0.0001f);
+            Assert.IsTrue(pit.IsFull);
+        }
+
+        [Test]
+        public void Lime_ShavingAFullPit_KeepsRunawaysComing()
+        {
+            var board = CreateBoard();
             var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
             gm.turnController.currentLevel = 3;
-            var pit = CreateCesspit(CreateBoard(), new Vector2Int(3, 3));
-            pit.SendMessage("SetFullness", pit.maxFullness);
-            Assert.IsTrue(GetField<bool>(pit, "_spawningRunaways"));
+            var pit = CreateCesspit(board, new Vector2Int(3, 3));
+            pit.fullness = 5f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+            Deposit(pit);
+            var spawner = GetField<Coroutine>(pit, "_runawayCoroutine");
+            Assert.IsNotNull(spawner, "precondition: a brimming pit overflows");
 
-            pit.Drain(0.5f);
-            Assert.IsTrue(GetField<bool>(pit, "_spawningRunaways"), "Just under the brim it keeps overflowing.");
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.AreSame(spawner, GetField<Coroutine>(pit, "_runawayCoroutine"),
+                "The spawn timer must survive the drain, or a limed pit never leaks.");
 
-            pit.Drain(1f);
-            Assert.IsFalse(GetField<bool>(pit, "_spawningRunaways"));
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.IsNull(GetField<Coroutine>(pit, "_runawayCoroutine"));
+        }
+
+        [Test]
+        public void FullPit_SendsIssuesOverTheTop_UntilItRecovers()
+        {
+            var board = CreateBoard();
+            var pit = CreateCesspit(board, new Vector2Int(3, 3));
+            pit.fullness = 5f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+
+            var accepted = Deposit(pit);
+            Assert.IsNull(GetField<Transform>(accepted, "_rideOverPit"), "A pit with room takes the issue in.");
+
+            var passing = Deposit(pit);
+            Assert.AreSame(pit.transform, GetField<Transform>(passing, "_rideOverPit"));
+            pit.SendMessage("OnTriggerExit", passing.GetComponent<Collider>(), SendMessageOptions.RequireReceiver);
+            Assert.IsNull(GetField<Transform>(passing, "_rideOverPit"), "Leaving the pit ends the ride.");
+        }
+
+        [Test]
+        public void FullPit_ShowsOverflow_UntilItRecoversOrIsSealed()
+        {
+            var board = CreateBoard();
+            var pit = CreateCesspit(board, new Vector2Int(3, 3));
+            var fill = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fill.transform.SetParent(pit.transform, false);
+            SetField(pit, "fillRenderer", fill.GetComponent<Renderer>());
+            pit.fullness = 5f;
+            var sprinkler = CreateSprinkler(board, new Vector2Int(3, 4));
+            sprinkler.SetSlot(null);
+
+            Deposit(pit);
+            var overflow = GetField<CesspitOverflowVisual>(pit, "_overflowVisual");
+            Assert.IsNotNull(overflow, "Brimming over builds the overflow.");
+            Assert.IsTrue(overflow.Showing);
+
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.IsTrue(overflow.Showing, "It keeps overflowing for as long as it counts as full.");
+
+            sprinkler.DrainCoveredCesspits(1f);
+            Assert.IsFalse(overflow.Showing);
+
+            Deposit(pit);
+            Assert.IsTrue(overflow.Showing);
+            pit.SendMessage("Seal");
+            Assert.IsFalse(overflow.Showing, "A capped pit can't spill.");
+        }
+
+        private IssueObject Deposit(Cesspit pit)
+        {
+            var go = CreateGameObject("Issue");
+            go.tag = "IssueObject";
+            go.AddComponent<SphereCollider>();
+            var issue = go.AddComponent<IssueObject>();
+            issue.SetSize(1);
+            pit.SendMessage("OnTriggerEnter", go.GetComponent<Collider>(), SendMessageOptions.RequireReceiver);
+            return issue;
         }
 
         private PathBuildBoard CreateBoard()
