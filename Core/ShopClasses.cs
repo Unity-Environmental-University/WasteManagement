@@ -317,9 +317,9 @@ namespace _project.Scripts.Core
 
         public GameObject Place(Transform location)
         {
-            if (!PlacementRules.TryGetPipeBoard(location, out _)) return null;
-
-            return Object.Instantiate(_prefab, location.position, location.rotation);
+            return !PlacementRules.TryGetPipeBoard(location, out _)
+                ? null
+                : Object.Instantiate(_prefab, location.position, location.rotation);
         }
     }
 
