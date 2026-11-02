@@ -15,9 +15,8 @@ namespace _project.Scripts.Tests
             Assert.IsNotNull(prefab);
             var duck = Track(Object.Instantiate(prefab.gameObject)).GetComponent<LakeDuck>();
             duck.SendMessage("Start");
-            var bubble = duck.GetComponentInChildren<SpeechBubble>(true) ?? Object.FindAnyObjectByType<SpeechBubble>();
+            var bubble = duck.GetComponentInChildren<SpeechBubble>(true);
             Assert.IsNotNull(bubble, "The duck brings its own speech bubble.");
-            Track(bubble.gameObject);
             Assert.IsFalse(bubble.IsShowing, "Nothing to say yet.");
 
             // The lake taking damage makes the duck react out loud.
@@ -36,8 +35,7 @@ namespace _project.Scripts.Tests
                 "Assets/_project/LakeDuck/Lake Duck.prefab");
             var duck = Track(Object.Instantiate(prefab.gameObject)).GetComponent<LakeDuck>();
             duck.SendMessage("Start");
-            var bubble = duck.GetComponentInChildren<SpeechBubble>(true) ?? Object.FindAnyObjectByType<SpeechBubble>();
-            Track(bubble.gameObject);
+            var bubble = duck.GetComponentInChildren<SpeechBubble>(true);
 
             // Mid-reaction (say, a happy quack), the lake takes a hit too small to send the duck ashore.
             SetField(duck, "_reactionUntil", float.MaxValue);
@@ -52,11 +50,29 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void DuckPrefab_BringsItsOwnParts()
+        {
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/_project/LakeDuck/Lake Duck.prefab");
+            Assert.IsNotNull(prefab.GetComponent<LakeDuckSwimmer>(), "Something moves it.");
+            Assert.IsNotNull(prefab.GetComponent<LakeDuckVoice>(), "Something quacks.");
+            var animator = prefab.GetComponent<Animator>();
+            Assert.IsTrue(animator && animator.runtimeAnimatorController, "Its poses come from animation clips.");
+            var source = prefab.GetComponent<AudioSource>();
+            Assert.IsNotNull(source, "It has a voice to quack with.");
+            Assert.IsNotNull(prefab.GetComponentInChildren<SpeechBubble>(true), "The bubble is part of the prefab.");
+        }
+
+        [Test]
         public void SpeechBubble_PopsAwayAfterItsTime()
         {
             var anchor = CreateGameObject("Anchor").transform;
-            var bubble = SpeechBubble.Create(anchor, 1f, 2f);
-            Track(bubble.gameObject);
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<SpeechBubble>(
+                "Assets/_project/Prefabs/Speech Bubble.prefab");
+            Assert.IsNotNull(prefab);
+            var bubble = Track(Object.Instantiate(prefab.gameObject)).GetComponent<SpeechBubble>();
+            Assert.IsFalse(bubble.IsShowing, "The prefab starts hidden.");
+            bubble.Follow(anchor, 1f);
 
             bubble.Say("Quack!", Color.black, 0.5f);
             Assert.IsTrue(bubble.IsShowing);
