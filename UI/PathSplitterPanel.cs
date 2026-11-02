@@ -116,6 +116,9 @@ namespace _project.Scripts.UI
             if (window && window.activeSelf && (!Target || !Target.isActiveAndEnabled))
                 Hide();
 
+            // The run started while the window was open.
+            if (IsOpen && !TurnController.IsOutsideRun) Hide();
+
             var gm = GameMaster.Instance;
             if (IsOpen && gm)
             {
@@ -164,7 +167,7 @@ namespace _project.Scripts.UI
 
         public void Show(PathSplitter splitter)
         {
-            if (!splitter) return;
+            if (!splitter || !TurnController.IsOutsideRun) return;
 
             if (Target && Target != splitter) Target.SetHighlight(null);
             Target = splitter;
@@ -181,14 +184,15 @@ namespace _project.Scripts.UI
         }
 
         /// <summary>
-        ///     Splitters can be tuned in either phase, including mid-run: a new rule applies to the next
-        ///     issue the splitter routes. A press only selects one while the pointer isn't removing pipe
-        ///     or utilities or dragging the view.
+        ///     Splitters can only be tuned in the build phase; a run uses the settings it started with.
+        ///     A press only selects one while the pointer isn't removing pipe or utilities or dragging
+        ///     the view.
         ///     An armed palette tool doesn't block it: palette tools stay armed after every placement,
         ///     and a splitter's slot is occupied, so the press can't place anything there anyway.
         /// </summary>
         private static bool CanPickSplitters()
         {
+            if (!TurnController.IsOutsideRun) return false;
             var gm = GameMaster.Instance;
             if (!gm) return true;
             var tool = gm.pathBuildBoard ? gm.pathBuildBoard.ActiveTool : PathBuildTool.None;

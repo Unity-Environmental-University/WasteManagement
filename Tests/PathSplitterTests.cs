@@ -664,6 +664,36 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void PathSplitterPanel_OnlyOpensDuringTheBuildPhase()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<PathSplitterPanel>(
+                "Assets/_project/Prefabs/UI/PathSplitterPanel.prefab");
+            var canvas = CreateGameObject("Canvas").AddComponent<Canvas>();
+            var panel = Object.Instantiate(prefab, canvas.transform);
+            var window = panel.transform.Find("Window").gameObject;
+            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
+
+            gm.turnController.currentPhase = GamePhase.Card;
+            panel.Show(splitter);
+            Assert.IsTrue(panel.IsOpen);
+
+            // Starting the run closes the open window.
+            gm.turnController.currentPhase = GamePhase.Tower;
+            panel.SendMessage("Update");
+            Assert.IsFalse(panel.IsOpen);
+            Assert.IsFalse(window.activeSelf);
+
+            panel.Show(splitter);
+            Assert.IsFalse(panel.IsOpen, "A run can't reopen the window.");
+            Assert.IsFalse(window.activeSelf);
+
+            gm.turnController.currentPhase = GamePhase.Card;
+            panel.Show(splitter);
+            Assert.IsTrue(panel.IsOpen);
+        }
+
+        [Test]
         public void PathSplitterPanel_UsesTheTriangleOnlyWhileBothBranchesHavePipe()
         {
             var fixture = CreateSplitPathFixture();

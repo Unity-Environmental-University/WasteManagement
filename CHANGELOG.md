@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - Junk flushed from an upstream sifter adds only a quarter of its load to the next sifter, so one overflow no longer cascades down the line
 - Sifter blades spin while it sifts and stop while it is clogged; minigame buckets grow while a dragged piece hovers them
 - Lime sprinkler: its square grows with the town level (3×3, 5×5, 9×9) and slowly breaks down the contents of covered cesspits during waves; a pit drained well back under full (90% by default) stops overflowing
-- Splitters can be tuned during the tower phase as well as setup; a new rule applies to the next issue routed
+- Splitters can be tuned only in the build phase; a run keeps the settings it started with
 
 ### Fixed
 - Alternate path preview stream no longer sinks out of sight beneath the pipe floor
