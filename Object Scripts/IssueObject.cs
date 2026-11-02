@@ -332,19 +332,36 @@ namespace _project.Scripts.Object_Scripts
             // IsPointerOverGameObject: the camera's PhysicsRaycaster makes it true over this very
             // issue, which would reject every click. See PointerUi.
             if (PointerUi.IsPointerOverInteractiveUi()) return;
+            if (TryHandleClick()) return;
 
-            var turnController = GameMaster.Instance?.turnController;
-            if (!turnController || turnController.currentPhase != GamePhase.Tower) return;
+            // Waste flowing through a sifter sits in front of it on screen; a click it can't use
+            // belongs to the sifter behind it.
+            var sifter = PointerUi.FindUnderPointer<WasteSifter>(_ => true);
+            if (sifter) sifter.HandleClick();
+        }
+
+        /// <summary>True when a click would chip at this issue's blockage or pop it.</summary>
+        public bool IsClickable
+        {
+            get
+            {
+                var turnController = GameMaster.Instance?.turnController;
+                return turnController && turnController.currentPhase == GamePhase.Tower &&
+                       (IsBlockingPipe || _canBePoppedByClick);
+            }
+        }
+
+        /// <summary>Applies a player's click; false when the click does nothing to this issue.</summary>
+        public bool TryHandleClick()
+        {
+            if (!IsClickable) return false;
 
             // Pipe blockages are clicked apart instead of popped — see HandleBlockedClick.
             if (IsBlockingPipe)
-            {
                 HandleBlockedClick();
-                return;
-            }
-
-            if (_canBePoppedByClick)
+            else
                 Destroy(gameObject);
+            return true;
         }
 
         /// <summary>

@@ -326,6 +326,17 @@ namespace _project.Scripts.Object_Scripts
 
         public void OnPointerClick(PointerEventData eventData)
         {
+            // The sifter's hit box is padded past its model, so it can cover a blockage being
+            // clicked apart on the pipe inside it; the blockage keeps the click.
+            var issue = PointerUi.FindUnderPointer<IssueObject>(candidate => candidate.IsClickable);
+            if (issue && issue.TryHandleClick()) return;
+
+            HandleClick();
+        }
+
+        /// <summary>Removes the sifter with the remove tool, or opens its debris mini-game.</summary>
+        public void HandleClick()
+        {
             // A pan-drag that starts on the sifter carries it along under the pointer, so the
             // release lands back on it and would read as a click.
             var cameraController = GameMaster.Instance.cameraController;

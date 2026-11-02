@@ -220,6 +220,28 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(survivorPosition.z, issueA.transform.position.z, 0.0001f);
         }
 
+        [Test]
+        public void Click_OnlyCountsForBlockagesAndPoppableIssues_DuringTheRun()
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.turnController.currentPhase = GamePhase.Tower;
+            var passing = CreatePrimitive("Passing Issue").AddComponent<IssueObject>();
+            passing.SetSize(1);
+            var blockage = CreatePrimitive("Blocking Issue").AddComponent<IssueObject>();
+            blockage.SetSize(4);
+
+            Assert.IsFalse(passing.IsClickable, "Waste flowing past leaves the click for what's behind it.");
+            Assert.IsFalse(passing.TryHandleClick());
+            Assert.IsTrue(passing, "An unusable click leaves the issue alone.");
+            Assert.IsTrue(blockage.IsClickable);
+
+            passing.EnableClickPop();
+            Assert.IsTrue(passing.IsClickable);
+
+            gm.turnController.currentPhase = GamePhase.Card;
+            Assert.IsFalse(blockage.IsClickable, "Issues only take clicks during the run.");
+        }
+
         [UnityTest]
         public IEnumerator IssueObject_BlockageBurstsAfterDeadline_WhenNotBrokenDown()
         {

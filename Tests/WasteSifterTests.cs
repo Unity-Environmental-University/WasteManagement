@@ -461,5 +461,27 @@ namespace _project.Scripts.Tests
                 SendMessageOptions.RequireReceiver);
 
         private static bool IsHeld(IssueObject issue) => GetField<bool>(issue, "_heldBySifter");
+
+#if UNITY_EDITOR
+        [Test]
+        public void SifterPrefab_ClickTargetCoversTheModel_WithoutCatchingAnything()
+        {
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_project/Prefabs/Sifter.prefab");
+            var sifter = Track(Object.Instantiate(prefab));
+            var clickTarget = sifter.transform.Find("ClickTarget")?.GetComponent<BoxCollider>();
+
+            Assert.IsTrue(clickTarget, "The sifter needs its padded click target.");
+            Assert.AreEqual(~0, clickTarget.excludeLayers.value,
+                "The click target is for the pointer only; it must not catch issues early.");
+            Assert.AreSame(sifter.GetComponent<WasteSifter>(), clickTarget.GetComponentInParent<WasteSifter>());
+
+            Physics.SyncTransforms();
+            foreach (var model in sifter.GetComponentsInChildren<Renderer>())
+            {
+                Assert.IsTrue(clickTarget.bounds.Contains(model.bounds.min), $"{model.name} pokes out of the click target.");
+                Assert.IsTrue(clickTarget.bounds.Contains(model.bounds.max), $"{model.name} pokes out of the click target.");
+            }
+        }
+#endif
     }
 }
