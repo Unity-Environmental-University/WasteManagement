@@ -29,7 +29,7 @@ namespace _project.Scripts.Core
         public Material Material => Inner.Material;
 
         public ICard Clone() => new FoilCard(Inner.Clone());
-        
+
         public void ProcessEffect(TowerController tC) => Inner.ProcessEffect(tC);
 
         public void Selected() => Inner.Selected();
@@ -64,7 +64,7 @@ namespace _project.Scripts.Core
     }
 
     #endregion
-    
+
 
     public class ChemicalSolvent : ICard
     {
@@ -78,7 +78,7 @@ namespace _project.Scripts.Core
         {
             var baseP = tC.chemicalProcessPower;
             baseP += (float)(baseP * .15);
-            
+
             tC.chemicalProcessPower = baseP;
         }
     }
@@ -95,7 +95,7 @@ namespace _project.Scripts.Core
         {
             var baseP = tC.organicProcessPower;
             baseP += (float)(baseP * .15);
-            
+
             tC.organicProcessPower = baseP;
         }
     }
@@ -114,7 +114,7 @@ namespace _project.Scripts.Core
             var baseChemPower = tC.chemicalProcessPower;
             baseRegen += (float)(baseRegen * .35);
             baseChemPower -= (float)(baseChemPower * .25);
-            
+
             tC.maintenanceRegen = baseRegen;
             tC.chemicalProcessPower = baseChemPower;
         }

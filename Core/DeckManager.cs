@@ -41,9 +41,9 @@ namespace _project.Scripts.Core
             }
 
             Instance = this;
-            
-            /* 
-            Disabling this until cards are reinstated. 
+
+            /*
+            Disabling this until cards are reinstated.
             InitializeDeck();
             */
         }

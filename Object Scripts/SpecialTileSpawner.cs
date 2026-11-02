@@ -8,7 +8,7 @@ namespace _project.Scripts.Object_Scripts
     public class SpecialTileSpawner : MonoBehaviour
     {
 #region Utility Spawner
-        
+
         [Header("Utility Spawner Configuration")]
         [SerializeField] private bool randomizeUtilityPlacement = true;
         [SerializeField] [Min(3)] private int utilityTileCount = 3;
@@ -29,7 +29,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] [Min(0)] private int buffTileCount = 3;
         [SerializeField] private Vector3 tileScaleMultiplier = Vector3.one;
         [SerializeField] private BuffDebuffTileController buffTilePrefab;
-        
+
         [Tooltip("Pool of possible effects. Each spawned tile randomly gets one option.")]
         [SerializeField] private BuffDebuffTileEffect[] effectOptions;
 
@@ -43,7 +43,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private PathBuildBoard board;
 
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
-        
+
         // Active Lists
         public List<SpecialInteractController> SpawnedUtilityTiles { get; } = new();
         public List<BuffDebuffTileController> SpawnedBuffTiles { get; } = new();

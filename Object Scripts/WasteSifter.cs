@@ -20,7 +20,7 @@ namespace _project.Scripts.Object_Scripts
         public float health;
         public float debrisAccumulation;
         public float maxDebrisAccumulation;
-        
+
         [SerializeField] private int siftPower = 1;
 
         [Header("Overflow Recovery")]

@@ -9,7 +9,7 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Transform spawnPoint;
         [SerializeField] private WaypointPath path;
         private Coroutine _spawnCoroutine;
-        
+
         [SerializeField] private bool nonWasteOnly;
         public float spawnInterval;
         public GameObject SpawnPrefab => spawnerObject;

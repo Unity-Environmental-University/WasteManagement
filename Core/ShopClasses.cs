@@ -20,7 +20,7 @@ namespace _project.Scripts.Core
     {
         PlaceableType PlaceableType { get; }
         GameObject Place(Transform location);
-        
+
     }
 
     public enum PathKind { Pipe, RecyclingBelt }

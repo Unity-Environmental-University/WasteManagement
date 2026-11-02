@@ -137,7 +137,7 @@ namespace _project.Scripts.Core
         [SerializeField] private Sprite blankTestSprite;
         public static ShopManager Instance { get; private set; }
         private static bool Debugging => GameMaster.Instance && GameMaster.Instance.debugging;
-        
+
         // Stock is retained while the player opens and closes the shop during one round.
         // It is rebuilt at the start of the next round, so every round gets a fresh shop.
         private readonly List<IShopItem> _stockItems = new();
@@ -148,7 +148,7 @@ namespace _project.Scripts.Core
         private IShopItem _selectedShopItem;
 
         private static int CurrentLevel =>
-            GameMaster.Instance && GameMaster.Instance.turnController ? 
+            GameMaster.Instance && GameMaster.Instance.turnController ?
                 GameMaster.Instance.turnController.currentLevel : 1;
 
         private static int CurrentEra =>
@@ -516,7 +516,7 @@ namespace _project.Scripts.Core
             target.pivot = source.pivot;
             target.anchoredPosition = source.anchoredPosition;
             target.sizeDelta = source.sizeDelta;
-            
+
             target.localRotation = source.localRotation;
             target.localScale = source.localScale;
         }

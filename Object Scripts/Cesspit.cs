@@ -10,7 +10,7 @@ namespace _project.Scripts.Object_Scripts
 {
     public class Cesspit : MonoBehaviour, IStinkSource, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler,
         IRemovableUtility
-    { 
+    {
         [SerializeField] private int processPower = 3;
 
         [Tooltip(

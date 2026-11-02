@@ -25,7 +25,7 @@ namespace _project.Scripts.Object_Scripts
             UpdateLakeColor();
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
         }
-        
+
         private void OnEnable()
         {
             StinkSourceRegistry.Register(this);
@@ -53,10 +53,10 @@ namespace _project.Scripts.Object_Scripts
             var popManager = GameMaster.Instance ? GameMaster.Instance.popManager : null;
             if (popManager) popManager.RecordLakePollution(issue.ProcessCost);
             GameMaster.Instance?.interfaceManager?.RefreshStinkMeter();
-            
+
             if (health <= 0) GameMaster.Instance?.turnController.GameLost();
         }
-        
+
         private void Awake()
         {
             /*

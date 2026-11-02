@@ -358,7 +358,7 @@ namespace _project.Scripts.Core
         /// <summary>
         ///     Builds and sends everything recorded since the last successful
         ///     sync. On the coroutine path, sync markers only advance once the
-        ///     server has confirmed the segment, so the next call 
+        ///     server has confirmed the segment, so the next call
         ///     simply includes a failed request's range again -- no separate retry queue.
         ///     On the beacon path there is no response to confirm, so markers
         ///     advance optimistically (matching the existing best-effort beacon

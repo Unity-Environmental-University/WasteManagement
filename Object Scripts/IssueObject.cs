@@ -14,7 +14,7 @@ namespace _project.Scripts.Object_Scripts
         NonWaste,
         Metal
     }
-    
+
     public class IssueObject : MonoBehaviour
     {
         [SerializeField] private float moveSpeed = 2f;
@@ -103,7 +103,7 @@ namespace _project.Scripts.Object_Scripts
                 return gm && gm.debugging;
             }
         }
-        
+
         private Vector3 _baseScale;
         private readonly HashSet<EntityId> _siftersProcessed = new();
         private const float BaseProcessCost = 1f;

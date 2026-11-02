@@ -64,7 +64,7 @@ namespace _project.Scripts.Object_Scripts
             if (sifter.TryGetComponent<TreatmentTank>(out var tank))
                 tank.fullnessBar = hBar;
         }
-        
+
         [Serializable]
         public struct LocationHealthBarRelation
         {
