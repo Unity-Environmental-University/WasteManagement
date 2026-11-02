@@ -10,7 +10,7 @@ namespace _project.Scripts.UI
     /// <summary>
     /// Pipe-routing tool palette, styled as an industrial "PIPELINE" control panel.
     /// Each tool is a backlit switch: dark steel at rest, lit when armed
-    /// (cyan = lay pipe, gunmetal = lay isolated pipe, amber = remove, pale = cursor or pan).
+    /// (cyan = lay pipe, gunmetal = lay elevated pipe, amber = remove, pale = cursor or pan).
     /// Exactly one switch is lit.
     /// ROTATE and RECENTER are momentary buttons rather than tools: each wakes only while it
     /// has something to act on (a pipe is armed / the view is off center).
@@ -22,8 +22,8 @@ namespace _project.Scripts.UI
         [SerializeField] private Button shortPipeButton;
         [SerializeField] private Button longPipeButton;
 
-        [Tooltip("Arms isolated pipe, which joins only itself. Dimmed until it unlocks.")]
-        [SerializeField] private Button isolatedPipeButton;
+        [Tooltip("Arms elevated pipe, which joins only itself. Dimmed until it unlocks.")]
+        [SerializeField] private Button elevatedPipeButton;
         [SerializeField] private Button breakPipeButton;
         [SerializeField] private Button clearToolButton;
         [SerializeField] private Button conveyorButton;
@@ -38,7 +38,7 @@ namespace _project.Scripts.UI
         [SerializeField] private Color flowColor = new(0.169f, 0.769f, 0.839f, 1f);    // armed: lay pipe
         [SerializeField] private Color cautionColor = new(0.914f, 0.635f, 0.235f, 1f); // armed/idle: remove
         [SerializeField] private Color neutralColor = new(0.792f, 0.831f, 0.847f, 1f); // armed: cursor, pan
-        [SerializeField] private Color isolatedColor = new(0.62f, 0.68f, 0.78f, 1f);   // armed: isolated pipe
+        [SerializeField] private Color elevatedColor = new(0.62f, 0.68f, 0.78f, 1f);   // armed: elevated pipe
         [SerializeField] private Color inkColor = new(0.055f, 0.078f, 0.094f, 1f);     // text on a lit switch
         [SerializeField] private Color textColor = new(0.914f, 0.945f, 0.953f, 1f);    // text on an idle switch
 
@@ -101,7 +101,7 @@ namespace _project.Scripts.UI
 
             RegisterAssignedStyle(shortPipeButton, flowColor);
             RegisterAssignedStyle(longPipeButton, flowColor);
-            RegisterAssignedStyle(isolatedPipeButton, isolatedColor);
+            RegisterAssignedStyle(elevatedPipeButton, elevatedColor);
             RegisterAssignedStyle(breakPipeButton, cautionColor);
             RegisterAssignedStyle(clearToolButton, neutralColor);
             RegisterAssignedStyle(conveyorButton, new Color(.22f,.85f,.38f));
@@ -125,7 +125,7 @@ namespace _project.Scripts.UI
             if (breakConveyorButton) breakConveyorButton.onClick.AddListener(SelectBreakConveyor);
             if (shortPipeButton) shortPipeButton.onClick.AddListener(SelectShortPipe);
             if (longPipeButton) longPipeButton.onClick.AddListener(SelectLongPipe);
-            if (isolatedPipeButton) isolatedPipeButton.onClick.AddListener(SelectIsolatedPipe);
+            if (elevatedPipeButton) elevatedPipeButton.onClick.AddListener(SelectElevatedPipe);
             if (breakPipeButton) breakPipeButton.onClick.AddListener(SelectBreakPipe);
             if (clearToolButton) clearToolButton.onClick.AddListener(ClearTool);
             if (panButton) panButton.onClick.AddListener(SelectPan);
@@ -142,7 +142,7 @@ namespace _project.Scripts.UI
             if (breakConveyorButton) breakConveyorButton.onClick.RemoveListener(SelectBreakConveyor);
             if (shortPipeButton) shortPipeButton.onClick.RemoveListener(SelectShortPipe);
             if (longPipeButton) longPipeButton.onClick.RemoveListener(SelectLongPipe);
-            if (isolatedPipeButton) isolatedPipeButton.onClick.RemoveListener(SelectIsolatedPipe);
+            if (elevatedPipeButton) elevatedPipeButton.onClick.RemoveListener(SelectElevatedPipe);
             if (breakPipeButton) breakPipeButton.onClick.RemoveListener(SelectBreakPipe);
             if (clearToolButton) clearToolButton.onClick.RemoveListener(ClearTool);
             if (panButton) panButton.onClick.RemoveListener(SelectPan);
@@ -175,9 +175,9 @@ namespace _project.Scripts.UI
             RefreshState();
         }
 
-        private void SelectIsolatedPipe()
+        private void SelectElevatedPipe()
         {
-            ShopManager.Instance?.SelectIsolatedPipeTool();
+            ShopManager.Instance?.SelectElevatedPipeTool();
             RefreshState();
         }
 
@@ -233,16 +233,16 @@ namespace _project.Scripts.UI
                 shop && shop.CanSelectConveyorTool);
 
             var placingPipe = activeTool == PathBuildTool.Place && kind == PathKind.Pipe;
-            var isolated = board && board.ActivePieceIsIsolated;
+            var elevated = board && board.ActivePieceIsElevated;
             ApplyButtonIfChanged(shortPipeButton,
-                placingPipe && !isolated && activePiece is { Length: 2 },
+                placingPipe && !elevated && activePiece is { Length: 2 },
                 shop && shop.CanSelectShortPipeTool);
             ApplyButtonIfChanged(longPipeButton,
-                placingPipe && !isolated && activePiece is { Length: 3 },
+                placingPipe && !elevated && activePiece is { Length: 3 },
                 shop && shop.CanSelectLongPipeTool);
-            ApplyButtonIfChanged(isolatedPipeButton,
-                placingPipe && isolated,
-                shop && shop.CanSelectIsolatedPipeTool);
+            ApplyButtonIfChanged(elevatedPipeButton,
+                placingPipe && elevated,
+                shop && shop.CanSelectElevatedPipeTool);
             ApplyButtonIfChanged(breakPipeButton,
                 activeTool == PathBuildTool.Break && kind == PathKind.Pipe,
                 shop && shop.CanSelectBreakPipeTool);

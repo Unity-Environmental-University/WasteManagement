@@ -7,11 +7,11 @@ using UnityEngine.EventSystems;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    ///     The valve on an isolated pipe end that faces regular pipe. It starts closed, with a red lever
+    ///     The valve on an elevated pipe end that faces regular pipe. It starts closed, with a red lever
     ///     across the pipe and a capped end; clicking it opens the drain, swinging a green lever in line
-    ///     and pouring the isolated stream into the regular pipe. Click again to close it. Like laying
+    ///     and pouring the elevated stream into the regular pipe. Click again to close it. Like laying
     ///     pipe, it only changes between runs: routes are set when a run starts, and rerouting items
-    ///     already in the pipes would scramble them. Built and rebuilt by <see cref="IsolatedPipeVisual" />;
+    ///     already in the pipes would scramble them. Built and rebuilt by <see cref="ElevatedPipeVisual" />;
     ///     the open/closed state lives on the board.
     /// </summary>
     public class DrainValve : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler

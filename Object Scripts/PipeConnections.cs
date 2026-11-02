@@ -49,7 +49,7 @@ namespace _project.Scripts.Object_Scripts
             if (!library) return null;
 
             var connectionCount = CountConnections(connections);
-            // No dedicated cap is required: the straight model keeps isolated/off-route cells
+            // No dedicated cap is required: the straight model keeps elevated/off-route cells
             // visually tidy and gives one-neighbor route cells an opening toward an endpoint.
             if (connectionCount <= 1) return library.StraightPipe;
 

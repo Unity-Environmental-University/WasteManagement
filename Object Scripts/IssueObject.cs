@@ -222,9 +222,9 @@ namespace _project.Scripts.Object_Scripts
             _baseScale = transform.localScale;
             SetSize(SetRandSize());
 
-            // Isolated pipe is too slim to show the model in; this swaps it for a bulge in the pipe.
-            if (!TryGetComponent<IsolatedPipeRider>(out _))
-                gameObject.AddComponent<IsolatedPipeRider>();
+            // Elevated pipe is too slim to show the model in; this swaps it for a bulge in the pipe.
+            if (!TryGetComponent<ElevatedPipeRider>(out _))
+                gameObject.AddComponent<ElevatedPipeRider>();
         }
 
         /// <summary>

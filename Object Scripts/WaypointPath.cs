@@ -358,7 +358,7 @@ namespace _project.Scripts.Object_Scripts
         // Routes run over PipeLayer nodes; callers outside get plain board cells.
         private static IReadOnlyList<Vector2Int> ToCells(List<Vector2Int> nodes)
         {
-            if (!nodes.Exists(PipeLayer.IsIsolated)) return nodes;
+            if (!nodes.Exists(PipeLayer.IsElevated)) return nodes;
             return nodes.ConvertAll(PipeLayer.Cell);
         }
 
@@ -372,10 +372,10 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     True while an issue heading for <paramref name="waypointIndex" /> on a route travels
-        ///     inside isolated pipe: the stretch leading to that waypoint starts or ends in the tube.
+        ///     inside elevated pipe: the stretch leading to that waypoint starts or ends in the tube.
         ///     The start and end points count as part of the first and last pipe cells.
         /// </summary>
-        public bool IsInsideIsolatedPipe(int routeIndex, int waypointIndex)
+        public bool IsInsideElevatedPipe(int routeIndex, int waypointIndex)
         {
             if (routeIndex < 0 || routeIndex >= _routes.Count) return false;
 
@@ -384,7 +384,7 @@ namespace _project.Scripts.Object_Scripts
             if (cells.Count == 0) return false;
             var to = Mathf.Clamp(waypointIndex - 1, 0, cells.Count - 1);
             var from = Mathf.Clamp(waypointIndex - 2, 0, cells.Count - 1);
-            return PipeLayer.IsIsolated(cells[to]) || PipeLayer.IsIsolated(cells[from]);
+            return PipeLayer.IsElevated(cells[to]) || PipeLayer.IsElevated(cells[from]);
         }
 
         /// <summary>Route 0 always counts, so an issue can sit on the main route before the path is built.</summary>
@@ -395,7 +395,7 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Returns whether two issues may merge at their current route progress. Issues on
-        ///     different routes stay isolated until both are targeting the shared route suffix
+        ///     different routes stay elevated until both are targeting the shared route suffix
         ///     where their branches have rejoined.
         /// </summary>
         public bool CanRoutesMergeAtProgress(int firstRouteIndex, int firstWaypointIndex,
@@ -928,19 +928,19 @@ namespace _project.Scripts.Object_Scripts
 
         /// <summary>
         ///     Whether flow can step from one cell into its neighbor: the neighbor holds this path's
-        ///     kind of piece, and for pipe the two pieces join (isolated pipe only joins its own kind).
+        ///     kind of piece, and for pipe the two pieces join (elevated pipe only joins its own kind).
         /// </summary>
         private bool Links(Vector2Int from, Vector2Int to)
         {
             return IsNodeOccupied(to) && (!LayeredPipe || pathBuildBoard.ArePipesLinked(from, to));
         }
 
-        // Pipe routes run over PipeLayer nodes, so isolated pipe can cross regular pipe in one cell.
+        // Pipe routes run over PipeLayer nodes, so elevated pipe can cross regular pipe in one cell.
         private bool LayeredPipe => PathKind == PathKind.Pipe;
 
         private bool IsNodeOccupied(Vector2Int node) =>
             LayeredPipe
-                ? pathBuildBoard.HasPipe(PipeLayer.Cell(node), PipeLayer.IsIsolated(node))
+                ? pathBuildBoard.HasPipe(PipeLayer.Cell(node), PipeLayer.IsElevated(node))
                 : pathBuildBoard.IsOccupied(node, PathKind);
 
         /// <summary>The nodes one step from <paramref name="node" />: each neighbor cell on every pipe layer.</summary>
@@ -950,12 +950,12 @@ namespace _project.Scripts.Object_Scripts
             {
                 var next = node + direction;
                 yield return next;
-                if (LayeredPipe) yield return PipeLayer.Node(PipeLayer.Cell(next), !PipeLayer.IsIsolated(next));
+                if (LayeredPipe) yield return PipeLayer.Node(PipeLayer.Cell(next), !PipeLayer.IsElevated(next));
             }
         }
 
         private Vector3 GetWaypointPosition(Vector2Int node) =>
-            pathBuildBoard.GetPathWaypointPosition(PipeLayer.Cell(node), PathKind, PipeLayer.IsIsolated(node));
+            pathBuildBoard.GetPathWaypointPosition(PipeLayer.Cell(node), PathKind, PipeLayer.IsElevated(node));
 
         /// <summary>Where a route passes through a board cell, on either pipe layer; -1 when it doesn't.</summary>
         private static int IndexOfCell(List<Vector2Int> route, Vector2Int cell)
@@ -1319,7 +1319,7 @@ namespace _project.Scripts.Object_Scripts
         }
 
         private static Vector2Int PieceNode(PathBuildBoard.PlacedPathPiece piece, Vector2Int cell) =>
-            piece.pathKind == PathKind.Pipe ? PipeLayer.Node(cell, piece.isolated) : cell;
+            piece.pathKind == PathKind.Pipe ? PipeLayer.Node(cell, piece.elevated) : cell;
 
         private bool FailRebuild()
         {

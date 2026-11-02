@@ -90,18 +90,18 @@ namespace _project.Scripts.Tests
             Assert.IsNotNull(snapshot);
             Assert.IsNotNull(pathData);
 
-            string Layer(bool isolated)
+            string Layer(bool elevated)
             {
                 var piece = new PathBuildBoard.PlacedPathPiece
                 {
-                    id = 1, length = 1, isolated = isolated, cells = { new Vector2Int(2, 2) }
+                    id = 1, length = 1, elevated = elevated, cells = { new Vector2Int(2, 2) }
                 };
                 var data = (Dictionary<string, string>)pathData.Invoke(null,
                     new[] { snapshot.Invoke(null, new object[] { piece }), false });
                 return data["layer"];
             }
 
-            Assert.AreEqual("isolated", Layer(true));
+            Assert.AreEqual("elevated", Layer(true));
             Assert.AreEqual("regular", Layer(false), "Crossing pieces in one cell stay distinguishable.");
         }
 

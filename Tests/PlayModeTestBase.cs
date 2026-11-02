@@ -58,20 +58,20 @@ namespace _project.Scripts.Tests
         }
 
         protected static PathPiecePlaceable Pipe(int length, bool vertical, PathKind kind = PathKind.Pipe,
-            bool isolated = false)
+            bool elevated = false)
         {
-            var piece = new PathPiecePlaceable("Pipe", string.Empty, 1, length, null, 0, kind, isolated);
+            var piece = new PathPiecePlaceable("Pipe", string.Empty, 1, length, null, 0, kind, elevated);
             if (vertical) piece.ToggleOrientation();
             return piece;
         }
 
         protected static void PlaceVertical(PathBuildBoard board, int column, int row, int length,
-            bool isolated = false) =>
-            Assert.IsNotNull(board.TryPlace(GetCell(board, column, row), Pipe(length, true, isolated: isolated)));
+            bool elevated = false) =>
+            Assert.IsNotNull(board.TryPlace(GetCell(board, column, row), Pipe(length, true, elevated: elevated)));
 
         protected static void PlaceHorizontal(PathBuildBoard board, int column, int row, int length,
-            bool isolated = false) =>
-            Assert.IsNotNull(board.TryPlace(GetCell(board, column, row), Pipe(length, false, isolated: isolated)));
+            bool elevated = false) =>
+            Assert.IsNotNull(board.TryPlace(GetCell(board, column, row), Pipe(length, false, elevated: elevated)));
 
         private static FieldInfo Field(object target, string fieldName)
         {

@@ -52,7 +52,7 @@ namespace _project.Scripts.Core
         public static bool TryGetPipeBoard(Transform location, out PathBuildBoard board)
         {
             board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
-            // Nothing sits where isolated pipe crosses regular pipe: it would catch both lines at once.
+            // Nothing sits where elevated pipe crosses regular pipe: it would catch both lines at once.
             return location && board && board.TryWorldToCell(location.position, out var cell) &&
                    board.IsOccupied(cell) && !board.IsPipeCrossing(cell);
         }
@@ -273,7 +273,7 @@ namespace _project.Scripts.Core
         }
 
         // A splitter may go down before any pipe: the route divides at whichever cell it sits on
-        // once pipes are laid through it. It still can't sit where isolated pipe crosses regular pipe.
+        // once pipes are laid through it. It still can't sit where elevated pipe crosses regular pipe.
         public GameObject Place(Transform location)
         {
             var board = GameMaster.Instance ? GameMaster.Instance.pathBuildBoard : null;
@@ -509,10 +509,10 @@ namespace _project.Scripts.Core
     public class PathPiecePlaceable : ITypedPathPiece
     {
         public PathPiecePlaceable(string displayName, string description, int requiredLevel, int length,
-            Sprite displaySprite, int infraValue, PathKind pathKind = PathKind.Pipe, bool isolated = false)
+            Sprite displaySprite, int infraValue, PathKind pathKind = PathKind.Pipe, bool elevated = false)
         {
             PathKind = pathKind;
-            Isolated = isolated;
+            Elevated = elevated;
             DisplayName = displayName;
             Description = description;
             RequiredLevel = Mathf.Max(1, requiredLevel);
@@ -530,10 +530,10 @@ namespace _project.Scripts.Core
         public PathKind PathKind { get; }
 
         /// <summary>
-        ///     Isolated pipe joins only other isolated pipe (and a splitter's cell, so a splitter can
+        ///     Elevated pipe joins only other elevated pipe (and a splitter's cell, so a splitter can
         ///     feed it); it runs alongside ordinary pipe without merging into it.
         /// </summary>
-        public bool Isolated { get; }
+        public bool Elevated { get; }
 
         public int Length { get; }
         public PathPieceOrientation Orientation { get; private set; } = PathPieceOrientation.Horizontal;

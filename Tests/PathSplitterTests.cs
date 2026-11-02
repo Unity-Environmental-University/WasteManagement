@@ -739,31 +739,31 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void IsolatedPipe_BesideTheMainLine_JoinsOnlyThroughASplitter()
+        public void ElevatedPipe_BesideTheMainLine_JoinsOnlyThroughASplitter()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
             var lastColumn = fixture.Board.Columns - 1;
-            // Isolated pipe hugging the main line for four cells, then off to the right edge.
+            // Elevated pipe hugging the main line for four cells, then off to the right edge.
             PlaceVertical(fixture.Board, 2, 0, 4, true);
             PlaceHorizontal(fixture.Board, 2, 4, lastColumn - 1, true);
             var receptacle = AddReceptacle(fixture, 4);
 
             Assert.IsTrue(fixture.Board.HasPipe(new Vector2Int(2, 2), true));
             Assert.IsTrue(fixture.Path.Rebuild());
-            Assert.IsFalse(fixture.Path.HasAlternateRoute, "Side by side, isolated pipe never joins the main line.");
+            Assert.IsFalse(fixture.Path.HasAlternateRoute, "Side by side, elevated pipe never joins the main line.");
 
             var splitter = AddSplitter(fixture, new Vector2Int(1, 4));
             Assert.IsTrue(fixture.Path.Rebuild());
             Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 4), out var branch),
-                "A splitter feeds the isolated line.");
+                "A splitter feeds the elevated line.");
             Assert.AreSame(receptacle, fixture.Path.GetRouteReceptacle(branch));
             Assert.IsFalse(fixture.Path.GetRouteCells(0).Any(cell => cell.x == 2),
                 "The main route stays on ordinary pipe.");
 
             // The tube's last cell opens toward the receptacle and runs on into it.
             var tubeEnd = fixture.Board.transform.Find("PipeVisuals").GetComponentsInChildren<Renderer>()
-                .Where(part => part.transform.parent.name == "Isolated Pipe")
+                .Where(part => part.transform.parent.name == "Elevated Pipe")
                 .Max(part => part.bounds.max.x);
             var lastCellCenter = fixture.Board.GetCellTopPosition(new Vector2Int(lastColumn, 4)).x;
             Assert.Greater(tubeEnd, lastCellCenter + fixture.Board.CellWorldPitch.x * 0.75f);
@@ -777,12 +777,12 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void IsolatedPipe_CrossesRegularPipe_AtRightAnglesWithoutJoiningIt()
+        public void ElevatedPipe_CrossesRegularPipe_AtRightAnglesWithoutJoiningIt()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
             var lastColumn = fixture.Board.Columns - 1;
-            // A stray regular pipe up column 4, and isolated pipe from the splitter across it to the edge.
+            // A stray regular pipe up column 4, and elevated pipe from the splitter across it to the edge.
             PlaceVertical(fixture.Board, 4, 0, 6);
             PlaceHorizontal(fixture.Board, 2, 2, lastColumn - 1, true);
             var crossing = new Vector2Int(4, 2);
@@ -790,10 +790,10 @@ namespace _project.Scripts.Tests
             AddSplitter(fixture, new Vector2Int(1, 2));
 
             Assert.IsTrue(fixture.Board.IsPipeCrossing(crossing));
-            Assert.IsNull(fixture.Board.TryPlace(GetCell(fixture.Board, 4, 3), Pipe(2, true, isolated: true)),
-                "Isolated pipe can't run along regular pipe in the same cells.");
+            Assert.IsNull(fixture.Board.TryPlace(GetCell(fixture.Board, 4, 3), Pipe(2, true, elevated: true)),
+                "Elevated pipe can't run along regular pipe in the same cells.");
             Assert.IsNull(fixture.Board.TryPlace(GetCell(fixture.Board, 6, 2), Pipe(2, false)),
-                "Nor regular pipe along isolated pipe.");
+                "Nor regular pipe along elevated pipe.");
 
             Assert.IsTrue(fixture.Path.Rebuild());
             Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var branch));
@@ -803,7 +803,7 @@ namespace _project.Scripts.Tests
             CollectionAssert.DoesNotContain(branchCells, new Vector2Int(4, 1), "The branch passes over the stray pipe.");
             CollectionAssert.DoesNotContain(branchCells, new Vector2Int(4, 3));
 
-            // Issues ride through the isolated tube, which runs above the regular channel.
+            // Issues ride through the elevated tube, which runs above the regular channel.
             var crossingWaypoint = fixture.Path.GetPosition(branch, branchCells.IndexOf(crossing) + 1);
             Assert.Less(Vector3.Distance(fixture.Board.GetPathWaypointPosition(crossing, PathKind.Pipe, true),
                 crossingWaypoint), 0.001f);
@@ -829,7 +829,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void IsolatedPipe_DeadEndingIntoRegularPipe_DrainsIntoIt()
+        public void ElevatedPipe_DeadEndingIntoRegularPipe_DrainsIntoIt()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
@@ -846,7 +846,7 @@ namespace _project.Scripts.Tests
 
             Assert.IsTrue(fixture.Board.DrainsInto(new Vector2Int(2, 6), new Vector2Int(1, 6)));
             Assert.IsFalse(fixture.Board.CanDrainInto(new Vector2Int(3, 4), new Vector2Int(2, 4)),
-                "Mid-run isolated pipe never drains.");
+                "Mid-run elevated pipe never drains.");
             Assert.IsFalse(fixture.Board.CanDrainInto(new Vector2Int(2, 2), new Vector2Int(1, 2)),
                 "Pipe leaving a splitter gets no valve.");
 
@@ -854,11 +854,11 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out var branch));
             var cells = fixture.Path.GetRouteCells(branch).ToList();
             var drain = cells.IndexOf(new Vector2Int(2, 6));
-            Assert.Greater(drain, 0, "The branch runs through the isolated pipe.");
+            Assert.Greater(drain, 0, "The branch runs through the elevated pipe.");
             Assert.AreEqual(new Vector2Int(1, 6), cells[drain + 1], "It empties into the main line...");
             Assert.AreEqual(new Vector2Int(1, 9), cells[^1], "...and rides it on to the end.");
             Assert.IsFalse(fixture.Path.GetRouteCells(0).Any(cell => cell.x > 1),
-                "Nothing flows from the main line back up into isolated pipe.");
+                "Nothing flows from the main line back up into elevated pipe.");
 
             AddSplitter(fixture, new Vector2Int(2, 6));
             Assert.IsFalse(fixture.Board.CanDrainInto(new Vector2Int(2, 6), new Vector2Int(1, 6)),
@@ -875,14 +875,14 @@ namespace _project.Scripts.Tests
             PlaceHorizontal(fixture.Board, 2, 6, 2, true);
             // Settling the splitter redraws the pipe it lands beside on the board's next update.
             AddSplitter(fixture, new Vector2Int(1, 2));
-            fixture.Board.RedrawStaleIsolatedPipe();
+            fixture.Board.RedrawStaleElevatedPipe();
             var end = new Vector2Int(2, 6);
             Assert.AreEqual(1, fixture.Board.GetComponentsInChildren<DrainValve>().Length,
                 "Only the end facing the main line gets a valve, not the one leaving the splitter.");
 
             Assert.IsTrue(fixture.Path.Rebuild());
             Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, CellTop(fixture, 1, 2), out _),
-                "A closed drain leaves the isolated pipe going nowhere.");
+                "A closed drain leaves the elevated pipe going nowhere.");
             var valve = FindValve(fixture, end);
             Assert.IsFalse(valve.IsOpen);
             Assert.IsNull(valve.transform.parent.Find("Splash"), "Nothing pours out of a closed drain.");
@@ -915,11 +915,11 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void IsolatedPipe_EndingBesideRegularPipe_DoesNotDrain()
+        public void ElevatedPipe_EndingBesideRegularPipe_DoesNotDrain()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
-            // Isolated pipe whose end lies alongside the main line rather than pointing into it.
+            // Elevated pipe whose end lies alongside the main line rather than pointing into it.
             PlaceVertical(fixture.Board, 2, 4, 2, true);
 
             Assert.IsFalse(fixture.Board.DrainsInto(new Vector2Int(2, 4), new Vector2Int(1, 4)));
@@ -928,7 +928,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void Remove_AtACrossing_TakesTheIsolatedPipeOnTopFirst()
+        public void Remove_AtACrossing_TakesTheElevatedPipeOnTopFirst()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 4, 0, 6);
@@ -938,25 +938,25 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(fixture.Board.TryBreak(GetCell(fixture.Board, 4, 2), PathKind.Pipe, out _));
             Assert.IsFalse(fixture.Board.HasPipe(crossing, true));
             Assert.IsTrue(fixture.Board.HasPipe(crossing, false));
-            Assert.IsFalse(fixture.Board.HasPipe(new Vector2Int(2, 2), true), "The whole isolated piece goes.");
+            Assert.IsFalse(fixture.Board.HasPipe(new Vector2Int(2, 2), true), "The whole elevated piece goes.");
 
             Assert.IsTrue(fixture.Board.TryBreak(GetCell(fixture.Board, 4, 2), PathKind.Pipe, out _));
             Assert.IsFalse(fixture.Board.IsOccupied(crossing));
         }
 
         [Test]
-        public void IsolatedPipe_IsDrawnAsASlimMetalTube()
+        public void ElevatedPipe_IsDrawnAsASlimMetalTube()
         {
             var fixture = CreatePathFixture();
             PlaceHorizontal(fixture.Board, 2, 2, 3, true);
 
             var visual = fixture.Board.transform.Find("PipeVisuals").Cast<Transform>()
                 .Single(child => child.name.StartsWith("Placed"));
-            var tube = visual.Find("Isolated Pipe");
+            var tube = visual.Find("Elevated Pipe");
             Assert.IsNotNull(tube);
             Assert.Greater(tube.childCount, 0);
             Assert.IsFalse(visual.Cast<Transform>().Any(child => child.name.StartsWith("Pipe Tile")),
-                "No channel tiles under isolated pipe.");
+                "No channel tiles under elevated pipe.");
 
             var bounds = tube.GetComponentsInChildren<Renderer>()
                 .Select(part => part.bounds).Aggregate((all, next) =>
@@ -968,7 +968,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void IssueInIsolatedPipe_IsShownAsABulgeInThePipe()
+        public void IssueInElevatedPipe_IsShownAsABulgeInThePipe()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
@@ -982,21 +982,21 @@ namespace _project.Scripts.Tests
 
             var metal = CreateIssue("Metal Issue", fixture.Path);
             metal.SetType(IssueType.Metal);
-            var rider = metal.GetComponent<IsolatedPipeRider>();
+            var rider = metal.GetComponent<ElevatedPipeRider>();
             var model = metal.GetComponent<Renderer>();
-            Assert.IsNotNull(rider, "Every issue can ride isolated pipe.");
+            Assert.IsNotNull(rider, "Every issue can ride elevated pipe.");
 
             // Up the main line to the splitter: the model shows.
             while (metal.GetWaypointIndex() <= 5) AdvanceIssueOneWaypoint(metal, fixture.Board);
             rider.SendMessage("LateUpdate");
-            Assert.IsFalse(rider.InsideIsolatedPipe);
+            Assert.IsFalse(rider.InsideElevatedPipe);
             Assert.IsTrue(model.enabled);
 
             // Sent into the tube: the model hides and a bulge rides the pipe in its place.
             Assert.IsTrue(splitter.RouteIssue(metal));
             AdvanceIssueOneWaypoint(metal, fixture.Board);
             rider.SendMessage("LateUpdate");
-            Assert.IsTrue(rider.InsideIsolatedPipe);
+            Assert.IsTrue(rider.InsideElevatedPipe);
             Assert.IsFalse(model.enabled);
             var bulge = GameObject.Find("Pipe Bulge");
             Assert.IsNotNull(bulge);
@@ -1020,7 +1020,7 @@ namespace _project.Scripts.Tests
             // Back on ordinary pipe, the model returns and the bulge goes.
             metal.TrySetRoute(0);
             rider.SendMessage("LateUpdate");
-            Assert.IsFalse(rider.InsideIsolatedPipe);
+            Assert.IsFalse(rider.InsideElevatedPipe);
             Assert.IsTrue(model.enabled);
             Assert.IsFalse(bulge.activeSelf);
             Object.Destroy(bulge);

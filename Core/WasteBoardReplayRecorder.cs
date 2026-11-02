@@ -63,7 +63,7 @@ namespace _project.Scripts.Core
             public List<Vector2Int> Cells;
             public int Id;
             public int InfraValue;
-            public bool Isolated;
+            public bool Elevated;
             public int Length;
             public string Orientation;
         }
@@ -535,8 +535,8 @@ namespace _project.Scripts.Core
                 { "piece-id", path.Id.ToString(Invariant) },
                 { "length", path.Length.ToString(Invariant) },
                 { "orientation", path.Orientation },
-                // Isolated pipe may cross regular pipe, so two pieces can share a cell; the layer tells them apart.
-                { "layer", path.Isolated ? "isolated" : "regular" },
+                // Elevated pipe may cross regular pipe, so two pieces can share a cell; the layer tells them apart.
+                { "layer", path.Elevated ? "elevated" : "regular" },
                 { "infra-value", path.InfraValue.ToString(Invariant) },
                 { "cells", string.Join(";", path.Cells.Select(cell => $"{cell.x},{cell.y}")) },
                 { "initial", initial ? "true" : "false" }
@@ -875,7 +875,7 @@ namespace _project.Scripts.Core
                 Length = piece.length,
                 Orientation = piece.orientation.ToString(),
                 InfraValue = piece.infraValue,
-                Isolated = piece.isolated,
+                Elevated = piece.elevated,
                 Cells = new List<Vector2Int>(piece.cells)
             };
         }

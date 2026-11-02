@@ -4,14 +4,14 @@ using UnityEngine;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    ///     Isolated pipe is a closed tube too slim for an issue's model, so while an issue travels
+    ///     Elevated pipe is a closed tube too slim for an issue's model, so while an issue travels
     ///     through it the model is hidden and a bulge in the pipe slides along in its place, as if
     ///     the pipe were swelling around whatever is being pushed through. The bulge is tinted by the
     ///     issue's type, and a clog swells and flashes the block highlight's orange, since the hidden
     ///     model can't show that warning. Colliders stay on, so sifters, merging and clicks work as usual.
     /// </summary>
     [RequireComponent(typeof(IssueObject))]
-    public class IsolatedPipeRider : MonoBehaviour
+    public class ElevatedPipeRider : MonoBehaviour
     {
         private const float BulgeWidth = 1.45f; // Times the tube's diameter.
         private const float BulgeLength = 2.2f;
@@ -34,8 +34,8 @@ namespace _project.Scripts.Object_Scripts
         private MaterialPropertyBlock _colorBlock;
         private Vector3 _heading = Vector3.forward;
 
-        /// <summary>True while the issue is inside isolated pipe and shown as a bulge.</summary>
-        public bool InsideIsolatedPipe { get; private set; }
+        /// <summary>True while the issue is inside elevated pipe and shown as a bulge.</summary>
+        public bool InsideElevatedPipe { get; private set; }
 
         private void Awake() => _issue = GetComponent<IssueObject>();
 
@@ -43,8 +43,8 @@ namespace _project.Scripts.Object_Scripts
         {
             var path = _issue.GetPath();
             var board = path ? path.Board : null;
-            var inside = board && path.IsInsideIsolatedPipe(_issue.GetRouteIndex(), _issue.GetWaypointIndex());
-            if (inside != InsideIsolatedPipe) SetInside(inside, board);
+            var inside = board && path.IsInsideElevatedPipe(_issue.GetRouteIndex(), _issue.GetWaypointIndex());
+            if (inside != InsideElevatedPipe) SetInside(inside, board);
             if (!inside) return;
 
             // A model swapped in mid-trip (a merge, say) arrives visible; keep it out of sight.
@@ -54,7 +54,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDisable()
         {
-            if (InsideIsolatedPipe) SetInside(false, null);
+            if (InsideElevatedPipe) SetInside(false, null);
         }
 
         private void OnDestroy()
@@ -64,7 +64,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void SetInside(bool inside, PathBuildBoard board)
         {
-            InsideIsolatedPipe = inside;
+            InsideElevatedPipe = inside;
             if (inside)
             {
                 HideModel();
@@ -95,7 +95,7 @@ namespace _project.Scripts.Object_Scripts
         {
             var boardTransform = board.transform;
             var local = boardTransform.InverseTransformPoint(transform.position);
-            local.y = board.IsolatedPipeCenterHeight;
+            local.y = board.ElevatedPipeCenterHeight;
             _bulge.position = boardTransform.TransformPoint(local);
 
             // Point along the pipe toward the next waypoint; slow or stalled issues keep their heading.
@@ -115,7 +115,7 @@ namespace _project.Scripts.Object_Scripts
             var pulse = 1f + wave * (blocked ? BlockedPulseAmount : PulseAmount);
             var width = BulgeWidth * (blocked ? BlockedSwell : 1f) * pulse;
             var length = BulgeLength * (blocked ? BlockedSwell : 1f) / pulse;
-            var diameter = board.IsolatedPipeRadius * 2f * boardTransform.lossyScale.x;
+            var diameter = board.ElevatedPipeRadius * 2f * boardTransform.lossyScale.x;
             _bulge.localScale = new Vector3(width, width, length) * diameter;
 
             var color = BulgeColor(_issue.GetIssueType());
@@ -128,9 +128,9 @@ namespace _project.Scripts.Object_Scripts
             if (_bulge) return _bulge;
 
             var bulge = new GameObject("Pipe Bulge") { layer = board.gameObject.layer };
-            bulge.AddComponent<MeshFilter>().sharedMesh = IsolatedPipeVisual.GetSphere();
+            bulge.AddComponent<MeshFilter>().sharedMesh = ElevatedPipeVisual.GetSphere();
             _bulgeRenderer = bulge.AddComponent<MeshRenderer>();
-            _bulgeRenderer.sharedMaterial = IsolatedPipeVisual.GetMetal(board);
+            _bulgeRenderer.sharedMaterial = ElevatedPipeVisual.GetMetal(board);
             _bulge = bulge.transform;
             return _bulge;
         }

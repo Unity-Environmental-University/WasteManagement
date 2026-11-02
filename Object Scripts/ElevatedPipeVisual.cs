@@ -5,7 +5,7 @@ using UnityEngine;
 namespace _project.Scripts.Object_Scripts
 {
     /// <summary>
-    ///     Draws isolated pipe as a slim, closed metal tube on short stands, instead of the open
+    ///     Draws elevated pipe as a slim, closed metal tube on short stands, instead of the open
     ///     channel tiles regular pipe uses. It rides above the channel walls, so where it crosses
     ///     regular pipe it visibly bridges over it. Each cell gets a tube leg toward every side it
     ///     connects on; straight runs get a flange collar and bends get a round joint. A leg that
@@ -13,9 +13,9 @@ namespace _project.Scripts.Object_Scripts
     ///     regular pipe gets a <see cref="DrainValve" />: capped while closed, and once opened a
     ///     spout drops over the channel wall and splashes into the water.
     /// </summary>
-    internal static class IsolatedPipeVisual
+    internal static class ElevatedPipeVisual
     {
-        private const string RootName = "Isolated Pipe";
+        private const string RootName = "Elevated Pipe";
 
         // How far, in cells, a leg into a regular channel reaches before turning down: past the
         // channel's wall, short of its middle.
@@ -37,8 +37,8 @@ namespace _project.Scripts.Object_Scripts
             ClearChildren(root);
             var material = GetMetal(board);
             var pitch = board.PipeCellPitch;
-            var radius = board.IsolatedPipeRadius;
-            var centerHeight = board.IsolatedPipeCenterHeight;
+            var radius = board.ElevatedPipeRadius;
+            var centerHeight = board.ElevatedPipeCenterHeight;
 
             foreach (var cell in cells)
             {
@@ -274,7 +274,7 @@ namespace _project.Scripts.Object_Scripts
 
             _metalSource = source;
             _metal = source ? new Material(source) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            _metal.name = "Isolated Pipe Metal";
+            _metal.name = "Elevated Pipe Metal";
             foreach (var texture in new[] { "_BaseMap", "_MainTex", "_BumpMap", "_MetallicGlossMap", "_OcclusionMap" })
                 if (_metal.HasProperty(texture))
                     _metal.SetTexture(texture, null);
