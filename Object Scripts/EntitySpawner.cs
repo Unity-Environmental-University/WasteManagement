@@ -20,6 +20,14 @@ namespace _project.Scripts.Object_Scripts
             if (!spawnPoint) spawnPoint = transform;
         }
 
+        /// <summary>Whether this spawner's waves can contain <paramref name="type" /> at the given town level.</summary>
+        public bool CanSpawn(IssueType type, int level)
+        {
+            if (nonWasteOnly) return type == IssueType.NonWaste;
+            return spawnerObject && spawnerObject.TryGetComponent<IssueObject>(out var issue) &&
+                   level >= issue.GetUnlockLevel(type);
+        }
+
         public bool StartSpawner(float spawnRateMultiplier = 1f)
         {
             // Restart semantics: never let a previous spawn loop keep running unreferenced.

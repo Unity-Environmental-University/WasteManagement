@@ -412,6 +412,12 @@ namespace _project.Scripts.Object_Scripts
             return Random.Range(1, 4);
         }
 
+        /// <summary>The town level from which spawners can roll this type.</summary>
+        public int GetUnlockLevel(IssueType issueType)
+        {
+            return issueType == IssueType.Metal ? metalUnlockLevel : 1;
+        }
+
         public void AssignType()
         {
             // Metal joins the mix once the town reaches metalUnlockLevel.
