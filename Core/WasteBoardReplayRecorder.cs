@@ -63,6 +63,7 @@ namespace _project.Scripts.Core
             public List<Vector2Int> Cells;
             public int Id;
             public int InfraValue;
+            public bool Isolated;
             public int Length;
             public string Orientation;
         }
@@ -519,21 +520,27 @@ namespace _project.Scripts.Core
 
         private void RecordPathEvent(string eventName, PathSnapshot path, bool initial)
         {
-            var data = new Dictionary<string, string>
-            {
-                { "piece-id", path.Id.ToString(Invariant) },
-                { "length", path.Length.ToString(Invariant) },
-                { "orientation", path.Orientation },
-                { "infra-value", path.InfraValue.ToString(Invariant) },
-                { "cells", string.Join(";", path.Cells.Select(cell => $"{cell.x},{cell.y}")) },
-                { "initial", initial ? "true" : "false" }
-            };
-            RecordEvent(eventName, data, new Dictionary<string, double>
+            RecordEvent(eventName, PathData(path, initial), new Dictionary<string, double>
             {
                 { "piece_length", path.Length },
                 { "infrastructure_value", path.InfraValue },
                 { "cells_affected", path.Cells.Count }
             });
+        }
+
+        private static Dictionary<string, string> PathData(PathSnapshot path, bool initial)
+        {
+            return new Dictionary<string, string>
+            {
+                { "piece-id", path.Id.ToString(Invariant) },
+                { "length", path.Length.ToString(Invariant) },
+                { "orientation", path.Orientation },
+                // Isolated pipe may cross regular pipe, so two pieces can share a cell; the layer tells them apart.
+                { "layer", path.Isolated ? "isolated" : "regular" },
+                { "infra-value", path.InfraValue.ToString(Invariant) },
+                { "cells", string.Join(";", path.Cells.Select(cell => $"{cell.x},{cell.y}")) },
+                { "initial", initial ? "true" : "false" }
+            };
         }
 
         private void SyncSquareContents(bool initial)
@@ -868,6 +875,7 @@ namespace _project.Scripts.Core
                 Length = piece.length,
                 Orientation = piece.orientation.ToString(),
                 InfraValue = piece.infraValue,
+                Isolated = piece.isolated,
                 Cells = new List<Vector2Int>(piece.cells)
             };
         }

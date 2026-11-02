@@ -117,6 +117,13 @@ namespace _project.Scripts.Core
         [SerializeField] private string longPipeDescription = "Straight pipe segment covering 3 cells.";
         [SerializeField] private int longPipeRequiredLevel = 1;
         [SerializeField] private Sprite longPipeSprite;
+        [SerializeField] private string isolatedPipeDisplayName = "Isolated Pipe";
+
+        [SerializeField] private string isolatedPipeDescription =
+            "Two-cell pipe that joins only other isolated pipe, so it can run beside the main line without " +
+            "merging into it. Feed it from a splitter. R rotates.";
+
+        [SerializeField] private int isolatedPipeRequiredLevel = 3;
         [SerializeField] private string breakPipeDisplayName = "Break Pipe";
         [SerializeField] private string breakPipeDescription = "Removes an existing pipe segment from the board.";
         [SerializeField] private int breakPipeRequiredLevel = 1;
@@ -150,6 +157,7 @@ namespace _project.Scripts.Core
 
         public bool CanSelectConveyorTool => CurrentLevel >= 1;
         public bool CanSelectShortPipeTool => CurrentLevel >= shortPipeRequiredLevel;
+        public bool CanSelectIsolatedPipeTool => CurrentLevel >= isolatedPipeRequiredLevel;
         public bool CanSelectLongPipeTool => CurrentLevel >= longPipeRequiredLevel;
         public bool CanSelectBreakPipeTool => CurrentLevel >= breakPipeRequiredLevel;
 
@@ -265,6 +273,12 @@ namespace _project.Scripts.Core
         public void SelectLongPipeTool()
         {
             SelectPathPieceTool(longPipeDisplayName, longPipeDescription, longPipeRequiredLevel, 3, longPipeSprite);
+        }
+
+        public void SelectIsolatedPipeTool()
+        {
+            SelectPathPieceTool(isolatedPipeDisplayName, isolatedPipeDescription, isolatedPipeRequiredLevel, 2,
+                shortPipeSprite, PathKind.Pipe, true);
         }
 
         public void SelectConveyorTool()
@@ -449,7 +463,7 @@ namespace _project.Scripts.Core
         }
 
         private void SelectPathPieceTool(string displayName, string description, int requiredLevel, int length,
-            Sprite displaySprite, PathKind pathKind = PathKind.Pipe)
+            Sprite displaySprite, PathKind pathKind = PathKind.Pipe, bool isolated = false)
         {
             if (!HasPathToolAccess(displayName, description, requiredLevel)) return;
 
@@ -463,7 +477,7 @@ namespace _project.Scripts.Core
 
             gm.placementInventory?.ClearSelection();
             board.SetActivePiece(new PathPiecePlaceable(displayName, description, requiredLevel, length, displaySprite,
-                pipeInfraValue, pathKind));
+                pipeInfraValue, pathKind, isolated));
         }
 
         private static bool HasPathToolAccess(string displayName, string description, int requiredLevel)

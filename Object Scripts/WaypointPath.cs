@@ -136,7 +136,7 @@ namespace _project.Scripts.Object_Scripts
         public int RouteCount => _routes.Count;
 
         public bool HasAlternateRoute => _routes.Count > 1;
-        public IReadOnlyList<Vector2Int> PathCells => _pathCells;
+        public IReadOnlyList<Vector2Int> PathCells => ToCells(_pathCells);
 
         /// <summary>The first branch's cells, or empty when the path has no branch.</summary>
         public IReadOnlyList<Vector2Int> AlternatePathCells => GetRouteCells(1);
@@ -198,13 +198,13 @@ namespace _project.Scripts.Object_Scripts
             // Path cells — green markers confirm these cells are traversed
             Gizmos.color = Color.green;
             foreach (var cell in _pathCells)
-                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell, PathKind), Vector3.one * 0.3f);
+                Gizmos.DrawWireCube(GetWaypointPosition(cell), Vector3.one * 0.3f);
 
             // Unused cells — red markers indicate placed pieces that were ignored
             // (either unreachable from the start or off the shortest route)
             Gizmos.color = Color.red;
             foreach (var cell in _unusedCells)
-                Gizmos.DrawWireCube(pathBuildBoard.GetPathWaypointPosition(cell, PathKind), Vector3.one * 0.3f);
+                Gizmos.DrawWireCube(GetWaypointPosition(cell), Vector3.one * 0.3f);
         }
 
         // Preview tuning fields (color/width/height) only take effect on the next RefreshLivePreview,
@@ -351,14 +351,40 @@ namespace _project.Scripts.Object_Scripts
         public IReadOnlyList<Vector2Int> GetRouteCells(int routeIndex)
         {
             return routeIndex >= 0 && routeIndex < _routes.Count
-                ? _routes[routeIndex].Cells
+                ? ToCells(_routes[routeIndex].Cells)
                 : System.Array.Empty<Vector2Int>();
+        }
+
+        // Routes run over PipeLayer nodes; callers outside get plain board cells.
+        private static IReadOnlyList<Vector2Int> ToCells(List<Vector2Int> nodes)
+        {
+            if (!nodes.Exists(PipeLayer.IsIsolated)) return nodes;
+            return nodes.ConvertAll(PipeLayer.Cell);
         }
 
         // An unknown route index falls back to the main route.
         private List<Vector3> GetRouteWaypoints(int routeIndex)
         {
             return routeIndex > 0 && IsRouteIndex(routeIndex) ? _routes[routeIndex].Waypoints : _waypoints;
+        }
+
+        internal PathBuildBoard Board => pathBuildBoard;
+
+        /// <summary>
+        ///     True while an issue heading for <paramref name="waypointIndex" /> on a route travels
+        ///     inside isolated pipe: the stretch leading to that waypoint starts or ends in the tube.
+        ///     The start and end points count as part of the first and last pipe cells.
+        /// </summary>
+        public bool IsInsideIsolatedPipe(int routeIndex, int waypointIndex)
+        {
+            if (routeIndex < 0 || routeIndex >= _routes.Count) return false;
+
+            // Waypoint 0 is the start point and waypoint i is cell i - 1.
+            var cells = _routes[routeIndex].Cells;
+            if (cells.Count == 0) return false;
+            var to = Mathf.Clamp(waypointIndex - 1, 0, cells.Count - 1);
+            var from = Mathf.Clamp(waypointIndex - 2, 0, cells.Count - 1);
+            return PipeLayer.IsIsolated(cells[to]) || PipeLayer.IsIsolated(cells[from]);
         }
 
         /// <summary>Route 0 always counts, so an issue can sit on the main route before the path is built.</summary>
@@ -428,7 +454,7 @@ namespace _project.Scripts.Object_Scripts
             if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
 
             foreach (var key in _branchRoutes.Keys)
-                if (key.cell == cell)
+                if (PipeLayer.Cell(key.cell) == cell)
                     return true;
             return false;
         }
@@ -440,8 +466,11 @@ namespace _project.Scripts.Object_Scripts
         public bool TryGetBranchRoute(int routeIndex, Vector3 worldPosition, out int branchRouteIndex, int output = 1)
         {
             branchRouteIndex = -1;
-            return pathBuildBoard && pathBuildBoard.TryWorldToCell(worldPosition, out var cell) &&
-                   _branchRoutes.TryGetValue((routeIndex, cell, output), out branchRouteIndex);
+            if (!pathBuildBoard || !pathBuildBoard.TryWorldToCell(worldPosition, out var cell)) return false;
+
+            // The splitter sits on whichever pipe layer its cell holds.
+            return _branchRoutes.TryGetValue((routeIndex, cell, output), out branchRouteIndex) ||
+                   _branchRoutes.TryGetValue((routeIndex, PipeLayer.Node(cell, true), output), out branchRouteIndex);
         }
 
         /// <summary>
@@ -456,11 +485,11 @@ namespace _project.Scripts.Object_Scripts
             var found = false;
             foreach (var route in _previewRoutes)
             {
-                var index = route.Cells.IndexOf(cell);
+                var index = IndexOfCell(route.Cells, cell);
                 if (index < 0) continue;
 
                 found = true;
-                var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
+                var current = GetWaypointPosition(route.Cells[index]);
                 GetRouteNeighbors(route, index, out var previous, out var next);
                 if (previous.HasValue) offsets.Add(previous.Value - current);
                 if (next.HasValue) offsets.Add(next.Value - current);
@@ -480,12 +509,12 @@ namespace _project.Scripts.Object_Scripts
 
             // A branch lists the route it forked from first, so the first route through the cell
             // that doesn't fork there is the lane the others branch off.
-            var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
             foreach (var route in _previewRoutes)
             {
-                var index = route.Cells.IndexOf(cell);
+                var index = IndexOfCell(route.Cells, cell);
                 if (index < 0) continue;
 
+                var current = GetWaypointPosition(route.Cells[index]);
                 GetRouteNeighbors(route, index, out _, out var next);
                 var offset = next - current;
                 if (route.ForkIndex != index) main ??= offset;
@@ -501,12 +530,12 @@ namespace _project.Scripts.Object_Scripts
         {
             var cells = route.Cells;
             previous = index > 0
-                ? pathBuildBoard.GetPathWaypointPosition(cells[index - 1], PathKind)
+                ? GetWaypointPosition(cells[index - 1])
                 : startPoint
                     ? startPoint.position
                     : null;
             next = index < cells.Count - 1
-                ? pathBuildBoard.GetPathWaypointPosition(cells[index + 1], PathKind)
+                ? GetWaypointPosition(cells[index + 1])
                 : route.Complete && (route.Receptacle || endPoint)
                     ? GetEndPosition(route)
                     : null;
@@ -531,10 +560,10 @@ namespace _project.Scripts.Object_Scripts
         private bool TryGetFlowSign(Route route, Vector2Int cell, Vector3 axis, out float sign)
         {
             sign = 0f;
-            var index = route.Cells.IndexOf(cell);
+            var index = IndexOfCell(route.Cells, cell);
             if (index < 0) return false;
 
-            var current = pathBuildBoard.GetPathWaypointPosition(cell, PathKind);
+            var current = GetWaypointPosition(route.Cells[index]);
             GetRouteNeighbors(route, index, out var previous, out var next);
 
             // Spanning previous→next keeps corner cells correct: the leg along the axis sets the sign.
@@ -620,7 +649,7 @@ namespace _project.Scripts.Object_Scripts
             foreach (var cell in cellPath)
             {
                 _pathCells.Add(cell);
-                _waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
+                _waypoints.Add(GetWaypointPosition(cell));
             }
 
             // Bucket remaining occupied cells as "unused" for the gizmo
@@ -640,7 +669,7 @@ namespace _project.Scripts.Object_Scripts
                 var route = _routes[i];
                 route.Waypoints.Add(startPoint.position);
                 foreach (var cell in route.Cells)
-                    route.Waypoints.Add(pathBuildBoard.GetPathWaypointPosition(cell, PathKind));
+                    route.Waypoints.Add(GetWaypointPosition(cell));
                 route.Waypoints.Add(GetEndPosition(route));
             }
 
@@ -704,7 +733,7 @@ namespace _project.Scripts.Object_Scripts
             _previewPoints.Clear();
             _previewPoints.Add(GetPreviewPosition(startPoint.position));
             foreach (var cell in previewCells)
-                _previewPoints.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(cell, PathKind)));
+                _previewPoints.Add(GetPreviewPosition(GetWaypointPosition(cell)));
             if (complete)
                 _previewPoints.Add(GetPreviewPosition(endPoint.position));
             // Splitter outlet colors must match the panel exactly, so they replace the water's own tint.
@@ -747,7 +776,7 @@ namespace _project.Scripts.Object_Scripts
 
         // A branch that runs all the way out on its own (to a receptacle, say) opens its last pipe
         // toward where it ends, the way the main route opens toward the end point.
-        private IEnumerable<(Vector2Int cell, Vector2Int outsideCell)> GetBranchEndOpenings(List<Route> routes)
+        private IEnumerable<(Vector2Int node, Vector2Int outsideCell)> GetBranchEndOpenings(List<Route> routes)
         {
             for (var i = 1; i < routes.Count; i++)
             {
@@ -768,7 +797,7 @@ namespace _project.Scripts.Object_Scripts
         {
             points.Clear();
             for (var i = route.ForkIndex; i <= lastIndex; i++)
-                points.Add(GetPreviewPosition(pathBuildBoard.GetPathWaypointPosition(route.Cells[i], PathKind)));
+                points.Add(GetPreviewPosition(GetWaypointPosition(route.Cells[i])));
             if (route.JoinIndex < 0 && route.Complete)
                 points.Add(GetPreviewPosition(GetEndPosition(route)));
         }
@@ -850,7 +879,7 @@ namespace _project.Scripts.Object_Scripts
             var frontier = new Queue<Vector2Int>();
             var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
             var best = starts[0];
-            var bestDistance = GridDistance(best, targetCell);
+            var bestDistance = GridDistance(PipeLayer.Cell(best), targetCell);
 
             foreach (var start in starts)
             {
@@ -862,7 +891,7 @@ namespace _project.Scripts.Object_Scripts
             while (frontier.Count > 0)
             {
                 var current = frontier.Dequeue();
-                var distance = GridDistance(current, targetCell);
+                var distance = GridDistance(PipeLayer.Cell(current), targetCell);
                 if (distance < bestDistance)
                 {
                     best = current;
@@ -876,10 +905,9 @@ namespace _project.Scripts.Object_Scripts
                     break;
                 }
 
-                foreach (var direction in Directions)
+                foreach (var next in NeighborNodes(current))
                 {
-                    var next = current + direction;
-                    if (cameFrom.ContainsKey(next) || !pathBuildBoard.IsOccupied(next, PathKind)) continue;
+                    if (cameFrom.ContainsKey(next) || !Links(current, next)) continue;
                     cameFrom[next] = current;
                     frontier.Enqueue(next);
                 }
@@ -896,6 +924,46 @@ namespace _project.Scripts.Object_Scripts
             path.Add(node);
             path.Reverse();
             return path;
+        }
+
+        /// <summary>
+        ///     Whether flow can step from one cell into its neighbor: the neighbor holds this path's
+        ///     kind of piece, and for pipe the two pieces join (isolated pipe only joins its own kind).
+        /// </summary>
+        private bool Links(Vector2Int from, Vector2Int to)
+        {
+            return IsNodeOccupied(to) && (!LayeredPipe || pathBuildBoard.ArePipesLinked(from, to));
+        }
+
+        // Pipe routes run over PipeLayer nodes, so isolated pipe can cross regular pipe in one cell.
+        private bool LayeredPipe => PathKind == PathKind.Pipe;
+
+        private bool IsNodeOccupied(Vector2Int node) =>
+            LayeredPipe
+                ? pathBuildBoard.HasPipe(PipeLayer.Cell(node), PipeLayer.IsIsolated(node))
+                : pathBuildBoard.IsOccupied(node, PathKind);
+
+        /// <summary>The nodes one step from <paramref name="node" />: each neighbor cell on every pipe layer.</summary>
+        private IEnumerable<Vector2Int> NeighborNodes(Vector2Int node)
+        {
+            foreach (var direction in Directions)
+            {
+                var next = node + direction;
+                yield return next;
+                if (LayeredPipe) yield return PipeLayer.Node(PipeLayer.Cell(next), !PipeLayer.IsIsolated(next));
+            }
+        }
+
+        private Vector3 GetWaypointPosition(Vector2Int node) =>
+            pathBuildBoard.GetPathWaypointPosition(PipeLayer.Cell(node), PathKind, PipeLayer.IsIsolated(node));
+
+        /// <summary>Where a route passes through a board cell, on either pipe layer; -1 when it doesn't.</summary>
+        private static int IndexOfCell(List<Vector2Int> route, Vector2Int cell)
+        {
+            for (var i = 0; i < route.Count; i++)
+                if (PipeLayer.Cell(route[i]) == cell)
+                    return i;
+            return -1;
         }
 
         private static int GridDistance(Vector2Int a, Vector2Int b)
@@ -938,7 +1006,7 @@ namespace _project.Scripts.Object_Scripts
             foreach (var start in starts)
             {
                 if (blocked != null && blocked.Contains(start)) continue;
-                if (!pathBuildBoard.IsOccupied(start, PathKind) || cameFrom.ContainsKey(start)) continue;
+                if (!IsNodeOccupied(start) || cameFrom.ContainsKey(start)) continue;
                 frontier.Enqueue(start);
                 cameFrom[start] = start;
             }
@@ -961,15 +1029,12 @@ namespace _project.Scripts.Object_Scripts
                     break;
                 }
 
-                // Check all 4 neighbors
-                foreach (var dir in Directions)
+                // Check all 4 neighbors, on both pipe layers
+                foreach (var next in NeighborNodes(current))
                 {
-                    var next = current + dir;
-
-                    // Skip if: already visited, out of bounds, or not occupied
                     if (blocked != null && blocked.Contains(next)) continue;
                     if (cameFrom.ContainsKey(next)) continue;
-                    if (!pathBuildBoard.IsOccupied(next, PathKind)) continue;
+                    if (!Links(current, next)) continue;
 
                     cameFrom[next] = current;
                     frontier.Enqueue(next);
@@ -1017,7 +1082,7 @@ namespace _project.Scripts.Object_Scripts
                     if (routes.Count >= MaxRoutes) return;
 
                     var cell = route.Cells[forkIndex];
-                    if (!_splitterCells.Contains(cell)) continue;
+                    if (!_splitterCells.Contains(PipeLayer.Cell(cell))) continue;
 
                     var usedExits = new HashSet<Vector2Int>();
                     for (var output = 1; output <= 2 && routes.Count < MaxRoutes; output++)
@@ -1073,12 +1138,11 @@ namespace _project.Scripts.Object_Scripts
             if (!parentExit.HasValue && !allowPartial) return null;
 
             HashSet<Vector2Int> blocked = null;
-            foreach (var direction in Directions)
+            foreach (var exit in NeighborNodes(fork))
             {
-                var exit = fork + direction;
                 if (exit == parentExit || parent.IndexOf(exit, 0, forkIndex + 1) >= 0 ||
                     (usedExits != null && usedExits.Contains(exit))) continue;
-                if (!pathBuildBoard.IsOccupied(exit, PathKind)) continue;
+                if (!Links(fork, exit)) continue;
 
                 var branch = new Route { ForkIndex = forkIndex };
                 branch.Cells.AddRange(parent.GetRange(0, forkIndex + 1));
@@ -1189,7 +1253,7 @@ namespace _project.Scripts.Object_Scripts
             // Flow carries on level out of the last pipe into the bin's side, rather than sinking
             // to its ground-level marker below the pipe.
             var end = route.Receptacle.transform.position;
-            if (route.Cells.Count > 0) end.y = pathBuildBoard.GetPathWaypointPosition(route.Cells[^1], PathKind).y;
+            if (route.Cells.Count > 0) end.y = GetWaypointPosition(route.Cells[^1]).y;
             return end;
         }
 
@@ -1208,8 +1272,14 @@ namespace _project.Scripts.Object_Scripts
             {
                 var candidate = anchorCell + direction;
                 if (!pathBuildBoard.IsCellInBounds(candidate)) continue;
-                if (!pathBuildBoard.IsOccupied(candidate, PathKind)) continue;
-                candidates.Add(candidate);
+                if (!LayeredPipe)
+                {
+                    if (pathBuildBoard.IsOccupied(candidate, PathKind)) candidates.Add(candidate);
+                    continue;
+                }
+
+                if (pathBuildBoard.HasPipe(candidate, false)) candidates.Add(candidate);
+                if (pathBuildBoard.HasPipe(candidate, true)) candidates.Add(PipeLayer.Node(candidate, true));
             }
 
             return candidates;
@@ -1229,8 +1299,10 @@ namespace _project.Scripts.Object_Scripts
             foreach (var piece in pathBuildBoard.PlacedPieces)
                 if (piece.pathKind == PathKind)
                     foreach (var cell in piece.cells)
-                        if (!onPath.Contains(cell))
-                            _unusedCells.Add(cell);
+                    {
+                        var node = PieceNode(piece, cell);
+                        if (!onPath.Contains(node)) _unusedCells.Add(node);
+                    }
         }
 
         /// <summary>
@@ -1243,8 +1315,11 @@ namespace _project.Scripts.Object_Scripts
             foreach (var piece in pathBuildBoard.PlacedPieces)
                 if (piece.pathKind == PathKind)
                     foreach (var cell in piece.cells)
-                        _unusedCells.Add(cell);
+                        _unusedCells.Add(PieceNode(piece, cell));
         }
+
+        private static Vector2Int PieceNode(PathBuildBoard.PlacedPathPiece piece, Vector2Int cell) =>
+            piece.pathKind == PathKind.Pipe ? PipeLayer.Node(cell, piece.isolated) : cell;
 
         private bool FailRebuild()
         {

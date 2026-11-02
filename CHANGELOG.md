@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Construction dust puff when a pipe piece or shop item is placed
 - Three-way path splitters: a second branch outlet, a ratio triangle in the `PathSplitterPanel` once both branches have pipe, numbered and color-coded outlets that match their live preview streams, a THIRD switch per issue type, and a sort preset
 - Receptacles: level-gated alternate endpoints (a metal acceptor, for example). A splitter branch whose pipe touches one ends there; it collects the issue type it accepts, and anything else piped to it still pollutes the lake
+- Isolated pipe (level 3): a slim metal tube that joins only other isolated pipe or a splitter, crosses regular pipe at right angles, and can drain into the main line through a clickable valve; issues inside it show as a bulge in the tube
 
 ### Changed
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
