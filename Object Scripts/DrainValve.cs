@@ -88,7 +88,7 @@ namespace _project.Scripts.Object_Scripts
         {
             var cameraController = GameMaster.Instance ? GameMaster.Instance.cameraController : null;
             if (cameraController && cameraController.IsPanArmed) return;
-            if (!CanChange) return;
+            if (!TurnController.IsOutsideRun) return;
 
             Toggle();
         }
@@ -111,20 +111,10 @@ namespace _project.Scripts.Object_Scripts
             UtilityHoverStatsPopup.Instance?.Hide(transform);
         }
 
-        /// <summary>True outside a run: in the build phase, or with no game running (tests, editor tools).</summary>
-        private static bool CanChange
-        {
-            get
-            {
-                var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
-                return !turnController || turnController.currentPhase == GamePhase.Card;
-            }
-        }
-
         private string HoverText()
         {
             var state = IsOpen ? "State: Open, draining" : "State: Closed";
-            var action = !CanChange ? "Change: Between runs"
+            var action = !TurnController.IsOutsideRun ? "Change: Between runs"
                 : IsOpen ? "Click: Close" : "Click: Open to drain";
             return $"DRAIN VALVE\n{state}\n{action}";
         }

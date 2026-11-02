@@ -32,6 +32,16 @@ namespace _project.Scripts.Core
         /// <summary>True while a wave is underway: not between waves, on the post-round summary, or after a loss.</summary>
         public bool IsWaveRunning => currentPhase == GamePhase.Tower && !_waitingForPostRoundContinue && !_gameLost;
 
+        /// <summary>True outside a run: in the build phase, or with no game running (tests, editor tools).</summary>
+        public static bool IsOutsideRun
+        {
+            get
+            {
+                var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+                return !turnController || turnController.currentPhase == GamePhase.Card;
+            }
+        }
+
         private void Awake()
         {
             if (Instance && Instance != this)
