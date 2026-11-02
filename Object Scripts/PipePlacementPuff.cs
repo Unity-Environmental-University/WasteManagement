@@ -14,14 +14,14 @@ namespace _project.Scripts.Object_Scripts
 
         public static void Play(PathBuildBoard board, IReadOnlyList<Vector2Int> cells, float pipeHeight)
         {
-            var smokeMaterial = Resources.Load<Material>("PipePlacementSmoke");
-            if (!smokeMaterial || cells.Count == 0) return;
+            var prefab = Resources.Load<ParticleSystem>("ConstructionDust");
+            if (!prefab || cells.Count == 0) return;
 
             var root = new GameObject("Pipe Construction Puff") { layer = board.gameObject.layer };
             root.transform.SetParent(board.transform, false);
             root.AddComponent<PipePlacementPuff>();
             var pitch = Mathf.Min(board.CellWorldPitch.x, board.CellWorldPitch.y);
-            var smoke = CreateSystem(root.transform, smokeMaterial, cells.Count * 10);
+            var smoke = CreateSystem(root.transform, prefab, cells.Count * 10);
 
             for (var i = 0; i < cells.Count; i++)
             {
@@ -38,8 +38,8 @@ namespace _project.Scripts.Object_Scripts
         public static void Play(GameObject placedItem)
         {
             if (!placedItem) return;
-            var material = Resources.Load<Material>("PipePlacementSmoke");
-            if (!material) return;
+            var prefab = Resources.Load<ParticleSystem>("ConstructionDust");
+            if (!prefab) return;
 
             var bounds = new Bounds(placedItem.transform.position, Vector3.one);
             var hasBounds = false;
@@ -55,7 +55,7 @@ namespace _project.Scripts.Object_Scripts
             root.transform.SetParent(placedItem.transform, false);
             root.AddComponent<PipePlacementPuff>();
             var pitch = Mathf.Max(0.3f, Mathf.Min(bounds.size.x, bounds.size.z) * 0.65f);
-            var smoke = CreateSystem(root.transform, material, 40);
+            var smoke = CreateSystem(root.transform, prefab, 40);
             for (var i = 0; i < 4; i++)
             {
                 var position = new Vector3(
@@ -90,38 +90,12 @@ namespace _project.Scripts.Object_Scripts
             }
         }
 
-        private static ParticleSystem CreateSystem(Transform parent, Material material, int capacity)
+        private static ParticleSystem CreateSystem(Transform parent, ParticleSystem prefab, int capacity)
         {
-            var child = new GameObject("Construction Dust") { layer = parent.gameObject.layer };
-            child.transform.SetParent(parent, false);
-            var particles = child.AddComponent<ParticleSystem>();
-            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var particles = Instantiate(prefab, parent, false);
+            particles.gameObject.layer = parent.gameObject.layer;
             var main = particles.main;
-            main.loop = false;
-            main.playOnAwake = false;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-            // Positions and sizes are already measured in world units, including scaled boards/items.
-            main.scalingMode = ParticleSystemScalingMode.Shape;
             main.maxParticles = capacity;
-            main.gravityModifier = 0f;
-            var emission = particles.emission;
-            emission.enabled = false;
-            var shape = particles.shape;
-            shape.enabled = false;
-            var size = particles.sizeOverLifetime;
-            size.enabled = true;
-            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 0.55f, 1f, 1.8f));
-            var fade = particles.colorOverLifetime;
-            fade.enabled = true;
-            var gradient = new Gradient();
-            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.55f, 0.12f),
-                    new GradientAlphaKey(0f, 1f) });
-            fade.color = gradient;
-            var renderer = particles.GetComponent<ParticleSystemRenderer>();
-            renderer.sharedMaterial = material;
-            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            renderer.receiveShadows = false;
             particles.Play();
             return particles;
         }

@@ -126,34 +126,11 @@ namespace _project.Scripts.Object_Scripts
         {
             if (_sparks) return _sparks;
 
-            var material = Resources.Load<Material>("PipePlacementSmoke");
-            if (!material) return null;
+            var prefab = Resources.Load<ParticleSystem>("CollectSparks");
+            if (!prefab) return null;
 
-            var sparksObject = new GameObject("Collect Sparks") { layer = gameObject.layer };
-            sparksObject.transform.SetParent(transform, false);
-            _sparks = sparksObject.AddComponent<ParticleSystem>();
-            _sparks.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-            var main = _sparks.main;
-            main.loop = false;
-            main.playOnAwake = false;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.scalingMode = ParticleSystemScalingMode.Shape;
-            main.maxParticles = 64;
-            main.gravityModifier = 2.5f;
-            var emission = _sparks.emission;
-            emission.enabled = false;
-            var shape = _sparks.shape;
-            shape.enabled = false;
-            var fade = _sparks.colorOverLifetime;
-            fade.enabled = true;
-            var gradient = new Gradient();
-            gradient.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
-                new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 0.6f), new GradientAlphaKey(0f, 1f) });
-            fade.color = gradient;
-            var sparkRenderer = _sparks.GetComponent<ParticleSystemRenderer>();
-            sparkRenderer.sharedMaterial = material;
-            sparkRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            sparkRenderer.receiveShadows = false;
+            _sparks = Instantiate(prefab, transform, false);
+            _sparks.gameObject.layer = gameObject.layer;
             _sparks.Play();
             return _sparks;
         }
