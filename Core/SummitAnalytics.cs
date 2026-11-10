@@ -40,6 +40,9 @@ namespace _project.Scripts.Core
 
         [Tooltip("Upload timeout in seconds")] public float uploadTimeout = 10f;
 
+        [Tooltip("Max events held while Summit is unreachable or has not issued a session id; the oldest are dropped past this")]
+        public int maxQueuedEvents = 2000;
+
         [Header("Performance Tracking")] [Tooltip("Automatically collect FPS and memory samples")]
         public bool autoCollectPerformance = true;
 
@@ -51,13 +54,25 @@ namespace _project.Scripts.Core
 
         // ─── Internal state ──────────────────────────────────────────────
 
+        // Summit's /api/ingest accepts at most 100 events and 1000 performance
+        // samples per request and answers a larger batch with 400.
+        private const int MaxEventsPerBatch = 100;
+        private const int MaxPerfSamplesPerBatch = 1000;
+
+        // Retry backoff for session/start and flushes: 2, 4, 8 ... 60 seconds.
+        private const float MinRetryDelay = 2f;
+        private const float MaxRetryDelay = 60f;
+
         private readonly List<QueuedEvent> _eventQueue = new();
+        private int _flushFailures;
         private int _frameTimeIndex;
         private readonly float[] _frameTimes = new float[60];
         private bool _isFlushing;
         private float _lastFlushTime;
         private float _lastPerfSampleTime;
+        private float _nextFlushAllowedTime;
         private readonly List<PerfSample> _perfQueue = new();
+        private int _sessionAttempt;
 
         // ─── Public state ────────────────────────────────────────────────
 
@@ -93,8 +108,9 @@ namespace _project.Scripts.Core
                 }
             }
 
-            // Auto-flush
+            // Auto-flush, paused while backing off after a failed send
             if (IsSessionActive && !_isFlushing &&
+                Time.realtimeSinceStartup >= _nextFlushAllowedTime &&
                 (_eventQueue.Count >= flushThreshold ||
                  Time.realtimeSinceStartup - _lastFlushTime >= flushInterval))
                 Flush();
@@ -163,12 +179,13 @@ namespace _project.Scripts.Core
             }
 
             IsSessionActive = true;
+            _sessionAttempt++;
 
 #if !UNITY_EDITOR
-        StartCoroutine(StartSessionCoroutine(appVersion, deviceInfo, metadata));
+        StartCoroutine(StartSessionCoroutine(appVersion, deviceInfo, metadata, _sessionAttempt));
 #else
             if (enableEditorNetworking)
-                StartCoroutine(StartSessionCoroutine(appVersion, deviceInfo, metadata));
+                StartCoroutine(StartSessionCoroutine(appVersion, deviceInfo, metadata, _sessionAttempt));
             else
             {
                 SessionId = Guid.NewGuid().ToString();
@@ -197,6 +214,7 @@ namespace _project.Scripts.Core
                 Tags = tags,
                 Measurements = measurements
             });
+            TrimEventQueue();
         }
 
         /// <summary>
@@ -219,7 +237,9 @@ namespace _project.Scripts.Core
         }
 
         /// <summary>
-        ///     Flush all queued events to the server immediately.
+        ///     Send the oldest queued events to the server immediately, at most
+        ///     one ingest batch while the session runs and every batch once it has
+        ///     ended.
         /// </summary>
         private void Flush()
         {
@@ -238,31 +258,55 @@ namespace _project.Scripts.Core
                 return;
             }
 
-#if !UNITY_EDITOR
-        var events = new List<QueuedEvent>(_eventQueue);
-        var perfs = new List<PerfSample>(_perfQueue);
-        _eventQueue.Clear();
-        _perfQueue.Clear();
-        _lastFlushTime = Time.realtimeSinceStartup;
-        StartCoroutine(FlushCoroutine(events, perfs));
-#else
-            if (enableEditorNetworking)
+            // Hold everything until Summit has issued a session id. Summit rejects
+            // an id it never issued (foreign keys), and events sent with no id are
+            // never attributed to the session. EndSession clears IsSessionActive
+            // first, so a session that never got an id still sends its events,
+            // unattributed, instead of discarding them.
+            if (SessionId == null && IsSessionActive)
             {
-                var events = new List<QueuedEvent>(_eventQueue);
-                var perfs = new List<PerfSample>(_perfQueue);
-                _eventQueue.Clear();
-                _perfQueue.Clear();
-                _lastFlushTime = Time.realtimeSinceStartup;
-                StartCoroutine(FlushCoroutine(events, perfs));
+                TrimEventQueue();
+                TrimRetainedPerfSamples();
+                return;
             }
-            else
+
+#if UNITY_EDITOR
+            if (!enableEditorNetworking)
             {
                 Debug.Log($"[SummitAnalytics] Editor flush: {_eventQueue.Count} events, {_perfQueue.Count} perf samples");
                 _eventQueue.Clear();
                 _perfQueue.Clear();
                 _lastFlushTime = Time.realtimeSinceStartup;
+                return;
             }
 #endif
+
+            _lastFlushTime = Time.realtimeSinceStartup;
+            StartCoroutine(FlushCoroutine(SessionId));
+        }
+
+        /// <summary>
+        ///     Removes the oldest events and samples that fit in one ingest request.
+        /// </summary>
+        private void TakeNextBatch(out List<QueuedEvent> events, out List<PerfSample> perfs)
+        {
+            var eventCount = Mathf.Min(_eventQueue.Count, MaxEventsPerBatch);
+            events = _eventQueue.GetRange(0, eventCount);
+            _eventQueue.RemoveRange(0, eventCount);
+
+            var perfCount = Mathf.Min(_perfQueue.Count, MaxPerfSamplesPerBatch);
+            perfs = _perfQueue.GetRange(0, perfCount);
+            _perfQueue.RemoveRange(0, perfCount);
+        }
+
+        /// <summary>
+        ///     Caps the event backlog while Summit is unreachable or has not issued
+        ///     a session id yet, dropping the oldest first.
+        /// </summary>
+        private void TrimEventQueue()
+        {
+            var excess = _eventQueue.Count - Mathf.Max(1, maxQueuedEvents);
+            if (excess > 0) _eventQueue.RemoveRange(0, excess);
         }
 
         /// <summary>
@@ -282,8 +326,17 @@ namespace _project.Scripts.Core
         {
             if (!IsSessionActive) return;
 
-            Flush();
+            // Clear the flag before flushing: Flush then sends events even if
+            // Summit never issued a session id, and FlushCoroutine keeps draining
+            // batches because no later Update will flush them.
             IsSessionActive = false;
+            Flush();
+
+            if (SessionId == null)
+            {
+                Debug.LogWarning("[SummitAnalytics] Session ended before Summit issued a session id; session/end skipped.");
+                return;
+            }
 
 #if !UNITY_EDITOR
         StartCoroutine(EndSessionCoroutine(finalMetadata));
@@ -395,7 +448,7 @@ namespace _project.Scripts.Core
         }
 
         private IEnumerator StartSessionCoroutine(string appVersion, Dictionary<string, string> deviceInfo,
-            Dictionary<string, object> metadata)
+            Dictionary<string, object> metadata, int attempt)
         {
             var sb = new StringBuilder(512);
             sb.Append('{');
@@ -448,33 +501,65 @@ namespace _project.Scripts.Core
 
             var url = apiUrl.TrimEnd('/') + "/summit/api/ingest/session/start";
             var body = Encoding.UTF8.GetBytes(sb.ToString());
+            var failures = 0;
 
-            using var request = new UnityWebRequest(url, "POST");
-            request.uploadHandler = new UploadHandlerRaw(body);
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.SetRequestHeader("Content-Type", "application/json");
-            request.SetRequestHeader("x-api-key", apiKey);
-            request.timeout = Mathf.CeilToInt(uploadTimeout);
-
-            yield return request.SendWebRequest();
-
-            if (request.result == UnityWebRequest.Result.Success)
+            // Never make up a session id: Summit rejects any id it did not issue.
+            // Retry with backoff until it answers; Flush holds events meanwhile.
+            while (attempt == _sessionAttempt && IsSessionActive)
             {
-                SessionId = ParseJsonValue(request.downloadHandler.text, "id");
-                Debug.Log($"[SummitAnalytics] Session started: {SessionId}");
-                OnSessionStarted?.Invoke(SessionId);
-            }
-            else
-            {
-                Debug.LogWarning($"[SummitAnalytics] Session start failed: {request.error}");
-                SessionId = Guid.NewGuid().ToString();
-                OnSessionStarted?.Invoke(SessionId);
+                using (var request = new UnityWebRequest(url, "POST"))
+                {
+                    request.uploadHandler = new UploadHandlerRaw(body);
+                    request.downloadHandler = new DownloadHandlerBuffer();
+                    request.SetRequestHeader("Content-Type", "application/json");
+                    request.SetRequestHeader("x-api-key", apiKey);
+                    request.timeout = Mathf.CeilToInt(uploadTimeout);
+
+                    yield return request.SendWebRequest();
+
+                    // EndSession or a newer StartSession ran while this was in flight.
+                    if (attempt != _sessionAttempt || !IsSessionActive) yield break;
+
+                    if (request.result == UnityWebRequest.Result.Success)
+                    {
+                        var sessionId = ParseJsonValue(request.downloadHandler.text, "id");
+                        if (!string.IsNullOrEmpty(sessionId))
+                        {
+                            SessionId = sessionId;
+                            Debug.Log($"[SummitAnalytics] Session started: {SessionId}");
+                            OnSessionStarted?.Invoke(SessionId);
+                            yield break;
+                        }
+
+                        // A 2xx without an id is not Summit's answer: a captive portal or
+                        // school proxy that redirects to a login page returns 200 too.
+                        // Treat it like a network failure and try again.
+                        failures++;
+                        Debug.LogWarning(
+                            $"[SummitAnalytics] Session start response ({request.responseCode}) had no id. Retrying in {RetryDelay(failures)}s.");
+                    }
+                    else if (!IsRetryableFailure(request.result, request.responseCode))
+                    {
+                        Debug.LogWarning(
+                            $"[SummitAnalytics] Session start rejected ({request.responseCode}): {request.error}. Not retrying.");
+                        yield break;
+                    }
+                    else
+                    {
+                        failures++;
+                        Debug.LogWarning(
+                            $"[SummitAnalytics] Session start failed ({request.responseCode}): {request.error}. Retrying in {RetryDelay(failures)}s.");
+                    }
+                }
+
+                yield return new WaitForSecondsRealtime(RetryDelay(failures));
             }
         }
 
-        private IEnumerator FlushCoroutine(List<QueuedEvent> events, List<PerfSample> perfs)
+        private IEnumerator FlushCoroutine(string sessionId)
         {
             _isFlushing = true;
+            TakeNextBatch(out var events, out var perfs);
 
             var sb = new StringBuilder(4096);
             sb.Append("{\"events\":[");
@@ -487,10 +572,10 @@ namespace _project.Scripts.Core
                 AppendJsonString(sb, e.Name);
                 sb.Append(",\"timestamp\":");
                 AppendJsonString(sb, e.Timestamp);
-                if (SessionId != null)
+                if (sessionId != null)
                 {
                     sb.Append(",\"session_id\":");
-                    AppendJsonString(sb, SessionId);
+                    AppendJsonString(sb, sessionId);
                 }
 
                 if (UserId != null)
@@ -502,10 +587,7 @@ namespace _project.Scripts.Core
                 sb.Append(",\"properties\":");
                 AppendObjectDict(sb, e.Properties);
                 if (e.NumericValue.HasValue)
-                {
-                    sb.Append(",\"numeric_value\":");
-                    sb.Append(e.NumericValue.Value.ToString("G"));
-                }
+                    AppendNumberField(sb, "numeric_value", e.NumericValue.Value);
 
                 if (e.Tags is { Length: > 0 })
                 {
@@ -540,16 +622,14 @@ namespace _project.Scripts.Core
                     sb.Append('{');
                     sb.Append("\"timestamp\":");
                     AppendJsonString(sb, p.Timestamp);
-                    if (SessionId != null)
+                    if (sessionId != null)
                     {
                         sb.Append(",\"session_id\":");
-                        AppendJsonString(sb, SessionId);
+                        AppendJsonString(sb, sessionId);
                     }
 
-                    sb.Append(",\"fps\":");
-                    sb.Append(p.FPS.ToString("G"));
-                    sb.Append(",\"memory_mb\":");
-                    sb.Append(p.MemoryMb.ToString("G"));
+                    AppendNumberField(sb, "fps", p.FPS);
+                    AppendNumberField(sb, "memory_mb", p.MemoryMb);
                     sb.Append('}');
                 }
 
@@ -574,17 +654,58 @@ namespace _project.Scripts.Core
                 if (request.result == UnityWebRequest.Result.Success)
                 {
                     Debug.Log($"[SummitAnalytics] Flushed {events.Count} events, {perfs.Count} perf samples");
+                    _flushFailures = 0;
+                    _nextFlushAllowedTime = 0f;
+                }
+                else if (IsRetryableFailure(request.result, request.responseCode))
+                {
+                    _flushFailures++;
+                    var delay = RetryDelay(_flushFailures);
+                    _nextFlushAllowedTime = Time.realtimeSinceStartup + delay;
+                    Debug.LogWarning(
+                        $"[SummitAnalytics] Flush failed ({request.responseCode}): {request.error}. Next attempt in at least {delay}s.");
+                    // Re-queue failed events ahead of anything tracked since, within the caps
+                    _eventQueue.InsertRange(0, events);
+                    _perfQueue.InsertRange(0, perfs);
+                    TrimEventQueue();
+                    TrimRetainedPerfSamples();
+                    _isFlushing = false;
+                    yield break;
                 }
                 else
                 {
-                    Debug.LogWarning($"[SummitAnalytics] Flush failed: {request.error}");
-                    // Re-queue failed events
-                    _eventQueue.InsertRange(0, events);
-                    _perfQueue.InsertRange(0, perfs);
+                    // Summit will reject this batch every time (bad key, schema or
+                    // size). Re-sending it would block every batch behind it.
+                    Debug.LogWarning(
+                        $"[SummitAnalytics] Flush rejected ({request.responseCode}): {request.error}. Dropped {events.Count} events, {perfs.Count} perf samples.");
+                    _flushFailures = 0;
+                    _nextFlushAllowedTime = 0f;
                 }
             }
 
             _isFlushing = false;
+
+            // While the session runs, Update sends the next batch. Once it has
+            // ended nothing else will, so keep draining under the same session id.
+            if (!IsSessionActive && _eventQueue.Count > 0)
+                StartCoroutine(FlushCoroutine(sessionId));
+        }
+
+        /// <summary>
+        ///     True for failures worth sending again: no response (network error or
+        ///     timeout), a server error, 408 or 429. Any other 4xx means Summit will
+        ///     reject the same request every time.
+        /// </summary>
+        private static bool IsRetryableFailure(UnityWebRequest.Result result, long responseCode)
+        {
+            if (result == UnityWebRequest.Result.ConnectionError || responseCode == 0) return true;
+            return responseCode >= 500 || responseCode == 408 || responseCode == 429;
+        }
+
+        /// <summary>Exponential backoff: 2, 4, 8 ... capped at 60 seconds.</summary>
+        private static float RetryDelay(int failures)
+        {
+            return Mathf.Min(MaxRetryDelay, MinRetryDelay * Mathf.Pow(2f, Mathf.Max(0, failures - 1)));
         }
 
         private IEnumerator EndSessionCoroutine(Dictionary<string, object> finalMetadata)
@@ -726,6 +847,19 @@ namespace _project.Scripts.Core
             }
 
             AppendJsonString(sb, Convert.ToString(value, CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>
+        ///     Appends ,"name":value in the invariant culture, so a comma-decimal
+        ///     locale can't write invalid JSON such as 59,83. Summit takes these
+        ///     fields as optional numbers, not nullable ones, so a NaN or infinite
+        ///     value is left out rather than written as null.
+        /// </summary>
+        private static void AppendNumberField(StringBuilder sb, string name, float value)
+        {
+            if (float.IsNaN(value) || float.IsInfinity(value)) return;
+            sb.Append(",\"").Append(name).Append("\":");
+            sb.Append(value.ToString("R", CultureInfo.InvariantCulture));
         }
 
         private static void AppendNumberDict(StringBuilder sb, Dictionary<string, double> dict)
