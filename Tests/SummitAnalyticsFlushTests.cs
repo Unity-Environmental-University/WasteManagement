@@ -136,19 +136,60 @@ namespace _project.Scripts.Tests
         public void TakeNextBatch_StaysWithinSummitsPerRequestLimit()
         {
             ActivateWithoutSessionId();
+            SetSessionId(OldSessionId);
             TrackEvents(150);
             QueuePerfSamples(3);
 
-            var args = new object[2];
-            var takeNextBatch =
-                typeof(SummitAnalytics).GetMethod("TakeNextBatch", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(takeNextBatch);
-            takeNextBatch.Invoke(_summit, args);
+            var (events, perfs) = TakeNextBatch();
 
-            Assert.AreEqual(100, ((IList)args[0]).Count, "Summit answers a batch over 100 events with 400.");
-            Assert.AreEqual(3, ((IList)args[1]).Count);
+            Assert.AreEqual(100, events.Count, "Summit answers a batch over 100 events with 400.");
+            Assert.AreEqual(3, perfs.Count);
             Assert.AreEqual(50, EventQueue.Count, "The rest waits for the next flush.");
             Assert.AreEqual("Event 100", EventName(EventQueue[0]));
+        }
+
+        [Test]
+        public void TakeNextBatch_AfterARestart_SendsTheEndedSessionsEventsUnderItsOwnId()
+        {
+            ActivateWithoutSessionId();
+            SetSessionId(OldSessionId);
+            TrackEvents(150);
+            EndWithoutFlushing();
+            StartWithoutSessionId();
+            _summit.Track("New session event");
+
+            var (first, _) = TakeNextBatch();
+            var (second, _) = TakeNextBatch();
+
+            Assert.AreEqual(100, first.Count);
+            Assert.AreEqual(50, second.Count, "The ended session's backlog drains without the new session's events.");
+            Assert.AreEqual(OldSessionId, SessionIdFor(first[0]));
+            Assert.AreEqual(OldSessionId, SessionIdFor(second[49]),
+                "The ended session's events must not go out under the new session's id.");
+            Assert.AreEqual(1, EventQueue.Count);
+            Assert.AreEqual("New session event", EventName(EventQueue[0]),
+                "The new session's events wait for its own id.");
+            Assert.IsTrue((bool)InvokeInstance("IsWaitingForSessionId", EventSession(EventQueue[0])));
+        }
+
+        [Test]
+        public void Flush_AfterARestart_HoldsOnlyOnceTheEndedBacklogIsGone()
+        {
+            ActivateWithoutSessionId();
+            SetSessionId(OldSessionId);
+            TrackEvents(2);
+            EndWithoutFlushing();
+            StartWithoutSessionId();
+            _summit.Track("New session event");
+
+            Assert.IsTrue((bool)InvokeInstance("HasEnded", EventSession(EventQueue[0])),
+                "FlushCoroutine keeps draining while the queue starts with an ended session's events.");
+            TakeNextBatch();
+            Assert.IsFalse((bool)InvokeInstance("HasEnded", EventSession(EventQueue[0])));
+
+            Flush();
+
+            Assert.AreEqual(1, EventQueue.Count, "The new session's events are held until Summit issues its id.");
         }
 
         [TestCase(UnityWebRequest.Result.ConnectionError, 0L, true)]
@@ -232,6 +273,8 @@ namespace _project.Scripts.Tests
 
         // ─── Helpers ─────────────────────────────────────────────────────
 
+        private const string OldSessionId = "3f2c8a52-6b1e-4c2f-9d7a-1b2c3d4e5f60";
+
         private IList PerfQueue => GetField<IList>(_summit, "_perfQueue");
 
         private IList EventQueue => GetField<IList>(_summit, "_eventQueue");
@@ -243,6 +286,42 @@ namespace _project.Scripts.Tests
             Assert.IsNotNull(setter);
             setter.Invoke(_summit, new object[] { true });
         }
+
+        /// <summary>What EndSession records, without the Editor flush clearing the queue.</summary>
+        private void EndWithoutFlushing()
+        {
+            var attempt = GetField<int>(_summit, "_sessionAttempt");
+            GetField<IDictionary>(_summit, "_endedSessionIds")[attempt] = GetSessionId();
+            SetActive(false);
+        }
+
+        /// <summary>What StartSession does before Summit answers.</summary>
+        private void StartWithoutSessionId()
+        {
+            SetSessionId(null);
+            SetActive(true);
+            SetField(_summit, "_sessionAttempt", GetField<int>(_summit, "_sessionAttempt") + 1);
+        }
+
+        private void SetActive(bool active)
+        {
+            var setter = typeof(SummitAnalytics).GetProperty("IsSessionActive")?.GetSetMethod(true);
+            Assert.IsNotNull(setter);
+            setter.Invoke(_summit, new object[] { active });
+        }
+
+        private (IList events, IList perfs) TakeNextBatch()
+        {
+            var args = new object[2];
+            InvokeInstance("TakeNextBatch", args);
+            return ((IList)args[0], (IList)args[1]);
+        }
+
+        private string SessionIdFor(object queuedEvent) =>
+            (string)InvokeInstance("SessionIdFor", EventSession(queuedEvent));
+
+        private static int EventSession(object queuedEvent) =>
+            (int)queuedEvent.GetType().GetField("Session").GetValue(queuedEvent);
 
         private void SetSessionId(string id)
         {

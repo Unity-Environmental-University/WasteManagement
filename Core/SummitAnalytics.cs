@@ -74,6 +74,10 @@ namespace _project.Scripts.Core
         private readonly List<PerfSample> _perfQueue = new();
         private int _sessionAttempt;
 
+        // Session ids of ended sessions, by attempt, while their events are
+        // still queued. Null when the session ended before Summit issued one.
+        private readonly Dictionary<int, string> _endedSessionIds = new();
+
         // ─── Public state ────────────────────────────────────────────────
 
         private string SessionId { get; set; }
@@ -214,6 +218,7 @@ namespace _project.Scripts.Core
 
             _eventQueue.Add(new QueuedEvent
             {
+                Session = _sessionAttempt,
                 Name = eventName,
                 Timestamp = DateTime.UtcNow.ToString("o"),
                 Properties = properties ?? new Dictionary<string, object>(),
@@ -265,12 +270,13 @@ namespace _project.Scripts.Core
                 return;
             }
 
-            // Hold everything until Summit has issued a session id. Summit rejects
-            // an id it never issued (foreign keys), and events sent with no id are
-            // never attributed to the session. EndSession clears IsSessionActive
-            // first, so a session that never got an id still sends its events,
-            // unattributed, instead of discarding them.
-            if (SessionId == null && IsSessionActive)
+            // Hold the running session's events until Summit has issued its id.
+            // Summit rejects an id it never issued (foreign keys), and events sent
+            // with no id are never attributed to the session. Events left over
+            // from an ended session ahead of them still go out. EndSession clears
+            // IsSessionActive first, so a session that never got an id still
+            // sends its events, unattributed, instead of discarding them.
+            if (IsWaitingForSessionId(_eventQueue[0].Session))
             {
                 TrimEventQueue();
                 TrimRetainedPerfSamples();
@@ -287,25 +293,63 @@ namespace _project.Scripts.Core
                 Debug.Log($"[SummitAnalytics] Editor flush: {_eventQueue.Count} events, {_perfQueue.Count} perf samples");
                 _eventQueue.Clear();
                 _perfQueue.Clear();
+                PruneEndedSessionIds();
                 _lastFlushTime = Time.realtimeSinceStartup;
                 return;
             }
 #endif
 
             _lastFlushTime = Time.realtimeSinceStartup;
-            StartCoroutine(FlushCoroutine(SessionId));
+            StartCoroutine(FlushCoroutine());
+        }
+
+        /// <summary>True while the given session is running and Summit has not issued its id.</summary>
+        private bool IsWaitingForSessionId(int session) =>
+            IsSessionActive && session == _sessionAttempt && SessionId == null;
+
+        /// <summary>True when the given session has ended, so no later Update flush will send its events.</summary>
+        private bool HasEnded(int session) => !IsSessionActive || session != _sessionAttempt;
+
+        /// <summary>The id Summit issued for the given session, or null if it never issued one.</summary>
+        private string SessionIdFor(int session)
+        {
+            if (_endedSessionIds.TryGetValue(session, out var endedId)) return endedId;
+            return session == _sessionAttempt ? SessionId : null;
+        }
+
+        /// <summary>Forgets ended session ids once none of their events or samples are queued.</summary>
+        private void PruneEndedSessionIds()
+        {
+            if (_endedSessionIds.Count == 0) return;
+            var oldest = int.MaxValue;
+            if (_eventQueue.Count > 0) oldest = _eventQueue[0].Session;
+            if (_perfQueue.Count > 0) oldest = Mathf.Min(oldest, _perfQueue[0].Session);
+
+            var stale = new List<int>();
+            foreach (var session in _endedSessionIds.Keys)
+                if (session < oldest) stale.Add(session);
+            foreach (var session in stale) _endedSessionIds.Remove(session);
         }
 
         /// <summary>
-        ///     Removes the oldest events and samples that fit in one ingest request.
+        ///     Removes the oldest events and samples that fit in one ingest request,
+        ///     stopping at any that still wait for their session id. Each item keeps
+        ///     its own session, so a batch can carry the end of one session and the
+        ///     start of the next.
         /// </summary>
         private void TakeNextBatch(out List<QueuedEvent> events, out List<PerfSample> perfs)
         {
-            var eventCount = Mathf.Min(_eventQueue.Count, MaxEventsPerBatch);
+            var eventCount = 0;
+            while (eventCount < _eventQueue.Count && eventCount < MaxEventsPerBatch &&
+                   !IsWaitingForSessionId(_eventQueue[eventCount].Session))
+                eventCount++;
             events = _eventQueue.GetRange(0, eventCount);
             _eventQueue.RemoveRange(0, eventCount);
 
-            var perfCount = Mathf.Min(_perfQueue.Count, MaxPerfSamplesPerBatch);
+            var perfCount = 0;
+            while (perfCount < _perfQueue.Count && perfCount < MaxPerfSamplesPerBatch &&
+                   !IsWaitingForSessionId(_perfQueue[perfCount].Session))
+                perfCount++;
             perfs = _perfQueue.GetRange(0, perfCount);
             _perfQueue.RemoveRange(0, perfCount);
         }
@@ -341,6 +385,7 @@ namespace _project.Scripts.Core
             // Summit never issued a session id, and FlushCoroutine keeps draining
             // batches because no later Update will flush them.
             IsSessionActive = false;
+            _endedSessionIds[_sessionAttempt] = SessionId;
             Flush();
 
             var sessionId = SessionId;
@@ -376,6 +421,7 @@ namespace _project.Scripts.Core
 
             _perfQueue.Add(new PerfSample
             {
+                Session = _sessionAttempt,
                 Timestamp = DateTime.UtcNow.ToString("o"),
                 FPS = avgFps,
                 MemoryMb = (float)GC.GetTotalMemory(false) / (1024 * 1024)
@@ -572,7 +618,7 @@ namespace _project.Scripts.Core
             }
         }
 
-        private IEnumerator FlushCoroutine(string sessionId)
+        private IEnumerator FlushCoroutine()
         {
             _isFlushing = true;
             TakeNextBatch(out var events, out var perfs);
@@ -588,10 +634,11 @@ namespace _project.Scripts.Core
                 AppendJsonString(sb, e.Name);
                 sb.Append(",\"timestamp\":");
                 AppendJsonString(sb, e.Timestamp);
-                if (sessionId != null)
+                var eventSessionId = SessionIdFor(e.Session);
+                if (eventSessionId != null)
                 {
                     sb.Append(",\"session_id\":");
-                    AppendJsonString(sb, sessionId);
+                    AppendJsonString(sb, eventSessionId);
                 }
 
                 if (UserId != null)
@@ -638,10 +685,11 @@ namespace _project.Scripts.Core
                     sb.Append('{');
                     sb.Append("\"timestamp\":");
                     AppendJsonString(sb, p.Timestamp);
-                    if (sessionId != null)
+                    var sampleSessionId = SessionIdFor(p.Session);
+                    if (sampleSessionId != null)
                     {
                         sb.Append(",\"session_id\":");
-                        AppendJsonString(sb, sessionId);
+                        AppendJsonString(sb, sampleSessionId);
                     }
 
                     AppendNumberField(sb, "fps", p.FPS);
@@ -710,11 +758,13 @@ namespace _project.Scripts.Core
             }
 
             _isFlushing = false;
+            PruneEndedSessionIds();
 
-            // While the session runs, Update sends the next batch. Once it has
-            // ended nothing else will, so keep draining under the same session id.
-            if (!IsSessionActive && _eventQueue.Count > 0)
-                StartCoroutine(FlushCoroutine(sessionId));
+            // While a session runs, Update sends its next batch. Nothing else
+            // will send an ended session's events, even after a new session has
+            // started, so keep draining those here.
+            if (_eventQueue.Count > 0 && HasEnded(_eventQueue[0].Session))
+                StartCoroutine(FlushCoroutine());
         }
 
         /// <summary>
@@ -957,6 +1007,7 @@ namespace _project.Scripts.Core
         private class QueuedEvent
         {
             public Dictionary<string, double> Measurements;
+            public int Session;
             public string Name;
             public float? NumericValue;
             public Dictionary<string, object> Properties;
@@ -968,6 +1019,7 @@ namespace _project.Scripts.Core
         {
             public float FPS;
             public float MemoryMb;
+            public int Session;
             public string Timestamp;
         }
     }
