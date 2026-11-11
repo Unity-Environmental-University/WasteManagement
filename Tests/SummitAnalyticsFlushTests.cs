@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using _project.Scripts.Core;
 using NUnit.Framework;
+using UnityEngine;
 using UnityEngine.Networking;
 
 namespace _project.Scripts.Tests
@@ -84,6 +85,42 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Flush_WithoutASessionId_DoesNotRunEveryFrame()
+        {
+            ActivateWithoutSessionId();
+            TrackEvents(_summit.flushThreshold + 5);
+            SetField(_summit, "_lastFlushTime", 0f);
+            SetField(_summit, "_nextFlushAllowedTime", 0f);
+
+            Flush();
+
+            Assert.Greater(GetField<float>(_summit, "_nextFlushAllowedTime"), Time.realtimeSinceStartup,
+                "A held queue over flushThreshold must not make Update call Flush on every frame.");
+            Assert.AreNotEqual(0f, GetField<float>(_summit, "_lastFlushTime"));
+        }
+
+        [Test]
+        public void ReleaseSessionId_KeepsTheIdOfANewerSession()
+        {
+            SetSessionId("new-session");
+
+            InvokeInstance("ReleaseSessionId", "old-session");
+
+            Assert.AreEqual("new-session", GetSessionId(),
+                "A late session/end must not wipe the id of the session that replaced it.");
+        }
+
+        [Test]
+        public void ReleaseSessionId_ClearsTheEndedSessionsId()
+        {
+            SetSessionId("old-session");
+
+            InvokeInstance("ReleaseSessionId", "old-session");
+
+            Assert.IsNull(GetSessionId());
+        }
+
+        [Test]
         public void Track_PastTheQueueCap_DropsTheOldestEvents()
         {
             _summit.maxQueuedEvents = 5;
@@ -121,11 +158,36 @@ namespace _project.Scripts.Tests
         [TestCase(UnityWebRequest.Result.ProtocolError, 429L, true)]
         [TestCase(UnityWebRequest.Result.ProtocolError, 400L, false)]
         [TestCase(UnityWebRequest.Result.ProtocolError, 401L, false)]
+        [TestCase(UnityWebRequest.Result.ProtocolError, 404L, false)]
         [TestCase(UnityWebRequest.Result.ProtocolError, 413L, false)]
+        // The server answered; only the download handler failed. Re-sending
+        // would duplicate a batch Summit may already have stored.
+        [TestCase(UnityWebRequest.Result.DataProcessingError, 200L, false)]
         public void IsRetryableFailure_RetriesOnlyTransientFailures(UnityWebRequest.Result result, long responseCode,
             bool expected)
         {
             Assert.AreEqual(expected, (bool)InvokeStatic("IsRetryableFailure", result, responseCode));
+        }
+
+        [TestCase("{\"id\":\"3f2c8a52-6b1e-4c2f-9d7a-1b2c3d4e5f60\",\"started_at\":\"2026-11-10T00:00:00Z\"}",
+            "3f2c8a52-6b1e-4c2f-9d7a-1b2c3d4e5f60")]
+        [TestCase("{\"id\":\"login-form\"}", null)]
+        [TestCase("<html><form id=\"login\" data-id=\"3f2c8a52-6b1e-4c2f-9d7a-1b2c3d4e5f60\"></form></html>", null)]
+        [TestCase("", null)]
+        [TestCase(null, null)]
+        public void ParseSessionId_AcceptsOnlyAUuidFromAJsonObject(string body, string expected)
+        {
+            Assert.AreEqual(expected, (string)InvokeStatic("ParseSessionId", body));
+        }
+
+        [TestCase("{\"ingested\":100}", true)]
+        [TestCase("  {\"ingested\":1}\n", true)]
+        [TestCase("<!DOCTYPE html><html><body>Sign in to continue</body></html>", false)]
+        [TestCase("", false)]
+        [TestCase(null, false)]
+        public void IsJsonObject_RejectsCaptivePortalPages(string body, bool expected)
+        {
+            Assert.AreEqual(expected, (bool)InvokeStatic("IsJsonObject", body));
         }
 
         [TestCase(1, 2f)]
@@ -180,6 +242,29 @@ namespace _project.Scripts.Tests
             var setter = typeof(SummitAnalytics).GetProperty("IsSessionActive")?.GetSetMethod(true);
             Assert.IsNotNull(setter);
             setter.Invoke(_summit, new object[] { true });
+        }
+
+        private void SetSessionId(string id)
+        {
+            var setter = typeof(SummitAnalytics)
+                .GetProperty("SessionId", BindingFlags.Instance | BindingFlags.NonPublic)?.GetSetMethod(true);
+            Assert.IsNotNull(setter);
+            setter.Invoke(_summit, new object[] { id });
+        }
+
+        private string GetSessionId()
+        {
+            var property = typeof(SummitAnalytics)
+                .GetProperty("SessionId", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(property);
+            return (string)property.GetValue(_summit);
+        }
+
+        private object InvokeInstance(string name, params object[] args)
+        {
+            var method = typeof(SummitAnalytics).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, $"{name} moved; update this test.");
+            return method.Invoke(_summit, args);
         }
 
         private void TrackEvents(int count)

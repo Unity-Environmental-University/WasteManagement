@@ -116,6 +116,9 @@ namespace _project.Scripts.Core
                 Flush();
         }
 
+        // Best effort before the app may be suspended. This sends one batch of
+        // at most 100 events, not the whole queue; the rest waits for Update
+        // after the app resumes and is lost if it never does.
         private void OnApplicationPause(bool paused)
         {
             if (paused && IsSessionActive) Flush();
@@ -178,6 +181,10 @@ namespace _project.Scripts.Core
                 return;
             }
 
+            // A previous session's id may still be set while its session/end is
+            // in flight. Clear it so Flush holds this session's events until
+            // Summit issues a new one.
+            SessionId = null;
             IsSessionActive = true;
             _sessionAttempt++;
 
@@ -267,6 +274,10 @@ namespace _project.Scripts.Core
             {
                 TrimEventQueue();
                 TrimRetainedPerfSamples();
+                // Keep Update from calling Flush every frame while the queue is
+                // over flushThreshold. A new session id lifts this right away.
+                _lastFlushTime = Time.realtimeSinceStartup;
+                _nextFlushAllowedTime = Mathf.Max(_nextFlushAllowedTime, Time.realtimeSinceStartup + MinRetryDelay);
                 return;
             }
 
@@ -332,19 +343,23 @@ namespace _project.Scripts.Core
             IsSessionActive = false;
             Flush();
 
-            if (SessionId == null)
+            var sessionId = SessionId;
+            if (sessionId == null)
             {
                 Debug.LogWarning("[SummitAnalytics] Session ended before Summit issued a session id; session/end skipped.");
                 return;
             }
 
 #if !UNITY_EDITOR
-        StartCoroutine(EndSessionCoroutine(finalMetadata));
+        StartCoroutine(EndSessionCoroutine(sessionId, finalMetadata));
 #else
             if (enableEditorNetworking)
-                StartCoroutine(EndSessionCoroutine(finalMetadata));
+                StartCoroutine(EndSessionCoroutine(sessionId, finalMetadata));
             else
+            {
+                ReleaseSessionId(sessionId);
                 Debug.Log("[SummitAnalytics] Editor mode — session ended.");
+            }
 #endif
         }
 
@@ -522,21 +537,22 @@ namespace _project.Scripts.Core
 
                     if (request.result == UnityWebRequest.Result.Success)
                     {
-                        var sessionId = ParseJsonValue(request.downloadHandler.text, "id");
-                        if (!string.IsNullOrEmpty(sessionId))
+                        var sessionId = ParseSessionId(request.downloadHandler.text);
+                        if (sessionId != null)
                         {
                             SessionId = sessionId;
+                            _nextFlushAllowedTime = 0f;
                             Debug.Log($"[SummitAnalytics] Session started: {SessionId}");
                             OnSessionStarted?.Invoke(SessionId);
                             yield break;
                         }
 
-                        // A 2xx without an id is not Summit's answer: a captive portal or
-                        // school proxy that redirects to a login page returns 200 too.
+                        // A 2xx without a UUID id is not Summit's answer: a captive portal
+                        // or school proxy that redirects to a login page returns 200 too.
                         // Treat it like a network failure and try again.
                         failures++;
                         Debug.LogWarning(
-                            $"[SummitAnalytics] Session start response ({request.responseCode}) had no id. Retrying in {RetryDelay(failures)}s.");
+                            $"[SummitAnalytics] Session start response ({request.responseCode}) had no session id. Retrying in {RetryDelay(failures)}s.");
                     }
                     else if (!IsRetryableFailure(request.result, request.responseCode))
                     {
@@ -651,19 +667,29 @@ namespace _project.Scripts.Core
 
                 yield return request.SendWebRequest();
 
-                if (request.result == UnityWebRequest.Result.Success)
+                // Summit answers a stored batch with a JSON object. A captive portal
+                // or proxy login page also answers 2xx, with HTML, and the batch never
+                // reached Summit, so retry it like a network failure.
+                var delivered = request.result == UnityWebRequest.Result.Success &&
+                                IsJsonObject(request.downloadHandler.text);
+
+                if (delivered)
                 {
                     Debug.Log($"[SummitAnalytics] Flushed {events.Count} events, {perfs.Count} perf samples");
                     _flushFailures = 0;
                     _nextFlushAllowedTime = 0f;
                 }
-                else if (IsRetryableFailure(request.result, request.responseCode))
+                else if (request.result == UnityWebRequest.Result.Success ||
+                         IsRetryableFailure(request.result, request.responseCode))
                 {
                     _flushFailures++;
                     var delay = RetryDelay(_flushFailures);
                     _nextFlushAllowedTime = Time.realtimeSinceStartup + delay;
+                    var reason = request.result == UnityWebRequest.Result.Success
+                        ? "response was not JSON"
+                        : request.error;
                     Debug.LogWarning(
-                        $"[SummitAnalytics] Flush failed ({request.responseCode}): {request.error}. Next attempt in at least {delay}s.");
+                        $"[SummitAnalytics] Flush failed ({request.responseCode}): {reason}. Next attempt in at least {delay}s.");
                     // Re-queue failed events ahead of anything tracked since, within the caps
                     _eventQueue.InsertRange(0, events);
                     _perfQueue.InsertRange(0, perfs);
@@ -708,11 +734,11 @@ namespace _project.Scripts.Core
             return Mathf.Min(MaxRetryDelay, MinRetryDelay * Mathf.Pow(2f, Mathf.Max(0, failures - 1)));
         }
 
-        private IEnumerator EndSessionCoroutine(Dictionary<string, object> finalMetadata)
+        private IEnumerator EndSessionCoroutine(string sessionId, Dictionary<string, object> finalMetadata)
         {
             var sb = new StringBuilder(256);
             sb.Append("{\"session_id\":");
-            AppendJsonString(sb, SessionId);
+            AppendJsonString(sb, sessionId);
             if (finalMetadata is { Count: > 0 })
             {
                 sb.Append(",\"metadata\":");
@@ -735,12 +761,21 @@ namespace _project.Scripts.Core
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)
-                    Debug.Log($"[SummitAnalytics] Session ended: {SessionId}");
+                    Debug.Log($"[SummitAnalytics] Session ended: {sessionId}");
                 else
                     Debug.LogWarning($"[SummitAnalytics] Session end failed: {request.error}");
             }
 
-            SessionId = null;
+            ReleaseSessionId(sessionId);
+        }
+
+        /// <summary>
+        ///     Clears the session id once its session has ended, unless a newer
+        ///     session has replaced it in the meantime.
+        /// </summary>
+        private void ReleaseSessionId(string endedSessionId)
+        {
+            if (SessionId == endedSessionId) SessionId = null;
         }
 
         // ─── JSON helpers (no external deps) ─────────────────────────────
@@ -877,6 +912,26 @@ namespace _project.Scripts.Core
             }
 
             sb.Append('}');
+        }
+
+        /// <summary>
+        ///     The session id from a session/start response, or null unless it is
+        ///     a UUID. ParseJsonValue takes the first "id" anywhere in the body, so
+        ///     a captive portal page could otherwise produce a junk id.
+        /// </summary>
+        private static string ParseSessionId(string body)
+        {
+            if (!IsJsonObject(body)) return null;
+            var id = ParseJsonValue(body, "id");
+            return Guid.TryParse(id, out _) ? id : null;
+        }
+
+        /// <summary>True when the body looks like a JSON object, as Summit's answers are.</summary>
+        private static bool IsJsonObject(string body)
+        {
+            if (string.IsNullOrEmpty(body)) return false;
+            var text = body.Trim();
+            return text.Length >= 2 && text[0] == '{' && text[text.Length - 1] == '}';
         }
 
         private static string ParseJsonValue(string json, string key)
