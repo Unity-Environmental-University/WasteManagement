@@ -202,7 +202,7 @@ namespace _project.Scripts.Object_Scripts
             if (!root) return;
 
             root.SetParent(null, false);
-            PathBuildBoard.DestroyObject(root.gameObject);
+            PathBuildBoard.DestroyForMode(root.gameObject);
         }
 
         private static readonly (PipeConnections flag, Vector3 direction)[] Sides =
@@ -230,7 +230,7 @@ namespace _project.Scripts.Object_Scripts
                 var child = root.GetChild(i);
                 // Detach first: Destroy waits for the end of the frame, and the visual is recolored now.
                 child.SetParent(null, false);
-                PathBuildBoard.DestroyObject(child.gameObject);
+                PathBuildBoard.DestroyForMode(child.gameObject);
             }
         }
 

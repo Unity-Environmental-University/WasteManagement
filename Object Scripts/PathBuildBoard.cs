@@ -50,6 +50,12 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private float cellGap = 0.1f;
         [SerializeField] private float cellHeight = 0.1f;
 
+        [Tooltip("Town level at which the board first widens. It widens again at every level after it.")]
+        [SerializeField, Min(1)] private int expandFromLevel = 4;
+
+        [Tooltip("Columns added to each side (left and right) every time the board widens.")]
+        [SerializeField, Min(0)] private int expandColumnsPerSide = 2;
+
         [Header("Visuals")] [SerializeField] private Material cellMaterial;
         [SerializeField] private Material pipeMaterial;
         [SerializeField] private Material conveyorMaterial;
@@ -94,6 +100,7 @@ namespace _project.Scripts.Object_Scripts
         private readonly List<PlacedPathPiece> _placedPieces = new();
         private readonly Dictionary<int, GameObject> _placedVisuals = new();
         private int _nextPieceId = 1;
+        private int _expansionsApplied;
 
         // Hover, selection and previews
         private PathBuildCell _hoveredCell;
@@ -302,7 +309,134 @@ namespace _project.Scripts.Object_Scripts
             RefreshVisuals();
             PathSplitter.AvailabilityChanged += HandleSplittersChanged;
             Receptacle.AvailabilityChanged += RefreshWaypointPaths;
+            TurnController.OnLevelChanged += ApplyLevelExpansions;
             NotifyPathLayoutChanged();
+        }
+
+        private void Start()
+        {
+            // The opening level may have been announced before this board subscribed.
+            var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
+            if (turnController) ApplyLevelExpansions(turnController.currentLevel);
+        }
+
+        /// <summary>Widens the board once for each level reached from <see cref="expandFromLevel" /> on.</summary>
+        private void ApplyLevelExpansions(int level)
+        {
+            if (!Application.isPlaying) return;
+            var target = Mathf.Max(0, level - expandFromLevel + 1);
+            while (_expansionsApplied < target)
+            {
+                _expansionsApplied++;
+                ExpandColumns(expandColumnsPerSide);
+            }
+        }
+
+        /// <summary>
+        ///     Adds <paramref name="perSide" /> columns to the left and right edges. The grid stays
+        ///     centered, so every cell and placed pipe keeps its world position; only its column index
+        ///     shifts. Endpoint markers on the left or right edge (receptacles, path ends) move out with
+        ///     the edge, so pipe that ended at one has to be extended to reach it again.
+        /// </summary>
+        public void ExpandColumns(int perSide)
+        {
+            if (perSide <= 0 || _cells == null) return;
+
+            var oldColumns = columns;
+            var sideMarkers = FindSideMarkers(oldColumns);
+
+            var oldCells = _cells;
+            columns += perSide * 2;
+            _cells = new PathBuildCell[columns, rows];
+            for (var column = 0; column < oldColumns; column++)
+            for (var row = 0; row < rows; row++)
+            {
+                var cell = oldCells[column, row];
+                if (!cell) continue;
+                var newColumn = column + perSide;
+                cell.Initialize(this, newColumn, row, cell.GetComponent<Renderer>());
+                cell.name = $"Path Cell {newColumn},{row}";
+                _cells[newColumn, row] = cell;
+            }
+
+            for (var column = 0; column < columns; column++)
+            for (var row = 0; row < rows; row++)
+                if (!_cells[column, row])
+                    _cells[column, row] = CreateCell(column, row);
+
+            // Re-key everything indexed by column.
+            var shift = new Vector2Int(perSide, 0);
+            _occupancy = new PieceOccupancy(columns, rows);
+            foreach (var piece in _placedPieces)
+                for (var i = 0; i < piece.cells.Count; i++)
+                {
+                    piece.cells[i] += shift;
+                    _occupancy.Set(piece.cells[i], piece.pathKind, piece.elevated, piece.id);
+                }
+
+            var openDrains = new List<Vector2Int>(_openDrains);
+            _openDrains.Clear();
+            foreach (var drain in openDrains) _openDrains.Add(drain + shift);
+
+            // Pipe art is keyed by cell, so redraw every placed piece at its new indices. The route
+            // highlight is recomputed by the waypoint refresh below.
+            _priorityRoutes.Clear();
+            _hoveredCell = null;
+            HidePreviewVisual();
+            if (_previewVisual) DestroyVisual(_previewVisual);
+            _previewVisual = null;
+            _conveyorPreview?.Invalidate();
+            foreach (var piece in _placedPieces)
+            {
+                if (_placedVisuals.TryGetValue(piece.id, out var oldVisual) && oldVisual)
+                {
+                    ReleaseVisualTiles(oldVisual);
+                    _appliedVisualColors.Remove(oldVisual);
+                    DestroyForMode(oldVisual);
+                }
+
+                var visual = CreatePipeVisual($"Placed {piece.pathKind} {piece.id}");
+                _placedVisuals[piece.id] = visual;
+                if (piece.pathKind == PathKind.RecyclingBelt)
+                {
+                    ConveyorVisual.Build(visual.transform, this, piece.cells, piece.orientation);
+                    visual.SetActive(true);
+                }
+                else
+                {
+                    UpdatePipeVisual(visual, piece.cells, piece.orientation, PlacedColor(piece), piece.elevated);
+                }
+            }
+
+            var outward = transform.TransformVector(new Vector3(perSide * PipeCellPitch, 0f, 0f));
+            foreach (var (marker, side) in sideMarkers)
+                marker.position += outward * side;
+
+            RefreshVisuals();
+            NotifyPathLayoutChanged();
+        }
+
+        /// <summary>Endpoint markers past the left (-1) or right (+1) edge of a board this many columns wide.</summary>
+        private List<(Transform marker, int side)> FindSideMarkers(int boardColumns)
+        {
+            var markers = new HashSet<Transform>();
+            foreach (var receptacle in FindObjectsByType<Receptacle>(FindObjectsInactive.Include))
+                if (receptacle) markers.Add(receptacle.transform);
+            foreach (var path in FindObjectsByType<WaypointPath>(FindObjectsInactive.Include))
+            {
+                if (path.StartPoint) markers.Add(path.StartPoint);
+                if (path.Destination) markers.Add(path.Destination);
+            }
+
+            var sideMarkers = new List<(Transform, int)>();
+            foreach (var marker in markers)
+            {
+                var column = WorldToCellUnclamped(marker.position).x;
+                if (column < 0) sideMarkers.Add((marker, -1));
+                else if (column >= boardColumns) sideMarkers.Add((marker, 1));
+            }
+
+            return sideMarkers;
         }
 
         /// <summary>
@@ -422,6 +556,7 @@ namespace _project.Scripts.Object_Scripts
         {
             PathSplitter.AvailabilityChanged -= HandleSplittersChanged;
             Receptacle.AvailabilityChanged -= RefreshWaypointPaths;
+            TurnController.OnLevelChanged -= ApplyLevelExpansions;
             if (_placementInventory is not null)
                 _placementInventory.SelectionChanged -= HandleSelectionChanged;
         }
@@ -627,7 +762,7 @@ namespace _project.Scripts.Object_Scripts
             if (_placedVisuals.TryGetValue(piece.id, out var visual) && visual)
             {
                 ReleaseVisualTiles(visual);
-                DestroyObject(visual);
+                DestroyForMode(visual);
             }
 
             _placedVisuals.Remove(piece.id);
@@ -757,24 +892,27 @@ namespace _project.Scripts.Object_Scripts
 
             for (var column = 0; column < columns; column++)
             for (var row = 0; row < rows; row++)
-            {
-                var cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                cellObject.name = $"Path Cell {column},{row}";
-                cellObject.layer = gameObject.layer;
-                cellObject.transform.SetParent(transform, false);
-                cellObject.transform.localPosition = GetLocalPosition(column, row);
-                cellObject.transform.localScale = new Vector3(cellSize, cellHeight, cellSize);
+                _cells[column, row] = CreateCell(column, row);
+        }
 
-                var rend = cellObject.GetComponent<Renderer>();
-                if (cellMaterial) rend.sharedMaterial = cellMaterial;
+        private PathBuildCell CreateCell(int column, int row)
+        {
+            var cellObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            cellObject.name = $"Path Cell {column},{row}";
+            cellObject.layer = gameObject.layer;
+            cellObject.transform.SetParent(transform, false);
+            cellObject.transform.localPosition = GetLocalPosition(column, row);
+            cellObject.transform.localScale = new Vector3(cellSize, cellHeight, cellSize);
 
-                var collisionComp = cellObject.GetComponent<Collider>();
-                if (collisionComp) collisionComp.isTrigger = true;
+            var rend = cellObject.GetComponent<Renderer>();
+            if (cellMaterial) rend.sharedMaterial = cellMaterial;
 
-                var cell = cellObject.AddComponent<PathBuildCell>();
-                cell.Initialize(this, column, row, rend);
-                _cells[column, row] = cell;
-            }
+            var collisionComp = cellObject.GetComponent<Collider>();
+            if (collisionComp) collisionComp.isTrigger = true;
+
+            var cell = cellObject.AddComponent<PathBuildCell>();
+            cell.Initialize(this, column, row, rend);
+            return cell;
         }
 
         /// <summary>
@@ -812,7 +950,7 @@ namespace _project.Scripts.Object_Scripts
         {
             for (var i = transform.childCount - 1; i >= 0; i--)
             {
-                DestroyObject(transform.GetChild(i).gameObject);
+                DestroyForMode(transform.GetChild(i).gameObject);
             }
 
             _cells = null;
@@ -869,11 +1007,11 @@ namespace _project.Scripts.Object_Scripts
         {
             ReleaseVisualTiles(visual);
             visual.SetActive(false);
-            DestroyObject(visual);
+            DestroyForMode(visual);
         }
 
         /// <summary>Destroys at end of frame in Play mode and immediately in Edit mode.</summary>
-        internal static void DestroyObject(UnityEngine.Object target)
+        internal static void DestroyForMode(UnityEngine.Object target)
         {
             if (Application.isPlaying)
                 Destroy(target);
