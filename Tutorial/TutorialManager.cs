@@ -106,7 +106,7 @@ namespace _project.Scripts.Tutorial
                         }
 
                         hint = $"Route check: connected, but it only crosses {crossed} blue build " +
-                               $"square{(crossed == 1 ? "" : "s")}. Run it through at least {required} — " +
+                               $"square{(crossed == 1 ? "" : "s")}. Run it through at least {required}, " +
                                "one for each utility you will install.";
                     }
 
@@ -196,40 +196,40 @@ namespace _project.Scripts.Tutorial
                 case Step.Welcome:
                     _panel.ShowStep(1, StepCount, "BUILD A PIPELINE",
                         "Waste spews from the outfall every wave and flows toward the lake. " +
-                        "Before a wave can start, you must lay a connected pipe route between them.");
+                        "Before a wave can start, lay a pipe route that connects the two.");
                     _panel.SetDemoVisible(true);
                     _panel.SetNextButton("NEXT");
                     break;
                 case Step.ArmTool:
                     _panel.ShowStep(2, StepCount, "ARM A PIPE TOOL",
-                        "In the PIPELINE panel, click PIPE 2-CELL to arm a two-cell pipe segment.");                    ShowPipeToolHighlight();
+                        "In the PIPELINE panel, click PIPE 2-CELL to pick up a two-cell pipe segment.");                    ShowPipeToolHighlight();
                     break;
                 case Step.Rotate:
                     _panel.ShowStep(3, StepCount, "ROTATE THE SEGMENT",
-                        "Press R to flip the armed segment between horizontal and vertical.");                    break;
+                        "Press R to turn the segment between horizontal and vertical.");                    break;
                 case Step.Place:
                     _panel.ShowStep(4, StepCount, "LAY THE PIPE",
-                        "Click a board cell to place the segment. Hover the grid first to preview where it will land.");                    break;
+                        "Click a board cell to place the segment. Hover over the grid first to see where it will go.");                    break;
                 case Step.Connect:
                     _panel.ShowStep(5, StepCount, "COMPLETE THE ROUTE",
-                        "Keep laying pipe until one unbroken route links the outfall to the lake — " +
-                        "and run it through at least two blue build squares, one for each utility " +
+                        "Keep laying pipe until one unbroken route links the outfall to the lake. " +
+                        "Run it through at least two blue build squares, one for each utility " +
                         "you will install next. The REMOVE tool clears mistakes.");
                     _panel.SetDemoVisible(true);                    break;
                 case Step.PlaceSifter:
                     _panel.ShowStep(6, StepCount, "INSTALL A SIFTER",
-                        "Buy a WASTE SIFTER from the shop — its box glows orange while it is ready " +
+                        "Buy a WASTE SIFTER from the shop. Its box glows orange while it is ready " +
                         "to place. Click a blue square on your pipeline to install it. Sifters " +
-                        "shrink waste that flows past.");                    break;
+                        "shrink the waste that flows through them.");                    break;
                 case Step.PlaceCesspit:
                     _panel.ShowStep(7, StepCount, "ADD A CESSPIT",
                         "Buy a CESSPIT from the shop and install it on another blue square along " +
-                        "the route. Cesspits store and process waste — but spawn runaways when they " +
-                        "fill up.");                    break;
+                        "the route. Cesspits store and process waste, but once one fills up, " +
+                        "runaway waste escapes from it.");                    break;
                 case Step.StartWave:
                     _panel.ShowStep(8, StepCount, "READY FOR THE WAVE",
-                        "Pipeline connected, defenses installed. Press the next-phase button when you " +
-                        "are ready to face the wave!");
+                        "Your pipeline is connected and your defenses are in. Press the next-phase " +
+                        "button when you are ready for the wave.");
                     _panel.SetNextButton("FINISH");
                     break;
             }
