@@ -1,6 +1,8 @@
+using System.Collections;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace _project.Scripts.Tests
 {
@@ -64,7 +66,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void SpeechBubble_PopsAwayAfterItsTime()
+        public void SpeechBubble_FloatsAboveItsAnchor_AndStaysUpLongEnoughToPop()
         {
             var anchor = CreateGameObject("Anchor").transform;
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<SpeechBubble>(
@@ -82,6 +84,28 @@ namespace _project.Scripts.Tests
             bubble.Say("Quack!", Color.black, 0f);
             bubble.SendMessage("LateUpdate");
             Assert.IsTrue(bubble.IsShowing, "It always stays up long enough to pop in and out.");
+        }
+
+        [UnityTest]
+        public IEnumerator SpeechBubble_PopsAwayAfterItsTime()
+        {
+            const float duration = 0.5f;
+            var anchor = CreateGameObject("Anchor").transform;
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<SpeechBubble>(
+                "Assets/_project/Prefabs/Speech Bubble.prefab");
+            var bubble = Track(Object.Instantiate(prefab.gameObject)).GetComponent<SpeechBubble>();
+            bubble.Follow(anchor, 1f);
+
+            bubble.Say("Quack!", Color.black, duration);
+            var shownAt = Time.time;
+
+            // Polled against real time so a leaked pause (timeScale 0) fails the test instead of hanging it.
+            var giveUpAt = Time.realtimeSinceStartup + 5f;
+            while (bubble.IsShowing && Time.realtimeSinceStartup < giveUpAt)
+                yield return null;
+
+            Assert.IsFalse(bubble.IsShowing, "The bubble must hide once its time is up.");
+            Assert.GreaterOrEqual(Time.time - shownAt, duration, "It must not hide before its time.");
         }
     }
 }
