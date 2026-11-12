@@ -632,6 +632,41 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(gameMaster.CanAnySpawnerSpawn(IssueType.NonWaste));
         }
 
+        [UnityTest]
+        public IEnumerator CompletedRounds_UnlockPlasticAndPaper([Values] bool roundBased)
+        {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var population = CreateGameObject("Population").AddComponent<PopulationManager>();
+            SetField(population, "roundToLevelOneToOne", roundBased);
+            gm.popManager = population;
+            var issuePrefab = CreatePrimitive("Issue Prefab").AddComponent<IssueObject>();
+            issuePrefab.enabled = false;
+            var spawner = CreateGameObject("Spawner").AddComponent<EntitySpawner>();
+            SetField(spawner, "spawnerObject", issuePrefab.gameObject);
+            gm.entitySpawners = new List<EntitySpawner> { spawner };
+            yield return null;
+
+            Assert.AreEqual(1, gm.turnController.currentLevel);
+            Assert.IsFalse(gm.CanAnySpawnerSpawn(IssueType.Plastic));
+            Assert.IsFalse(gm.CanAnySpawnerSpawn(IssueType.Paper));
+            var reachedPlastic = false;
+            var reachedPaper = false;
+            for (var round = 0; round < 12; round++)
+            {
+                // Finish a wave through the turn controller; never inject a town level.
+                gm.turnController.currentPhase = GamePhase.Tower;
+                gm.turnController.EndPhase();
+                var level = gm.turnController.currentLevel;
+                Assert.AreEqual(level >= 4, gm.CanAnySpawnerSpawn(IssueType.Plastic));
+                Assert.AreEqual(level >= 5, gm.CanAnySpawnerSpawn(IssueType.Paper));
+                reachedPlastic |= level == 4;
+                reachedPaper |= level == 5;
+            }
+
+            Assert.IsTrue(reachedPlastic, "Completed rounds must reach the plastic unlock.");
+            Assert.IsTrue(reachedPaper, "Completed rounds must reach the paper unlock.");
+        }
+
         [Test]
         public void CanAnySpawnerSpawn_JunkOnlySpawnerSendsNothingElse()
         {
