@@ -1,9 +1,11 @@
+using System.Collections;
 using System.Collections.Generic;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.TestTools;
 using UnityEngine.UI;
 
 namespace _project.Scripts.Tests
@@ -14,12 +16,11 @@ namespace _project.Scripts.Tests
         public void DisablingSifter_ReleasesHeldIssueAndAllowsRecapture()
         {
             var sifter = CreateGameObject("Sifter").AddComponent<WasteSifter>();
-            var issue = CreateGameObject("Issue").AddComponent<IssueObject>();
+            sifter.maxDebrisAccumulation = 100f;
+            var issue = CreateJunk("Issue");
             var sifterId = sifter.GetEntityId();
-            Assert.IsTrue(issue.TryRegisterSifter(sifterId));
-            issue.SetHeldBySifter(true);
-
-            GetField<HashSet<IssueObject>>(sifter, "_heldIssues").Add(issue);
+            Enter(sifter, issue);
+            Assert.IsTrue(IsHeld(issue), "The screen should catch the junk before it is switched off.");
 
             sifter.gameObject.SetActive(false);
 
@@ -106,19 +107,36 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(IsHeld(junk), "Overflow relief is not immunity to clogging.");
         }
 
-        [Test]
-        public void ClearingDownstreamSifter_RemovesRecapturedFlush()
+        [UnityTest]
+        public IEnumerator ClearingDownstreamSifter_RemovesRecapturedFlush()
         {
             var sifter = CreateGameObject("Recovery Sifter").AddComponent<WasteSifter>();
             var junk = CreateJunk("Flushed Junk");
             junk.FlushFromSifter();
             sifter.maxDebrisAccumulation = junk.SiftCost;
             Enter(sifter, junk);
+            Assert.IsTrue(IsHeld(junk));
 
-            sifter.ClearDebris();
+            // Junk with no path that is let go instead of removed would "reach the end" on its next
+            // Update and be destroyed anyway, so watch for that to tell the two apart.
+            var reachedEnd = false;
+            void OnReachedEnd(IssueObject issue) => reachedEnd |= issue == junk;
+            IssueObject.OnReachedEnd += OnReachedEnd;
+            try
+            {
+                sifter.ClearDebris();
 
-            Assert.AreEqual(0f, sifter.debrisAccumulation);
-            Assert.IsEmpty(GetField<HashSet<IssueObject>>(sifter, "_heldIssues"));
+                Assert.AreEqual(0f, sifter.debrisAccumulation);
+                Assert.IsEmpty(GetField<HashSet<IssueObject>>(sifter, "_heldIssues"));
+                // Destroy is deferred to the end of the frame.
+                yield return null;
+                Assert.IsFalse(junk, "Sorting it out of the screen removes the junk.");
+                Assert.IsFalse(reachedEnd, "It must be removed, not released down the line.");
+            }
+            finally
+            {
+                IssueObject.OnReachedEnd -= OnReachedEnd;
+            }
         }
 
         [Test]
@@ -435,24 +453,23 @@ namespace _project.Scripts.Tests
             return active;
         }
 
-        private IssueObject CreateMetal(string name)
-        {
-            var go = CreateGameObject(name);
-            go.tag = "IssueObject";
-            go.AddComponent<SphereCollider>();
-            var issue = go.AddComponent<IssueObject>();
-            issue.SetType(IssueType.Metal);
-            return issue;
-        }
+        private IssueObject CreateMetal(string name) => CreateIssue(name, IssueType.Metal);
 
         private IssueObject CreateJunk(string name)
         {
+            var issue = CreateIssue(name, IssueType.NonWaste);
+            issue.SetSize(3);
+            return issue;
+        }
+
+        /// <summary>An issue the sifter and cesspit triggers accept; recyclables take their fixed size.</summary>
+        private IssueObject CreateIssue(string name, IssueType type)
+        {
             var go = CreateGameObject(name);
             go.tag = "IssueObject";
             go.AddComponent<SphereCollider>();
             var issue = go.AddComponent<IssueObject>();
-            issue.SetType(IssueType.NonWaste);
-            issue.SetSize(3);
+            issue.SetType(type);
             return issue;
         }
 

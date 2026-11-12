@@ -1,6 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
@@ -35,13 +35,11 @@ namespace _project.Scripts.Tests
             _panTestMouse = null;
             _previousPointer = null;
 
-            if (_previousFocusSettings is { } previous)
-            {
-                InputSystem.settings.backgroundBehavior = previous.background;
-                InputSystem.settings.editorInputBehaviorInPlayMode = previous.editor;
-                Application.runInBackground = previous.runInBackground;
-                _previousFocusSettings = null;
-            }
+            if (_previousFocusSettings is not { } previous) return;
+            InputSystem.settings.backgroundBehavior = previous.background;
+            InputSystem.settings.editorInputBehaviorInPlayMode = previous.editor;
+            Application.runInBackground = previous.runInBackground;
+            _previousFocusSettings = null;
         }
 
         // Queued mouse events only reach the pan action while the Game view has focus, which a
@@ -379,8 +377,27 @@ namespace _project.Scripts.Tests
             }
 
             InputSystem.Update();
+            Assert.IsFalse(GetField<bool>(fixture.Controller, "_isPanning"));
             var stoppedPosition = fixture.Camera.transform.position;
-            if (_panTestMouse.added) SendPanMouse(new Vector2(500, 300), true);
+
+            if (interruption == "DeviceRemoved")
+            {
+                // The removed mouse can't send anything, so follow up with a fresh one: moving it
+                // must not resume the dead gesture, and only its own press may start a new one.
+                _panTestMouse = InputSystem.AddDevice<Mouse>();
+                SendPanMouse(new Vector2(500, 300), false);
+                SendPanMouse(new Vector2(550, 300), false);
+                Assert.AreEqual(stoppedPosition, fixture.Camera.transform.position);
+
+                SendPanMouse(new Vector2(550, 300), true);
+                SendPanMouse(new Vector2(600, 300), true);
+                Assert.AreNotEqual(stoppedPosition, fixture.Camera.transform.position,
+                    "A fresh press on the new mouse should pan again.");
+                return;
+            }
+
+            // The button is still held from the interrupted gesture: dragging it on must not pan.
+            SendPanMouse(new Vector2(500, 300), true);
             Assert.AreEqual(stoppedPosition, fixture.Camera.transform.position);
             Assert.IsFalse(GetField<bool>(fixture.Controller, "_isPanning"));
         }
@@ -526,38 +543,69 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(0, cap.InfraValue);
         }
 
-        [Test]
-        public void BuryCesspit_PurchaseThenClickConsumesPlacement_WhenCesspitIsSealed()
+        // Burial doesn't depend on a cap, so it's checked on both a sealed and an open pit.
+        [UnityTest]
+        public IEnumerator BuryCesspit_PurchaseThenClick_RemovesThePitAndConsumesPlacement([Values] bool sealFirst)
         {
             var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gameMaster.pathBuildBoard = CreateGameObject("Path Board").AddComponent<PathBuildBoard>();
+            // Disabled so its Start doesn't scatter random tiles; burial only needs SpawnBuffTile.
+            var tileSpawner = CreateGameObject("Tile Spawner").AddComponent<SpecialTileSpawner>();
+            tileSpawner.enabled = false;
             var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
-            var cap = new CesspitCapShopItem("Cesspit Cap", "", 1, null);
+            cesspit.transform.position = gameMaster.pathBuildBoard.GetCellTopPosition(new Vector2Int(2, 3));
             var burial = new BuryCesspitShopItem("Bury Cesspit", "", 1, null);
+            // Let the turn controller start: it only finds its GameMaster in Start, and a placement
+            // registers a move there. Without this the test leans on a GameMaster left by another test.
+            yield return null;
 
-            cap.Purchase();
-            cesspit.OnPointerClick(null);
-            Assert.IsTrue(cesspit.IsSealed);
+            if (sealFirst)
+            {
+                new CesspitCapShopItem("Cesspit Cap", "", 1, null).Purchase();
+                cesspit.OnPointerClick(null);
+                Assert.IsTrue(cesspit.IsSealed);
+            }
 
             burial.Purchase();
+            Assert.AreEqual(burial, gameMaster.PendingPlacement);
             cesspit.OnPointerClick(null);
 
             Assert.IsNull(gameMaster.PendingPlacement);
+            // Destroy is deferred to the end of the frame.
+            yield return null;
+            Assert.IsFalse(cesspit, "Burying takes the cesspit off the board.");
+
+            // ...and leaves a debuff tile on the square it filled.
+            Assert.AreEqual(1, tileSpawner.SpawnedBuffTiles.Count);
+            var tile = tileSpawner.SpawnedBuffTiles[0];
+            Assert.AreEqual(BuffDebuffKind.Debuff, tile.Kind);
+            Assert.AreEqual(new Vector2Int(2, 3), gameMaster.pathBuildBoard.WorldToCell(tile.transform.position));
         }
 
-        [Test]
-        public void PointerUi_InputGuard_IgnoresPassiveGraphicsButBlocksButtons()
+        [UnityTest]
+        public IEnumerator PointerUi_IsPointerOverInteractiveUi_IgnoresPassiveGraphicsButBlocksButtons()
         {
-            var passiveGraphic = CreateGameObject("Passive UI Graphic");
-            passiveGraphic.AddComponent<Image>();
-            var button = CreateGameObject("Interactive UI Button");
-            button.AddComponent<Button>();
+            CreateGameObject("Event System").AddComponent<EventSystem>();
+            var canvasHost = Track(new GameObject("Input Canvas", typeof(RectTransform), typeof(Canvas),
+                typeof(GraphicRaycaster)));
+            canvasHost.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var graphicHost = Track(new GameObject("Passive Graphic", typeof(RectTransform), typeof(Image)));
+            var graphicRect = (RectTransform)graphicHost.transform;
+            graphicRect.SetParent(canvasHost.transform, false);
+            graphicRect.anchorMin = Vector2.zero;
+            graphicRect.anchorMax = Vector2.one;
+            graphicRect.offsetMin = graphicRect.offsetMax = Vector2.zero;
+            yield return null;
+            Canvas.ForceUpdateCanvases();
 
-            var guard = typeof(PointerUi).GetMethod("HandlesPointerInput",
-                BindingFlags.NonPublic | BindingFlags.Static);
+            AddTestMouse();
+            SendPanMouse(RectTransformUtility.WorldToScreenPoint(null, graphicRect.position), false);
 
-            Assert.IsNotNull(guard);
-            Assert.IsFalse((bool)guard.Invoke(null, new object[] { passiveGraphic }));
-            Assert.IsTrue((bool)guard.Invoke(null, new object[] { button }));
+            Assert.IsFalse(PointerUi.IsPointerOverInteractiveUi(),
+                "A backdrop or label must not swallow world clicks.");
+
+            graphicHost.AddComponent<Button>();
+            Assert.IsTrue(PointerUi.IsPointerOverInteractiveUi(), "The same graphic as a button blocks them.");
         }
 
         /// <summary>A GameMaster whose Awake picks up the path board parented beneath it.</summary>
@@ -583,10 +631,16 @@ namespace _project.Scripts.Tests
             SetField(controller, "mainCamera", mainCamera);
             SetField(controller, "secondaryCamera", camera);
             SetField(controller, "recenterDuration", 0f);
+            AddTestMouse();
+            return (controller, board, camera);
+        }
+
+        /// <summary>Adds the mouse SendPanMouse drives; the teardown removes it and restores focus settings.</summary>
+        private void AddTestMouse()
+        {
             RouteInputToGameRegardlessOfFocus();
             _previousPointer = Pointer.current;
             _panTestMouse = InputSystem.AddDevice<Mouse>();
-            return (controller, board, camera);
         }
 
         private void SendPanMouse(Vector2 position, bool pressed)

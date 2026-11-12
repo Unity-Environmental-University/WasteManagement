@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -13,6 +12,8 @@ namespace _project.Scripts.Tests
     /// <summary>Issue movement through route changes while held, merging, and pipe blockages.</summary>
     public class IssueObjectTests : PathTestBase
     {
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+
         [TestCase(true)]
         [TestCase(false)]
         public void HeldIssue_ResumesAtItsCell_AfterRouteIsShortened(bool flush)
@@ -163,17 +164,25 @@ namespace _project.Scripts.Tests
         public void IssueVisualOverride_PersistsAfterProcessingChangesSize()
         {
             var issue = CreatePrimitive("Runaway Issue").AddComponent<IssueObject>();
+            // One model per size tier, so shrinking swaps in a model that was never tinted.
+            var tiers = new[] { "Small", "Medium", "Big" }
+                .Select(name => CreatePrimitive(name, issue.transform)).ToArray();
+            SetField(issue, "sizeVisuals", tiers);
             var runawayColor = new Color(1f, 0.45f, 0f);
 
             issue.SetSize(3);
+            Assert.IsTrue(tiers[2].activeSelf);
             issue.SetVisualOverride(runawayColor);
             issue.Process(1, "Test Process");
 
+            Assert.IsTrue(tiers[1].activeSelf, "Shrinking to size 2 shows the medium model.");
+            Assert.IsFalse(tiers[2].activeSelf);
             // The override tint rides in a MaterialPropertyBlock (no per-renderer material
             // instance), so read it back from the block rather than .material.color.
             var propertyBlock = new MaterialPropertyBlock();
-            issue.GetComponent<Renderer>().GetPropertyBlock(propertyBlock);
-            Assert.AreEqual(runawayColor, propertyBlock.GetColor("_Color"));
+            tiers[1].GetComponent<Renderer>().GetPropertyBlock(propertyBlock);
+            Assert.AreEqual(runawayColor, propertyBlock.GetColor(ColorId),
+                "The model swapped in must wear the override too.");
         }
 
         [UnityTest]
@@ -184,6 +193,9 @@ namespace _project.Scripts.Tests
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
             Assert.IsTrue(fixture.Path.Rebuild());
+            // Path movement reads the board height through GameMaster.Instance; without one here
+            // the test would lean on whatever instance an earlier test left behind.
+            CreateGameObject("Game Master").AddComponent<GameMaster>().pathBuildBoard = fixture.Board;
 
             var issueA = CreateIssue("Issue A", fixture.Path);
             var issueB = CreateIssue("Issue B", fixture.Path);
@@ -220,18 +232,27 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(survivorPosition.z, issueA.transform.position.z, 0.0001f);
         }
 
-        [Test]
-        public void Click_OnlyCountsForBlockagesAndPoppableIssues_DuringTheRun()
+        [UnityTest]
+        public IEnumerator Click_OnlyCountsForBlockagesAndPoppableIssues_DuringTheRun()
         {
+            // The passing issue rides a real pipe so it survives the frame below on its own merits.
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 10);
+            Assert.IsTrue(fixture.Path.Rebuild());
             var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.pathBuildBoard = fixture.Board;
+            // Only the phase matters here; a live turn controller would start running the wave.
+            gm.turnController.enabled = false;
             gm.turnController.currentPhase = GamePhase.Tower;
-            var passing = CreatePrimitive("Passing Issue").AddComponent<IssueObject>();
+            var passing = CreateIssue("Passing Issue", fixture.Path);
             passing.SetSize(1);
             var blockage = CreatePrimitive("Blocking Issue").AddComponent<IssueObject>();
             blockage.SetSize(4);
 
             Assert.IsFalse(passing.IsClickable, "Waste flowing past leaves the click for what's behind it.");
             Assert.IsFalse(passing.TryHandleClick());
+            // Destroy is deferred to the end of the frame, so only a frame later can show it wasn't popped.
+            yield return null;
             Assert.IsTrue(passing, "An unusable click leaves the issue alone.");
             Assert.IsTrue(blockage.IsClickable);
 
@@ -246,13 +267,16 @@ namespace _project.Scripts.Tests
         public IEnumerator IssueObject_BlockageBurstsAfterDeadline_WhenNotBrokenDown()
         {
             var issue = CreatePrimitive("Timed Blocking Issue").AddComponent<IssueObject>();
-            SetField(issue, "blockedBurstDelay", 0.05f);
+            // 0.1 s is the shortest deadline Update honors; the default is several seconds.
+            SetField(issue, "blockedBurstDelay", 0.1f);
             issue.SetSize(4);
 
             Assert.IsTrue(issue.IsBlockingPipe);
 
-            yield return new WaitForSeconds(0.1f);
-            yield return null;
+            // Poll instead of waiting exactly the deadline, so slow frames can't make it flaky.
+            var giveUpAt = Time.realtimeSinceStartup + 2f;
+            while (issue && Time.realtimeSinceStartup < giveUpAt)
+                yield return null;
 
             Assert.IsFalse(issue, "An uncleared pipe blockage should burst and destroy itself after its deadline.");
         }
@@ -264,13 +288,22 @@ namespace _project.Scripts.Tests
             PlaceVertical(fixture.Board, 1, 0, 10);
             Assert.IsTrue(fixture.Path.Rebuild());
 
+            CreateGameObject("Game Master").AddComponent<GameMaster>().pathBuildBoard = fixture.Board;
+
             var pathIssue = CreateIssue("Path Issue", fixture.Path);
-            var runawayIssue = CreatePrimitive("Runaway Issue").AddComponent<IssueObject>();
-            runawayIssue.SetDirectDestination(Vector3.forward);
+            var runawayIssue = CreateIssue("Runaway Issue", fixture.Path);
+            runawayIssue.SetDirectDestination(Vector3.forward * 100f);
+            // SetDirectDestination drops the path, and a path mismatch alone already blocks a merge.
+            // Put it back so only the direct-destination rule stands between the two.
+            SetField(runawayIssue, "path", fixture.Path);
             pathIssue.SetSize(1);
             runawayIssue.SetSize(1);
 
+            // A merge deactivates the absorbed issue at once, so check before colliding the other way.
             pathIssue.SendMessage("OnTriggerEnter", runawayIssue.GetComponent<Collider>());
+            Assert.IsTrue(runawayIssue.gameObject.activeSelf, "The path issue absorbed the runaway.");
+            runawayIssue.SendMessage("OnTriggerEnter", pathIssue.GetComponent<Collider>());
+            Assert.IsTrue(pathIssue.gameObject.activeSelf, "The runaway absorbed the path issue.");
             yield return null;
 
             Assert.IsTrue(pathIssue);
@@ -279,23 +312,36 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(1f, runawayIssue.ProcessCost);
         }
 
-        [Test]
-        public void MetalIssues_NeverMergeAndKeepTheirFixedSize()
+        [UnityTest]
+        public IEnumerator MetalIssues_NeverMergeAndKeepTheirFixedSize()
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
             Assert.IsTrue(fixture.Path.Rebuild());
+            CreateGameObject("Game Master").AddComponent<GameMaster>().pathBuildBoard = fixture.Board;
 
             var metal = CreateIssue("Metal Issue", fixture.Path);
             metal.SetType(IssueType.Metal);
+            var otherMetal = CreateIssue("Other Metal Issue", fixture.Path);
+            otherMetal.SetType(IssueType.Metal);
             var waste = CreateIssue("Waste Issue", fixture.Path);
             waste.SetType(IssueType.Organic);
+            waste.SetSize(1);
+            var metalSize = metal.ProcessCost;
+            var wasteSize = waste.ProcessCost;
 
-            var canMerge = typeof(IssueObject).GetMethod("CanMergeWith", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(canMerge);
-            Assert.IsFalse((bool)canMerge.Invoke(metal, new object[] { waste }));
-            Assert.IsFalse((bool)canMerge.Invoke(waste, new object[] { metal }));
-            Assert.AreEqual(metal.ProcessCost, GetField<int>(metal, "metalSize") * 1f);
+            // The same collisions that merge two waste issues (see MergesIntoNextSizeStage).
+            metal.SendMessage("OnTriggerEnter", waste.GetComponent<Collider>());
+            waste.SendMessage("OnTriggerEnter", metal.GetComponent<Collider>());
+            metal.SendMessage("OnTriggerEnter", otherMetal.GetComponent<Collider>());
+            yield return null;
+
+            Assert.IsTrue(metal);
+            Assert.IsTrue(otherMetal, "Metal doesn't clump with metal either.");
+            Assert.IsTrue(waste);
+            Assert.AreEqual(metalSize, metal.ProcessCost);
+            Assert.AreEqual(metalSize, otherMetal.ProcessCost);
+            Assert.AreEqual(wasteSize, waste.ProcessCost);
             Assert.IsFalse(metal.IsBlockingPipe);
         }
 
@@ -353,21 +399,17 @@ namespace _project.Scripts.Tests
         public void SetType_LeavingMetalDropsItsTint_AndJunkShowsAJunkModel()
         {
             var issue = CreatePrimitive("Issue").AddComponent<IssueObject>();
-            var junk = new[] { "Boot", "Tire" }
-                .Select(name =>
-                {
-                    var model = CreateGameObject(name);
-                    model.transform.SetParent(issue.transform, false);
-                    return model;
-                }).ToArray();
+            // With no metal models assigned, metal borrows a junk model, so the tint lands on one of these.
+            var junk = new[] { "Boot", "Tire" }.Select(name => CreatePrimitive(name, issue.transform)).ToArray();
             SetField(issue, "nonWasteVisuals", junk);
 
             issue.SetType(IssueType.Metal);
-            Assert.IsTrue(GetField<Color?>(issue, "_visualOverrideColor").HasValue);
+            Assert.IsTrue(junk.Any(model => model.activeSelf && model.GetComponent<Renderer>().HasPropertyBlock()),
+                "The model metal shows wears its tint.");
 
             // The recycling demo spawner sets junk directly instead of through AssignType.
             issue.SetType(IssueType.NonWaste);
-            Assert.IsFalse(GetField<Color?>(issue, "_visualOverrideColor").HasValue,
+            Assert.IsFalse(junk.Any(model => model.GetComponent<Renderer>().HasPropertyBlock()),
                 "Junk doesn't keep the metal tint.");
             Assert.AreEqual(1, junk.Count(model => model.activeSelf), "Exactly one junk model shows.");
         }

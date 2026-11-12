@@ -1,12 +1,12 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using _project.Scripts.UI;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.TestTools;
 using UnityEngine.UI;
 
@@ -296,6 +296,7 @@ namespace _project.Scripts.Tests
             gm.pathBuildBoard = fixture.Board;
 
             var lake = CreateGameObject("Lake").AddComponent<LakeController>();
+            var startHealth = lake.health;
             var metal = CreatePrimitive("Metal Issue").AddComponent<IssueObject>();
             metal.SetType(IssueType.Metal);
             metal.SetPath(fixture.Path);
@@ -306,17 +307,14 @@ namespace _project.Scripts.Tests
             junk.SetPath(fixture.Path);
             Assert.IsTrue(junk.TrySetRoute(metal.GetRouteIndex()));
 
-            foreach (var issue in new[] { metal, junk })
-            {
-                while (issue.GetWaypointIndex() < fixture.Path.GetWaypointCount(issue.GetRouteIndex()))
-                    AdvanceIssueOneWaypoint(issue, fixture.Board);
-                issue.SendMessage("Update");
-            }
-
+            RunToEnd(metal, fixture.Board);
             Assert.AreSame(receptacle, metal.EndReceptacle);
+            Assert.AreEqual(1, receptacle.DeliveredCount, "The metal is collected.");
+            Assert.AreEqual(startHealth, lake.health, 0.001f, "The metal itself spares the lake.");
+
+            RunToEnd(junk, fixture.Board);
             Assert.AreEqual(1, receptacle.DeliveredCount, "Only the metal is collected.");
-            Assert.Less(lake.health, 100f, "Waste dumped at the metal receptacle still pollutes the lake.");
-            Assert.AreEqual(100f - junk.ProcessCost * 5, lake.health, 0.001f, "The metal itself spares the lake.");
+            Assert.Less(lake.health, startHealth, "Waste dumped at the metal receptacle still pollutes the lake.");
         }
 
         [Test]
@@ -330,6 +328,7 @@ namespace _project.Scripts.Tests
             gm.pathBuildBoard = fixture.Board;
 
             var lake = CreateGameObject("Lake").AddComponent<LakeController>();
+            var startHealth = lake.health;
             var metal = CreatePrimitive("Metal Issue").AddComponent<IssueObject>();
             metal.SetType(IssueType.Metal);
             metal.SetPath(fixture.Path);
@@ -339,12 +338,10 @@ namespace _project.Scripts.Tests
             receptacle.SendMessage("ApplyLevel", 2);
             Assert.IsFalse(receptacle.IsUnlocked);
 
-            while (metal.GetWaypointIndex() < fixture.Path.GetWaypointCount(metal.GetRouteIndex()))
-                AdvanceIssueOneWaypoint(metal, fixture.Board);
-            metal.SendMessage("Update");
+            RunToEnd(metal, fixture.Board);
 
             Assert.AreEqual(0, receptacle.DeliveredCount, "A locked receptacle collects nothing.");
-            Assert.AreEqual(100f - metal.ProcessCost * 5, lake.health, 0.001f);
+            Assert.Less(lake.health, startHealth, "The metal pollutes the lake instead.");
         }
 
         [Test]
@@ -372,7 +369,7 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
-        public void PathSplitter_Awake_IgnoresPointerRaycastsWithoutBuildingVisuals()
+        public void PathSplitter_Awake_PutsItselfAndItsChildrenOnIgnoreRaycastBehindATrigger()
         {
             var instance = CreateGameObject("Path Splitter");
             var child = CreateGameObject("Path Splitter Child");
@@ -384,7 +381,6 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(ignoreRaycastLayer, instance.layer);
             Assert.AreEqual(ignoreRaycastLayer, child.layer);
             Assert.IsTrue(instance.GetComponent<Collider>().isTrigger);
-            Assert.IsNull(instance.transform.Find("Path Splitter Visual"));
         }
 
         [Test]
@@ -483,6 +479,8 @@ namespace _project.Scripts.Tests
             PlaceHorizontal(fixture.Board, 2, 2, 1);
             PlaceVertical(fixture.Board, 0, 2, 7);
             var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
+            // Fixed shares, so the expected counts below don't depend on the splitter's defaults.
+            splitter.SetShares(50, 0);
             Assert.IsTrue(fixture.Path.Rebuild());
             Assert.IsFalse(fixture.Path.TryGetBranchRoute(0, splitter.transform.position, out _),
                 "The stub keeps output 2's number while it's unfinished.");
@@ -497,10 +495,8 @@ namespace _project.Scripts.Tests
                 counts[issue.GetRouteIndex() == loop ? 2 : issue.GetRouteIndex() == 0 ? 0 : 1]++;
             }
 
-            CollectionAssert.AreEqual(new[]
-            {
-                splitter.MainSharePercent, 0, splitter.BranchSharePercent + splitter.ThirdSharePercent
-            }, counts, "The loop takes the stub's share as well as its own.");
+            CollectionAssert.AreEqual(new[] { 50, 0, 50 }, counts,
+                "The loop takes the stub's share as well as its own.");
             splitter.SetRule(IssueType.Organic, SplitterRule.BranchOnly);
             Assert.AreEqual(2, splitter.ChooseOutput(IssueType.Organic, true, false));
         }
@@ -558,8 +554,11 @@ namespace _project.Scripts.Tests
             CollectionAssert.AreEqual(new[] {50, 50, 0}, counts);
             splitter.SetShares(0, 100);
             Assert.AreEqual(0, splitter.ChooseOutput(IssueType.Organic, false));
+            // Shares past 100 trim the third outlet; the branch share is whatever is left, never negative.
             splitter.SetShares(90, 90);
-            Assert.AreEqual(100, splitter.MainSharePercent + splitter.BranchSharePercent + splitter.ThirdSharePercent);
+            Assert.AreEqual(90, splitter.MainSharePercent);
+            Assert.AreEqual(10, splitter.ThirdSharePercent);
+            Assert.AreEqual(0, splitter.BranchSharePercent);
         }
 
         [Test]
@@ -583,16 +582,33 @@ namespace _project.Scripts.Tests
         {
             var triangle = CreateGameObject("Triangle").AddComponent<SplitRatioTriangle>();
             triangle.rectTransform.sizeDelta = new Vector2(240, 180);
-            var pick = typeof(SplitRatioTriangle).GetMethod("Pick", BindingFlags.Instance | BindingFlags.NonPublic);
             var rect = triangle.rectTransform.rect;
-            pick.Invoke(triangle, new object[] {new Vector2(rect.center.x, rect.yMax - 18)});
+            // The triangle's corners sit 18 units inside the rect: main bottom-left, branch
+            // bottom-right, third top-center (SplitRatioTriangle.Corner).
+            var main = new Vector2(rect.xMin + 18, rect.yMin + 18);
+            var branch = new Vector2(rect.xMax - 18, rect.yMin + 18);
+            var third = new Vector2(rect.center.x, rect.yMax - 18);
+
+            // Drive the real drag handler. With no camera (as on a Screen Space Overlay canvas)
+            // the screen point maps straight onto the unrotated rect at the origin.
+            void Drag(Vector2 local) => triangle.OnDrag(new PointerEventData(null)
+            {
+                button = PointerEventData.InputButton.Left,
+                position = triangle.transform.TransformPoint(local)
+            });
+
+            Drag(third);
             Assert.AreEqual(new Vector3(0, 0, 1), triangle.Shares);
-            pick.Invoke(triangle, new object[] {new Vector2(rect.xMin + 18, rect.yMin + 18)});
+            Drag(main);
             Assert.AreEqual(new Vector3(1, 0, 0), triangle.Shares);
-            pick.Invoke(triangle, new object[] {new Vector2(999, -999)});
-            Assert.AreEqual(new Vector3(0, 1, 0), triangle.Shares);
-            pick.Invoke(triangle, new object[] {Vector2.zero});
-            Assert.AreEqual(1, triangle.Shares.x + triangle.Shares.y + triangle.Shares.z, .00001f);
+            Drag(new Vector2(999, -999));
+            Assert.AreEqual(new Vector3(0, 1, 0), triangle.Shares, "A drag past the branch corner snaps to it.");
+
+            // The centroid splits evenly; rounding to whole percents gives main the spare point.
+            Drag((main + branch + third) / 3f);
+            Assert.AreEqual(0.34f, triangle.Shares.x, 0.0001f);
+            Assert.AreEqual(0.33f, triangle.Shares.y, 0.0001f);
+            Assert.AreEqual(0.33f, triangle.Shares.z, 0.0001f);
         }
 
         [Test]
@@ -600,9 +616,12 @@ namespace _project.Scripts.Tests
         {
             var fixture = CreatePathFixture();
             PlaceVertical(fixture.Board, 1, 0, 10);
+            // A dead-end stub beside the splitter: pipe leaves it, but no second route completes.
+            PlaceHorizontal(fixture.Board, 2, 2, 1);
+            var splitter = AddSplitter(fixture, new Vector2Int(1, 2));
             Assert.IsTrue(fixture.Path.Rebuild());
+            Assert.IsFalse(fixture.Path.HasAlternateRoute);
 
-            var splitter = CreateGameObject("Path Splitter").AddComponent<PathSplitter>();
             var issue = CreateIssue("Issue", fixture.Path);
 
             Assert.IsFalse(splitter.RouteIssue(issue));
@@ -1049,6 +1068,14 @@ namespace _project.Scripts.Tests
             AddSplitter(fixture, new Vector2Int(1, 4));
             receptacle = AddReceptacle(fixture, 4);
             return fixture;
+        }
+
+        // Walks the issue through every waypoint of its route, then one more update to finish it there.
+        private static void RunToEnd(IssueObject issue, PathBuildBoard board)
+        {
+            while (issue.GetWaypointIndex() < issue.GetPath().GetWaypointCount(issue.GetRouteIndex()))
+                AdvanceIssueOneWaypoint(issue, board);
+            issue.SendMessage("Update");
         }
 
         private static PathWaterTube FindPreview(PathFixture fixture, string name) =>

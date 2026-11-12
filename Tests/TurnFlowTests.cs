@@ -60,14 +60,23 @@ namespace _project.Scripts.Tests
             var issue = CreateIssue("Late Issue", fixture.Path);
             issue.SetMoveSpeed(0f);
 
-            yield return null;
+            // The timer stops the spawners once its duration is up; from then on only the issue
+            // can hold the wave open. Wait for that point rather than a fixed frame count, so the
+            // Tower check below can't pass just because the timer hadn't run yet.
+            for (var frame = 0; frame < 30 && GetField<Coroutine>(fixture.Spawner, "_spawnCoroutine") != null; frame++)
+                yield return null;
+            Assert.IsNull(GetField<Coroutine>(fixture.Spawner, "_spawnCoroutine"),
+                "precondition: the wave timer elapsed and stopped the spawners");
+            for (var frame = 0; frame < 3; frame++)
+                yield return null;
 
-            Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
+            Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase,
+                "The wave must stay open while an issue is still on the path.");
             fixture.GameMaster.popManager.RecordLakePollution(3f);
 
             Object.Destroy(issue.gameObject);
-            yield return null;
-            yield return null;
+            for (var frame = 0; frame < 30 && fixture.TurnController.currentPhase == GamePhase.Tower; frame++)
+                yield return null;
 
             Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
             Assert.AreEqual(10, fixture.GameMaster.popManager.GetPopulationSize());
