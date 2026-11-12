@@ -73,7 +73,7 @@ namespace _project.Scripts.Core
         {
             if (_gm.debugging) Debug.Log("Game Sequence Started!");
             currentTurn = 0;
-            currentLevel = _gm.popManager ? _gm.popManager.GetLevelByPopulationSize() : 1;
+            currentLevel = _gm.popManager ? _gm.popManager.GetCurrentLevel() : 1;
             OnLevelChanged?.Invoke(currentLevel);
             moveCount = 0;
             EnterCardSequence();

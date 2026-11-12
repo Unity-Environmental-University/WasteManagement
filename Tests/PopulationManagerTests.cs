@@ -1,4 +1,5 @@
 using _project.Scripts.Core;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -160,6 +161,27 @@ namespace _project.Scripts.Tests
 
             // Pop 11 vs starting 4 at 0.04 growth per resident from a 0.6x starting duration = 0.88x.
             Assert.AreEqual(26.4f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_RoundToLevelOneToOne_AdvancesOneLevelPerRound()
+        {
+            var populationManager = CreatePopulationManager();
+            typeof(PopulationManager)
+                .GetField("roundToLevelOneToOne", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(populationManager, true);
+
+            // Heavy pollution keeps population in the level-one band, so the level must come from rounds.
+            var first = populationManager.ApplyPostWaveGrowth(0);
+            populationManager.RecordLakePollution(100f);
+            var second = populationManager.ApplyPostWaveGrowth(0);
+            var third = populationManager.ApplyPostWaveGrowth(0);
+
+            Assert.AreEqual((1, 2), (first.LevelBefore, first.LevelAfter));
+            Assert.AreEqual((2, 3), (second.LevelBefore, second.LevelAfter));
+            Assert.AreEqual((3, 3), (third.LevelBefore, third.LevelAfter));
+            Assert.IsFalse(third.LeveledUp);
+            Assert.AreEqual(3, populationManager.GetCurrentLevel());
         }
 
         private static void IncreasePopulationAboveStart(PopulationManager populationManager)

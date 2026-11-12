@@ -71,6 +71,7 @@ namespace _project.Scripts.Core
         [SerializeField] private float baseStinkValue;
 
         private int _populationSize;
+        private int _roundLevel = 1;
         private float _wavePollution;
 
         /// <summary>
@@ -126,7 +127,7 @@ namespace _project.Scripts.Core
         {
             EnsureStartingPopulation();
             var populationBefore = _populationSize;
-            var levelBefore = CalculateLevelByPopulationSize(populationBefore);
+            var levelBefore = GetCurrentLevel();
             var pollution = _wavePollution;
             var stink = GetCurrentStink();
 
@@ -146,6 +147,7 @@ namespace _project.Scripts.Core
             var levelAfter = roundToLevelOneToOne
                 ? Mathf.Min(levelBefore + 1, MaxLevel)
                 : CalculateLevelByPopulationSize(_populationSize);
+            _roundLevel = levelAfter;
 
             return new PostWaveGrowthResult(
                 populationBefore,
@@ -165,7 +167,7 @@ namespace _project.Scripts.Core
         public float GetIssueSpawnRateMultiplier()
         {
             var multiplier = GetPopulationScaledValue(startingSpawnRateMultiplier, spawnRateGrowthPerPop, 0.01f);
-            return GetLevelByPopulationSize() == 1
+            return GetCurrentLevel() == 1
                 ? multiplier * LevelOneWavePressureMultiplier
                 : multiplier;
         }
@@ -174,7 +176,7 @@ namespace _project.Scripts.Core
         {
             var duration = Mathf.Max(0f, baseDuration) *
                            GetPopulationScaledValue(startingWaveDurationMultiplier, waveDurationGrowthPerPop, 0f);
-            return GetLevelByPopulationSize() == 1
+            return GetCurrentLevel() == 1
                 ? duration * LevelOneWavePressureMultiplier
                 : duration;
         }
@@ -203,6 +205,12 @@ namespace _project.Scripts.Core
             baseStinkValue = Mathf.Max(baseStinkValue, 0f);
         }
 #endif
+
+        /// <summary>
+        ///     The town's current level: one per completed round when <see cref="roundToLevelOneToOne" />
+        ///     is enabled, otherwise derived from population size.
+        /// </summary>
+        public int GetCurrentLevel() => roundToLevelOneToOne ? _roundLevel : GetLevelByPopulationSize();
 
         public int GetLevelByPopulationSize()
         {
