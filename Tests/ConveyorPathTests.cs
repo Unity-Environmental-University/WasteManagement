@@ -157,7 +157,7 @@ namespace _project.Scripts.Tests
         {
             _board.SetActivePiece(Piece(PathKind.RecyclingBelt, false));
             _board.SetHoveredCell(Cell(0, 0));
-            var oldPreview = _board.transform.Find("Conveyor Preview");
+            var oldPreview = _board.transform.Find("PipeVisuals/Conveyor Preview");
             Assert.IsNotNull(oldPreview);
             var oldCenter = oldPreview.GetComponentInChildren<Renderer>().bounds.center;
             var oldCellPosition = _board.GetCellTopPosition(Vector2Int.zero);
@@ -167,7 +167,7 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(oldPreview, "Expansion discards geometry built for the old grid.");
 
             _board.SetHoveredCell(Cell(0, 0));
-            var newPreview = _board.transform.Find("Conveyor Preview");
+            var newPreview = _board.transform.Find("PipeVisuals/Conveyor Preview");
             Assert.IsNotNull(newPreview);
             var expectedShift = _board.GetCellTopPosition(Vector2Int.zero) - oldCellPosition;
             var actualShift = newPreview.GetComponentInChildren<Renderer>().bounds.center - oldCenter;
