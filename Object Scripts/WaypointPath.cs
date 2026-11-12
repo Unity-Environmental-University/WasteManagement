@@ -142,6 +142,9 @@ namespace _project.Scripts.Object_Scripts
         public IReadOnlyList<Vector2Int> AlternatePathCells => GetRouteCells(1);
         public Transform Destination => endPoint;
 
+        /// <summary>The marker issues enter the board from.</summary>
+        public Transform StartPoint => startPoint;
+
         public bool IsValid { get; private set; }
         public string InvalidReason { get; private set; }
 
