@@ -12,7 +12,6 @@ namespace _project.Scripts.Core
         private const float BaseHealth = 100f;
         private const float BaseMaintenanceRegen = 15;
         private const float BaseOrganicProcessPower = 1f;
-        private const float BaseChemicalProcessPower = 1f;
 
         [SerializeField] private HealthBar healthBar;
 
@@ -33,7 +32,6 @@ namespace _project.Scripts.Core
         public float maintenanceHealth = BaseHealth;
         public float maintenanceRegen = BaseMaintenanceRegen;
         public float organicProcessPower = BaseOrganicProcessPower;
-        public float chemicalProcessPower = BaseChemicalProcessPower;
 
         public bool AddUpgrade(ICard upgrade)
         {
@@ -49,7 +47,7 @@ namespace _project.Scripts.Core
                 GameMaster.Instance.selectedCard = null;
                 if (!Debugging) return true;
                 Debug.Log(
-                    $"[{name}] AddUpgrade: {upgrade.Name} | organic: {organicProcessPower:F2} | chemical: {chemicalProcessPower:F2} | regen: {maintenanceRegen:F2}");
+                    $"[{name}] AddUpgrade: {upgrade.Name} | organic: {organicProcessPower:F2} | regen: {maintenanceRegen:F2}");
                 Debug.Log(
                     $"[{name}] Upgrades filled: {_upgrades.Count(u => u != null)}/6 | valid: {ValidateUpgrades()}");
                 return true;
@@ -95,9 +93,8 @@ namespace _project.Scripts.Core
             return type switch
             {
                 IssueType.Organic => organicProcessPower,
-                IssueType.Chemical => chemicalProcessPower,
-                // Junk and metal aren't treated here, so they cost the tower nothing.
-                IssueType.NonWaste or IssueType.Metal => 0f,
+                // Junk and recyclables aren't treated here, so they cost the tower nothing.
+                IssueType.NonWaste or IssueType.Metal or IssueType.Plastic or IssueType.Paper => 0f,
                 _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
         }

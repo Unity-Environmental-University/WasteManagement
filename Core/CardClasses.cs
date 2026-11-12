@@ -76,10 +76,10 @@ namespace _project.Scripts.Core
 
         public void ProcessEffect(TowerController tC)
         {
-            var baseP = tC.chemicalProcessPower;
+            var baseP = tC.organicProcessPower;
             baseP += (float)(baseP * .15);
 
-            tC.chemicalProcessPower = baseP;
+            tC.organicProcessPower = baseP;
         }
     }
 
@@ -111,12 +111,12 @@ namespace _project.Scripts.Core
         public void ProcessEffect(TowerController tC)
         {
             var baseRegen = tC.maintenanceRegen;
-            var baseChemPower = tC.chemicalProcessPower;
+            var basePower = tC.organicProcessPower;
             baseRegen += (float)(baseRegen * .35);
-            baseChemPower -= (float)(baseChemPower * .25);
+            basePower -= (float)(basePower * .25);
 
             tC.maintenanceRegen = baseRegen;
-            tC.chemicalProcessPower = baseChemPower;
+            tC.organicProcessPower = basePower;
         }
     }
 }

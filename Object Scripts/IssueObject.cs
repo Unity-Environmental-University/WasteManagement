@@ -10,9 +10,10 @@ namespace _project.Scripts.Object_Scripts
     public enum IssueType
     {
         Organic,
-        Chemical,
         NonWaste,
-        Metal
+        Metal,
+        Plastic,
+        Paper
     }
 
     public class IssueObject : MonoBehaviour
@@ -35,7 +36,7 @@ namespace _project.Scripts.Object_Scripts
         private GameObject[] sizeVisuals = new GameObject[3];
 
         [Tooltip(
-            "Junk models (boot, tire, alligator...). Each NonWaste issue shows one of the assigned models at random, so junk reads as visibly different from organic/chemical waste. Metal falls back to these by size tier when it has no model of its own.")]
+            "Junk models (boot, tire, alligator...). Each NonWaste issue shows one of the assigned models at random, so junk reads as visibly different from organic waste. Metal, plastic and paper fall back to these by size tier when it has no model of its own.")]
         [SerializeField]
         private GameObject[] nonWasteVisuals = new GameObject[3];
 
@@ -63,6 +64,44 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField]
         [Min(1)]
         private int metalSize = 2;
+
+        [Tooltip(
+            "Plastic look, same size tiers as sizeVisuals. An empty tier falls back to nonWasteVisuals, then sizeVisuals.")]
+        [SerializeField]
+        private GameObject[] plasticVisuals = new GameObject[3];
+
+        [Tooltip("Tint that marks plastic objects, applied over whichever model they use.")]
+        [SerializeField]
+        private Color plasticTint = new(0.25f, 0.75f, 0.95f);
+
+        [Tooltip("Town level from which spawners start mixing plastic objects in with the waste.")]
+        [SerializeField]
+        [Min(1)]
+        private int plasticUnlockLevel = 4;
+
+        [Tooltip("Every Plastic issue spawns at this size. Plastic never merges.")]
+        [SerializeField]
+        [Min(1)]
+        private int plasticSize = 2;
+
+        [Tooltip(
+            "Paper look, same size tiers as sizeVisuals. An empty tier falls back to nonWasteVisuals, then sizeVisuals.")]
+        [SerializeField]
+        private GameObject[] paperVisuals = new GameObject[3];
+
+        [Tooltip("Tint that marks paper objects, applied over whichever model they use.")]
+        [SerializeField]
+        private Color paperTint = new(0.95f, 0.92f, 0.8f);
+
+        [Tooltip("Town level from which spawners start mixing paper objects in with the waste.")]
+        [SerializeField]
+        [Min(1)]
+        private int paperUnlockLevel = 5;
+
+        [Tooltip("Every Paper issue spawns at this size. Paper never merges.")]
+        [SerializeField]
+        [Min(1)]
+        private int paperSize = 2;
 
         [Tooltip("Degrees per second the issue turns to face its direction of travel. 0 snaps instantly.")]
         [SerializeField]
@@ -432,24 +471,41 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>The town level from which spawners can roll this type.</summary>
         public int GetUnlockLevel(IssueType issueType)
         {
-            return issueType == IssueType.Metal ? metalUnlockLevel : 1;
+            return issueType switch
+            {
+                IssueType.Metal => metalUnlockLevel,
+                IssueType.Plastic => plasticUnlockLevel,
+                IssueType.Paper => paperUnlockLevel,
+                _ => 1
+            };
         }
+
+        /// <summary>
+        ///     Metal, plastic and paper: solid pieces of one size and look, headed for their own
+        ///     receptacle. They never merge.
+        /// </summary>
+        public static bool IsRecyclable(IssueType issueType)
+        {
+            return issueType is IssueType.Metal or IssueType.Plastic or IssueType.Paper;
+        }
+
+        private static readonly IssueType[] Recyclables = { IssueType.Metal, IssueType.Plastic, IssueType.Paper };
+        private static readonly List<IssueType> RollPool = new();
 
         public void AssignType()
         {
-            // Metal joins the mix once the town reaches metalUnlockLevel.
+            // Organic carries double weight, the share organic and chemical had together before
+            // chemical was folded in. Each recyclable joins the mix once the town reaches its unlock level.
             var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
-            var metalUnlocked = turnController && turnController.currentLevel >= metalUnlockLevel;
-            var rand = Random.Range(0, metalUnlocked ? 4 : 3);
+            RollPool.Clear();
+            RollPool.Add(IssueType.Organic);
+            RollPool.Add(IssueType.Organic);
+            RollPool.Add(IssueType.NonWaste);
+            foreach (var recyclable in Recyclables)
+                if (turnController && turnController.currentLevel >= GetUnlockLevel(recyclable))
+                    RollPool.Add(recyclable);
 
-            SetType(rand switch
-            {
-                0 => IssueType.Organic,
-                1 => IssueType.Chemical,
-                2 => IssueType.NonWaste,
-                3 => IssueType.Metal,
-                _ => IssueType.Organic
-            });
+            SetType(RollPool[Random.Range(0, RollPool.Count)]);
 
             // SetType has already re-applied the visuals Awake() picked before the type was known.
             // Junk doesn't come in sizes: pin it, and roll a fresh model every time.
@@ -564,17 +620,24 @@ namespace _project.Scripts.Object_Scripts
         {
             var previous = type;
             type = t;
-            if (type == IssueType.Metal)
+            if (IsRecyclable(type))
             {
-                // Metal comes in one size and one look, and the visuals must follow the new type.
-                // Swap to the metal model first, so the tint never lands on the model being left.
-                SetSize(metalSize);
-                SetVisualOverride(metalTint);
+                // Recyclables come in one size and one look, and the visuals must follow the new type.
+                // Swap to the new model first, so the tint never lands on the model being left.
+                if (previous != type && IsRecyclable(previous)) ClearVisualOverride();
+                var (size, tint) = type switch
+                {
+                    IssueType.Plastic => (plasticSize, plasticTint),
+                    IssueType.Paper => (paperSize, paperTint),
+                    _ => (metalSize, metalTint)
+                };
+                SetSize(size);
+                SetVisualOverride(tint);
                 return;
             }
 
-            // Leaving metal drops its tint; the caller sets any new size.
-            if (previous == IssueType.Metal) ClearVisualOverride();
+            // Leaving a recyclable drops its tint; the caller sets any new size.
+            if (IsRecyclable(previous)) ClearVisualOverride();
             if (type == IssueType.NonWaste && previous != IssueType.NonWaste) _junkModel = RollJunkModel();
             ApplySizeVisualModel();
         }
@@ -832,8 +895,8 @@ namespace _project.Scripts.Object_Scripts
             // NonWaste is junk, not waste — it doesn't clump with turds or with other junk.
             // Both sides simply pass through each other on collision.
             if (type == IssueType.NonWaste || other.type == IssueType.NonWaste) return false;
-            // Metal objects are solid pieces headed for their own receptacle; they never clump either.
-            if (type == IssueType.Metal || other.type == IssueType.Metal) return false;
+            // Recyclables are solid pieces headed for their own receptacle; they never clump either.
+            if (IsRecyclable(type) || IsRecyclable(other.type)) return false;
             if (!path || path != other.path) return false;
             // Either side being freshly de-clogged skips this merge — see postShrinkMergeImmunity.
             if (Time.time < _mergeImmuneUntil || Time.time < other._mergeImmuneUntil) return false;
@@ -905,18 +968,26 @@ namespace _project.Scripts.Object_Scripts
         /// </summary>
         private void ApplySizeVisualModel()
         {
-            // NonWaste uses its own junk models where a tier is assigned, and Metal its own models
-            // before the junk ones; an empty tier falls back to the regular waste model so a
-            // half-filled visual set never goes invisible.
-            var tier = Mathf.Clamp(Size - 1, 0, Mathf.Max(sizeVisuals?.Length ?? 0,
-                Mathf.Max(nonWasteVisuals?.Length ?? 0, metalVisuals?.Length ?? 0)) - 1);
+            // NonWaste uses its own junk models where a tier is assigned, and each recyclable its
+            // own models before the junk ones; an empty tier falls back to the regular waste model
+            // so a half-filled visual set never goes invisible.
+            var tier = Mathf.Clamp(Size - 1, 0, Mathf.Max(Mathf.Max(sizeVisuals?.Length ?? 0,
+                Mathf.Max(nonWasteVisuals?.Length ?? 0, metalVisuals?.Length ?? 0)),
+                Mathf.Max(plasticVisuals?.Length ?? 0, paperVisuals?.Length ?? 0)) - 1);
             GameObject target = null;
-            if (type == IssueType.Metal && metalVisuals != null && tier < metalVisuals.Length)
-                target = metalVisuals[tier];
+            var recyclableVisuals = type switch
+            {
+                IssueType.Metal => metalVisuals,
+                IssueType.Plastic => plasticVisuals,
+                IssueType.Paper => paperVisuals,
+                _ => null
+            };
+            if (recyclableVisuals != null && tier < recyclableVisuals.Length)
+                target = recyclableVisuals[tier];
             if (type == IssueType.NonWaste && nonWasteVisuals != null && _junkModel >= 0 &&
                 _junkModel < nonWasteVisuals.Length)
                 target = nonWasteVisuals[_junkModel];
-            if (!target && (type is IssueType.NonWaste or IssueType.Metal) && nonWasteVisuals != null &&
+            if (!target && (type == IssueType.NonWaste || IsRecyclable(type)) && nonWasteVisuals != null &&
                 tier < nonWasteVisuals.Length)
                 target = nonWasteVisuals[tier];
             if (!target && sizeVisuals != null && tier < sizeVisuals.Length)
@@ -927,6 +998,8 @@ namespace _project.Scripts.Object_Scripts
             ShowOnly(sizeVisuals, target);
             ShowOnly(nonWasteVisuals, target);
             ShowOnly(metalVisuals, target);
+            ShowOnly(plasticVisuals, target);
+            ShowOnly(paperVisuals, target);
 
             if (target == _activeVisual) return;
 

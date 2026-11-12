@@ -48,6 +48,18 @@ namespace _project.Scripts.Core
 
         public static GameMaster Instance { get; private set; }
 
+        /// <summary>Whether any spawner can send <paramref name="type" /> down the pipe at the current town level.</summary>
+        public bool CanAnySpawnerSpawn(IssueType type)
+        {
+            if (!turnController || entitySpawners == null) return false;
+
+            foreach (var spawner in entitySpawners)
+                if (spawner && spawner.CanSpawn(type, turnController.currentLevel))
+                    return true;
+
+            return false;
+        }
+
         private void Awake()
         {
             if (Instance && Instance != this)

@@ -62,7 +62,7 @@ namespace _project.Scripts.UI
         private string BuildStatsString()
         {
             var tc = towerController;
-            return $"HP: {tc.maintenanceHealth:F0}  Regen: {tc.maintenanceRegen:F1}  Organic: {tc.organicProcessPower:F2}  Chemical: {tc.chemicalProcessPower:F2}";
+            return $"HP: {tc.maintenanceHealth:F0}  Regen: {tc.maintenanceRegen:F1}  Organic: {tc.organicProcessPower:F2}";
         }
     }
 }

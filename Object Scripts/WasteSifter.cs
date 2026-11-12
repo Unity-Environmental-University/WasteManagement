@@ -27,6 +27,9 @@ namespace _project.Scripts.Object_Scripts
         [Tooltip("Debris load from junk flushed by an upstream sifter. Fresh junk still adds its full load.")]
         [SerializeField, Range(0f, 1f)] private float flushedDebrisMultiplier = 0.25f;
 
+        [Tooltip("Plastic is screened like junk, but bags and wrappers mat over the screen: its debris load is multiplied by this.")]
+        [SerializeField, Min(1f)] private float plasticDebrisMultiplier = 2f;
+
         [Header("Comminutor Visual")]
         [SerializeField] private ComminutorRotor comminutorRotor;
 
@@ -266,7 +269,10 @@ namespace _project.Scripts.Object_Scripts
                 return;
             }
 
-            var isNonWaste = issue.GetIssueType() == IssueType.NonWaste;
+            // Plastic is screened like junk, only it clogs faster. Paper has nothing special: it
+            // passes the screen and is sifted like waste.
+            var isPlastic = issue.GetIssueType() == IssueType.Plastic;
+            var isNonWaste = issue.GetIssueType() == IssueType.NonWaste || isPlastic;
             if (isNonWaste && !IsBlocked)
             {
                 // A screen doesn't grind solids — it stops them. NonWaste sticks here, adding
@@ -280,6 +286,7 @@ namespace _project.Scripts.Object_Scripts
                 var debrisLoad = issue.WasFlushedFromSifter
                     ? issue.SiftCost * Mathf.Clamp01(flushedDebrisMultiplier)
                     : issue.SiftCost;
+                if (isPlastic) debrisLoad *= plasticDebrisMultiplier;
                 AccumulateDebris(debrisLoad);
                 return;
             }

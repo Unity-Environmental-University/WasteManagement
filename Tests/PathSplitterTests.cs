@@ -220,7 +220,7 @@ namespace _project.Scripts.Tests
 
             var branchSplitter = PathSplitter.Live.Single(s => s.transform.position == CellTop(fixture, 3, 4));
             branchSplitter.SetRule(IssueType.Organic, SplitterRule.BranchOnly);
-            branchSplitter.SetRule(IssueType.Chemical, SplitterRule.MainOnly);
+            branchSplitter.SetRule(IssueType.NonWaste, SplitterRule.MainOnly);
 
             var diverted = CreateIssue("Diverted Issue", fixture.Path);
             diverted.SetType(IssueType.Organic);
@@ -229,7 +229,7 @@ namespace _project.Scripts.Tests
             Assert.AreEqual(subBranch, diverted.GetRouteIndex());
 
             var kept = CreateIssue("Kept Issue", fixture.Path);
-            kept.SetType(IssueType.Chemical);
+            kept.SetType(IssueType.NonWaste);
             Assert.IsTrue(kept.TrySetRoute(branch));
             Assert.IsTrue(branchSplitter.RouteIssue(kept));
             Assert.AreEqual(branch, kept.GetRouteIndex(), "The main lane keeps an issue on the branch it arrived on.");
@@ -428,10 +428,10 @@ namespace _project.Scripts.Tests
 
             IssueType[] arrivals =
             {
-                IssueType.NonWaste, IssueType.Organic, IssueType.Chemical,
-                IssueType.NonWaste, IssueType.Organic, IssueType.Chemical
+                IssueType.NonWaste, IssueType.Organic, IssueType.Metal,
+                IssueType.NonWaste, IssueType.Organic, IssueType.Metal
             };
-            // Chemical is still split, and pinned types don't disturb its 50/50 rotation.
+            // Metal is still split, and pinned types don't disturb its 50/50 rotation.
             int[] expectedRoutes = { 1, 0, 0, 1, 0, 1 };
 
             for (var i = 0; i < arrivals.Length; i++)
