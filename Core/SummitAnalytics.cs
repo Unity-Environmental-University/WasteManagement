@@ -497,14 +497,15 @@ namespace _project.Scripts.Core
                 Debug.Log("[SummitAnalytics] Hardware profile sent.");
             else
             {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-                var responseDetail = request.downloadHandler.text;
-                if (responseDetail.Length > 1024)
-                    responseDetail = responseDetail.Substring(0, 1024) + "…";
-                Debug.LogWarning($"[SummitAnalytics] Hardware profile failed ({request.responseCode}): {request.error}. Response: {responseDetail}");
-#else
-                Debug.LogWarning($"[SummitAnalytics] Hardware profile failed ({request.responseCode}): {request.error}");
-#endif
+                // The response body is only logged in debug builds.
+                var responseDetail = "";
+                if (Debug.isDebugBuild)
+                {
+                    var response = request.downloadHandler.text;
+                    responseDetail = $". Response: {(response.Length > 1024 ? response.Substring(0, 1024) + "…" : response)}";
+                }
+
+                Debug.LogWarning($"[SummitAnalytics] Hardware profile failed ({request.responseCode}): {request.error}{responseDetail}");
             }
         }
 

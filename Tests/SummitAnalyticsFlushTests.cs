@@ -67,8 +67,14 @@ namespace _project.Scripts.Tests
         [Test]
         public void Flush_EmptyQueues_RemainsANoOp()
         {
+            // Every path past the empty-queue guard resets the flush clock, so an untouched
+            // sentinel is what proves the guard returned first.
+            const float sentinel = -123f;
+            SetField(_summit, "_lastFlushTime", sentinel);
+
             Flush();
 
+            Assert.AreEqual(sentinel, GetField<float>(_summit, "_lastFlushTime"));
             Assert.AreEqual(0, PerfQueue.Count);
         }
 

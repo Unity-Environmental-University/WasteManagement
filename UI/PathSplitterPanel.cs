@@ -265,9 +265,9 @@ namespace _project.Scripts.UI
 
             if (caption)
                 caption.text = (sliding
-                                   ? $"Slide to split 1 and {SliderOutput + 1}. SHARE uses this split."
-                                   : "Drag the dot: 3 at top, 1 left, 2 right. SHARE uses these ratios.") +
-                               "\nMissing pinned output? Uses 1.";
+                                   ? $"Slide to split between outlets 1 and {SliderOutput + 1}. SHARE types follow this split."
+                                   : "Drag the dot. Outlet 3 is at the top, 1 on the left, 2 on the right. SHARE types follow this mix.") +
+                               "\nA type pinned to a missing outlet goes out 1.";
 
             // Two readouts sit at the quarter marks; three split the width evenly.
             PlaceColumn(mainLabel, mainShareText, true, sliding ? 0.25f : 1f / 6f);

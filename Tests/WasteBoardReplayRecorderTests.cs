@@ -20,14 +20,20 @@ namespace _project.Scripts.Tests
             SetField(_recorder, "_board", _board);
         }
 
-        [Test]
-        public void SquareContentData_IncludesLimeSprinklerRange()
+        // The sprinkler's square grows 3x3 -> 5x5 -> 9x9 with the town level, so the reported reach
+        // (cells on each side) must follow it rather than stay at the level-one value.
+        [TestCase(1, "1")]
+        [TestCase(2, "2")]
+        [TestCase(3, "4")]
+        public void SquareContentData_IncludesLimeSprinklerRange_ForTheTownLevel(int level, string expected)
         {
+            var gm = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            gm.turnController.currentLevel = level;
             var sprinkler = Place<LimeSprinkler>(new Vector2Int(2, 2));
 
             var data = SnapshotData(sprinkler);
 
-            Assert.AreEqual("1", data["range-cells"]);
+            Assert.AreEqual(expected, data["range-cells"]);
         }
 
         [Test]
@@ -54,30 +60,34 @@ namespace _project.Scripts.Tests
             Assert.AreEqual("25", data["health-percent"]);
         }
 
+        // StateEquals is what the periodic sync uses to decide whether to re-send a square, so a
+        // field it skips would silently freeze that value in the replay.
         [Test]
-        public void SnapshotSignature_ChangesWithCesspitFullness()
+        public void StateEquals_DetectsCesspitFullnessChange()
         {
             var cesspit = Place<Cesspit>(new Vector2Int(2, 2));
             cesspit.maxFullness = 8f;
             cesspit.fullness = 2f;
-            var before = SnapshotSignature(cesspit);
+            var before = Snapshot(cesspit);
+            Assert.IsTrue(StateEquals(before, Snapshot(cesspit)), "An unchanged pit must not re-send.");
 
             cesspit.fullness = 6f;
 
-            Assert.AreNotEqual(before, SnapshotSignature(cesspit));
+            Assert.IsFalse(StateEquals(before, Snapshot(cesspit)));
         }
 
         [Test]
-        public void SnapshotSignature_ChangesWithWasteSifterHealth()
+        public void StateEquals_DetectsWasteSifterHealthChange()
         {
             var sifter = Place<WasteSifter>(new Vector2Int(2, 2));
             sifter.maxHealth = 40f;
             sifter.health = 30f;
-            var before = SnapshotSignature(sifter);
+            var before = Snapshot(sifter);
+            Assert.IsTrue(StateEquals(before, Snapshot(sifter)), "An unchanged sifter must not re-send.");
 
             sifter.health = 10f;
 
-            Assert.AreNotEqual(before, SnapshotSignature(sifter));
+            Assert.IsFalse(StateEquals(before, Snapshot(sifter)));
         }
 
         [Test]
@@ -114,13 +124,11 @@ namespace _project.Scripts.Tests
             return (Dictionary<string, string>)dataMethod.Invoke(_recorder, new[] { snapshot, false });
         }
 
-        private string SnapshotSignature(MonoBehaviour behaviour)
+        private static bool StateEquals(object snapshot, object other)
         {
-            var snapshot = Snapshot(behaviour);
-            var property = snapshot.GetType().GetProperty("Signature",
-                BindingFlags.Instance | BindingFlags.Public);
-            Assert.IsNotNull(property);
-            return (string)property.GetValue(snapshot);
+            var method = snapshot.GetType().GetMethod("StateEquals", BindingFlags.Instance | BindingFlags.Public);
+            Assert.IsNotNull(method);
+            return (bool)method.Invoke(snapshot, new[] { other });
         }
 
         private object Snapshot(MonoBehaviour behaviour)
