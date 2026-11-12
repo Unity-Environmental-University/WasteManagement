@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using _project.Scripts.Core;
 using _project.Scripts.Object_Scripts;
 using NUnit.Framework;
@@ -29,6 +31,58 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(fixture.Board.IsOccupied(new Vector2Int(1, 0)));
             Assert.IsTrue(fixture.Path.Rebuild(), "The route still connects its bottom and top endpoints.");
         }
+
+        [Test]
+        public void ExpandColumns_RecordsResizeAndReindexesExistingReplayContent()
+        {
+            var fixture = CreatePathFixture();
+            PlaceVertical(fixture.Board, 1, 0, 2);
+            var slot = CreatePrimitive("Utility Slot").AddComponent<SpecialInteractController>();
+            slot.transform.position = fixture.Board.GetCellTopPosition(new Vector2Int(1, 0));
+            var recorder = CreateGameObject("Recorder").AddComponent<WasteBoardReplayRecorder>();
+            recorder.enabled = false;
+            SetField(recorder, "_board", fixture.Board);
+            var trailhead = recorder.GetComponent<TrailheadRecorder>();
+            trailhead.enableEditorNetworking = false;
+            trailhead.StartRecording("Board Growth Test");
+            recorder.SendMessage("RecordBoardMetadata");
+            recorder.SendMessage("SyncPaths", true);
+            recorder.SendMessage("SyncSquareContents", true);
+            fixture.Board.PathLayoutChanged += () => recorder.SendMessage("HandlePathLayoutChanged");
+            var events = GetField<IList>(trailhead, "_recordingEvents");
+            var initialCount = events.Count;
+            var initialColumns = fixture.Board.Columns;
+            var oldCells = EventData(events[0])["cells"];
+
+            fixture.Board.ExpandColumns(2);
+
+            var added = events.Cast<object>().Skip(initialCount).ToArray();
+            Assert.AreEqual("Board Resized", EventName(added[0]));
+            Assert.AreEqual(initialColumns.ToString(), EventData(added[0])["previous-columns"]);
+            Assert.AreEqual((initialColumns + 4).ToString(), EventData(added[0])["board-columns"]);
+            Assert.AreEqual("2", EventData(added[0])["column-shift"]);
+            var removed = added.Single(e => EventName(e) == "Path Removed");
+            var placed = added.Single(e => EventName(e) == "Path Placed");
+            Assert.AreEqual(oldCells, EventData(removed)["cells"]);
+            Assert.AreEqual("3,0;3,1", EventData(placed)["cells"]);
+            Assert.AreEqual(EventData(removed)["piece-id"], EventData(placed)["piece-id"]);
+            Assert.IsTrue(added.Any(e => EventName(e) == "Square Content Changed"));
+            Assert.AreEqual(initialColumns.ToString(),
+                GetField<Dictionary<string, string>>(trailhead, "_recordingMetadata")["board-columns"],
+                "Opening metadata must still describe frames before the resize.");
+
+            var afterResize = events.Count;
+            recorder.SendMessage("HandlePathLayoutChanged");
+            Assert.AreEqual(afterResize, events.Count, "An unchanged board must not duplicate mutations.");
+
+            fixture.Board.ExpandColumns(2);
+            Assert.AreEqual((initialColumns + 4).ToString(), EventData(events[afterResize])["previous-columns"]);
+            Assert.AreEqual((initialColumns + 8).ToString(), EventData(events[afterResize])["board-columns"]);
+        }
+
+        private static string EventName(object entry) => (string)entry.GetType().GetField("Name").GetValue(entry);
+        private static Dictionary<string, string> EventData(object entry) =>
+            (Dictionary<string, string>)entry.GetType().GetField("Data").GetValue(entry);
 
         [Test]
         public void ExpandColumns_MovesASideReceptacleOutWithTheEdge()

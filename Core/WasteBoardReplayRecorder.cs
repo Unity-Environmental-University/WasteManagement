@@ -37,6 +37,7 @@ namespace _project.Scripts.Core
         private readonly List<EntityId> _removedIdsScratch = new();
         private readonly HashSet<EntityId> _summitSquareContents = new();
         private PathBuildBoard _board;
+        private Vector2Int _recordedBoardSize;
         private float _nextSubjectDiscovery;
         private float _sessionStartedAt;
         private bool _finishing;
@@ -404,6 +405,7 @@ namespace _project.Scripts.Core
         {
             if (!_board || !trailhead) return;
 
+            _recordedBoardSize = new Vector2Int(_board.Columns, _board.Rows);
             var origin = _board.transform.position;
             var rotation = _board.transform.rotation;
             var pitch = _board.CellWorldPitch;
@@ -501,7 +503,26 @@ namespace _project.Scripts.Core
 
         private void HandlePathLayoutChanged()
         {
+            if (!_board || !trailhead || !trailhead.IsRecording) return;
+
+            var size = new Vector2Int(_board.Columns, _board.Rows);
+            if (size != _recordedBoardSize)
+            {
+                // Metadata describes the opening grid. Later sizes belong on the timeline,
+                // otherwise a resize would also change how the beginning is played back.
+                RecordEvent("Board Resized", new Dictionary<string, string>
+                {
+                    { "previous-columns", _recordedBoardSize.x.ToString(Invariant) },
+                    { "previous-rows", _recordedBoardSize.y.ToString(Invariant) },
+                    { "board-columns", size.x.ToString(Invariant) },
+                    { "board-rows", size.y.ToString(Invariant) },
+                    { "column-shift", ((size.x - _recordedBoardSize.x) / 2).ToString(Invariant) }
+                });
+                _recordedBoardSize = size;
+            }
+
             SyncPaths(false);
+            SyncSquareContents(false);
         }
 
         private void SyncPaths(bool initial)
@@ -513,6 +534,13 @@ namespace _project.Scripts.Core
                 RecordPathEvent("Path Removed", _paths[removed], initial);
             foreach (var added in current.Keys.Except(_paths.Keys))
                 RecordPathEvent("Path Placed", current[added], initial);
+            foreach (var id in current.Keys.Intersect(_paths.Keys))
+            {
+                if (current[id].Cells.SequenceEqual(_paths[id].Cells)) continue;
+                // Preserve piece IDs while replacing their old coordinates using existing events.
+                RecordPathEvent("Path Removed", _paths[id], initial);
+                RecordPathEvent("Path Placed", current[id], initial);
+            }
 
             _paths.Clear();
             foreach (var pair in current) _paths[pair.Key] = pair.Value;
