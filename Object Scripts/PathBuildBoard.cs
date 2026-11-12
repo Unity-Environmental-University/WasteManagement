@@ -383,6 +383,7 @@ namespace _project.Scripts.Object_Scripts
             _priorityRoutes.Clear();
             _hoveredCell = null;
             HidePreviewVisual();
+            _conveyorPreview?.Invalidate();
             foreach (var piece in _placedPieces)
             {
                 if (_placedVisuals.TryGetValue(piece.id, out var oldVisual) && oldVisual)
