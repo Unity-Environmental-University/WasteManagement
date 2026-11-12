@@ -136,26 +136,15 @@ namespace _project.Scripts.Object_Scripts
                 var slot = Instantiate(utilityTilePrefab, position, Quaternion.identity, transform);
                 slot.name = $"{utilityTilePrefab.name} ({cell.x},{cell.y})";
 
-                // Slots added mid-wave must stay hidden until the next card phase, which is when
-                // TurnController re-enables every tile renderer.
-                if (IsTowerPhase && slot.TryGetComponent<Renderer>(out var slotRenderer))
-                    slotRenderer.enabled = false;
-
+                // A slot shows or hides itself for the current phase, so one added mid-wave stays
+                // hidden until the next card phase.
                 var controller = slot.GetComponent<SpecialInteractController>();
+                if (controller) controller.RefreshVisibility();
                 SpawnedUtilityTiles.Add(controller);
                 spawned.Add(controller);
             }
 
             return spawned;
-        }
-
-        private static bool IsTowerPhase
-        {
-            get
-            {
-                var turnController = GameMaster.Instance ? GameMaster.Instance.turnController : null;
-                return turnController && turnController.currentPhase == GamePhase.Tower;
-            }
         }
 
         // Scans every slot in the scene, not just SpawnedUtilityTiles, so hand-placed slots also

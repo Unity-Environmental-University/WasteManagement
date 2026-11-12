@@ -24,6 +24,9 @@ namespace _project.Scripts.Object_Scripts
         [SerializeField] private Color buffColor = new(0.30f, 0.85f, 0.40f, 1f);
         [SerializeField] private Color debuffColor = new(0.85f, 0.30f, 0.30f, 1f);
 
+        [Tooltip("Material drawn on top of speed-debuff tiles (the down-chevron marker). Kept square on the tile.")]
+        [SerializeField] private Material slowMarkerMaterial;
+
         [Header("Triggering")]
         [Tooltip("How tall the trigger reaches in world units, so issues passing over the flat tile are caught.")]
         [SerializeField] private float triggerWorldHeight = 1.5f;
@@ -38,6 +41,12 @@ namespace _project.Scripts.Object_Scripts
         private readonly HashSet<EntityId> _affectedIssueIds = new();
 
         private MaterialPropertyBlock _colorPropertyBlock;
+
+        // The tile's own renderers, without the slow marker.
+        private Renderer[] _bodyRenderers;
+
+        // Double down-chevron shown on speed-debuff tiles; built on demand.
+        private MeshRenderer _slowMarker;
 
         private void OnEnable()
         {
@@ -64,6 +73,14 @@ namespace _project.Scripts.Object_Scripts
             }
 
             EnsureTriggerCollider();
+            CacheBodyRenderers();
+        }
+
+        // Gathered before the marker child exists, so tinting never touches it. Lazy as well, since
+        // edit-mode spawning and inactive tiles can be set up before Awake runs.
+        private void CacheBodyRenderers()
+        {
+            _bodyRenderers ??= GetComponentsInChildren<Renderer>(true);
         }
 
         /// <summary>
@@ -107,7 +124,13 @@ namespace _project.Scripts.Object_Scripts
 
             if (effect)
                 effects.Add(effect);
+
+            RefreshSlowMarker();
         }
+
+        // Whether this tile slows the issues that cross it.
+        private bool IsSpeedDebuff =>
+            kind == BuffDebuffKind.Debuff && effects.Exists(effect => effect is MoveSpeedBuffDebuffTileEffect);
 
         private void OnTriggerEnter(Collider other)
         {
@@ -154,9 +177,8 @@ namespace _project.Scripts.Object_Scripts
 
             // Keep the collider's X/Z footprint (already matches the tile), but make sure it reaches
             // triggerWorldHeight in world space — the tile mesh is flat, so divide out its Y scale.
-            var scaleY = Mathf.Max(0.0001f, Mathf.Abs(transform.lossyScale.y));
             var size = box.size;
-            size.y = triggerWorldHeight / scaleY;
+            size.y = triggerWorldHeight / AbsLossyScale().y;
             box.size = size;
         }
 
@@ -165,8 +187,56 @@ namespace _project.Scripts.Object_Scripts
             // Property-block tint: `.material.color` would clone a material instance per
             // renderer per tile, breaking batching for the whole tile population.
             var color = kind == BuffDebuffKind.Buff ? buffColor : debuffColor;
-            foreach (var rend in GetComponentsInChildren<Renderer>(true))
-                RendererColorUtility.SetColor(rend, color, ref _colorPropertyBlock);
+            CacheBodyRenderers();
+            foreach (var rend in _bodyRenderers)
+                if (rend)
+                    RendererColorUtility.SetColor(rend, color, ref _colorPropertyBlock);
+
+            RefreshSlowMarker();
+        }
+
+        private void RefreshSlowMarker()
+        {
+            if (!IsSpeedDebuff || !slowMarkerMaterial)
+            {
+                if (_slowMarker) _slowMarker.gameObject.SetActive(false);
+                return;
+            }
+
+            if (!_slowMarker)
+            {
+                CacheBodyRenderers();
+                var marker = new GameObject("Slow Marker", typeof(MeshFilter), typeof(MeshRenderer));
+                marker.layer = gameObject.layer;
+                marker.transform.SetParent(transform, false);
+                // Quads face -Z; tipping one 90° about X lays it flat facing up, with the image's
+                // top edge toward +Z so its chevrons point down the screen from the board camera.
+                marker.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                marker.GetComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+                _slowMarker = marker.GetComponent<MeshRenderer>();
+                _slowMarker.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _slowMarker.receiveShadows = false;
+                _slowMarker.sharedMaterial = slowMarkerMaterial;
+            }
+
+            // Sit just above the cube's top face, and undo the tile's stretch so the art stays
+            // square at the tile's shorter side.
+            // The quad's local Y maps to the tile's Z once tipped flat.
+            var scale = AbsLossyScale();
+            var side = Mathf.Min(scale.x, scale.z);
+            _slowMarker.transform.localPosition = new Vector3(0f, 0.5f + 0.02f / scale.y, 0f);
+            _slowMarker.transform.localScale = new Vector3(side / scale.x, side / scale.z, 1f);
+            _slowMarker.gameObject.SetActive(true);
+        }
+
+        // Per-axis world scale, kept positive and non-zero so it can be divided out.
+        private Vector3 AbsLossyScale()
+        {
+            var scale = transform.lossyScale;
+            return new Vector3(
+                Mathf.Max(0.0001f, Mathf.Abs(scale.x)),
+                Mathf.Max(0.0001f, Mathf.Abs(scale.y)),
+                Mathf.Max(0.0001f, Mathf.Abs(scale.z)));
         }
 
         private static void SetLayerRecursively(Transform root, int layer)
