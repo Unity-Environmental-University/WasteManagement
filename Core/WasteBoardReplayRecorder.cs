@@ -89,13 +89,9 @@ namespace _project.Scripts.Core
             public string State;
             public Component Target;
 
-            public string Signature =>
-                $"{Cell.x},{Cell.y}|{Kind}|{Label}|{Color}|{State}|{Effect}|{RangeCells}|{FullnessPercent}|{HealthPercent}";
-
             /// <summary>
-            ///     Field-by-field change check used by the periodic sync — equivalent to comparing
-            ///     <see cref="Signature" /> strings but without building two strings per tracked
-            ///     object per tick.
+            ///     Field-by-field change check used by the periodic sync. Compared directly rather
+            ///     than through a combined string, so no strings are built per tracked object per tick.
             /// </summary>
             public bool StateEquals(SquareContentSnapshot other) =>
                 other != null && Cell == other.Cell && Kind == other.Kind && Label == other.Label &&
@@ -641,11 +637,12 @@ namespace _project.Scripts.Core
                     label = "Treatment Tank";
                     color = "#14b8a6";
                     break;
-                case LimeSprinkler:
+                case LimeSprinkler sprinkler:
                     kind = "lime-sprinkler";
                     label = "Lime Sprinkler";
                     color = "#bef264";
-                    rangeCells = 1;
+                    // Cells reached on each side of the sprinkler; the square grows with the town level.
+                    rangeCells = (sprinkler.AreaSize - 1) / 2;
                     break;
                 case PathSplitter:
                     kind = "path-splitter";
