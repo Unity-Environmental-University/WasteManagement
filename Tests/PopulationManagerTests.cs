@@ -1,4 +1,5 @@
 using _project.Scripts.Core;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -160,6 +161,44 @@ namespace _project.Scripts.Tests
 
             // Pop 11 vs starting 4 at 0.04 growth per resident from a 0.6x starting duration = 0.88x.
             Assert.AreEqual(26.4f, populationManager.GetScaledWaveDuration(30f), 0.0001f);
+        }
+
+        [Test]
+        public void ApplyPostWaveGrowth_RoundToLevelOneToOne_AdvancesOneLevelPerRound()
+        {
+            var populationManager = CreatePopulationManager();
+            typeof(PopulationManager)
+                .GetField("roundToLevelOneToOne", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(populationManager, true);
+
+            // Pollution prevents population growth after onboarding, so only completed rounds advance levels.
+            for (var round = 1; round <= 6; round++)
+            {
+                populationManager.RecordLakePollution(100f);
+                var result = populationManager.ApplyPostWaveGrowth(0);
+                Assert.AreEqual(Mathf.Min(round, 5), result.LevelBefore);
+                Assert.AreEqual(Mathf.Min(round + 1, 5), result.LevelAfter);
+                Assert.AreEqual(round < 5, result.LeveledUp);
+            }
+
+            Assert.AreEqual(5, populationManager.GetCurrentLevel());
+            Assert.AreEqual(1, populationManager.GetLevelByPopulationSize());
+        }
+
+        [TestCase(10, 1)]
+        [TestCase(11, 2)]
+        [TestCase(16, 2)]
+        [TestCase(17, 3)]
+        [TestCase(22, 3)]
+        [TestCase(23, 4)]
+        [TestCase(28, 4)]
+        [TestCase(29, 5)]
+        [TestCase(100, 5)]
+        public void PopulationProgression_ReachesLaterLevels_AndStopsAtFive(int population, int expectedLevel)
+        {
+            var populationManager = CreatePopulationManager();
+            populationManager.ChangePopulationSize(population - populationManager.GetPopulationSize());
+            Assert.AreEqual(expectedLevel, populationManager.GetCurrentLevel());
         }
 
         private static void IncreasePopulationAboveStart(PopulationManager populationManager)
