@@ -42,7 +42,7 @@ namespace _project.Scripts.Core
         private const int LevelOneGrowthBonus = 4;
         private const float LevelOnePenaltyMultiplier = 0.25f;
         private const int LevelOneMinimumGrowth = 2;
-        private const int MaxLevel = 3;
+        private const int MaxLevel = 5;
 
         [SerializeField] private int startingPopSize = 4;
 
@@ -222,7 +222,9 @@ namespace _project.Scripts.Core
         {
             if (populationSize <= levelTwoPopulationThreshold) return 1;
             if (populationSize <= levelThreePopulationThreshold) return 2;
-            return 3;
+            // Continue the existing population spacing through the plastic and paper levels.
+            var populationPerLevel = Mathf.Max(1, levelThreePopulationThreshold - levelTwoPopulationThreshold);
+            return Mathf.Min(MaxLevel, 3 + (populationSize - levelThreePopulationThreshold - 1) / populationPerLevel);
         }
 
         private int PopulationAboveStart()

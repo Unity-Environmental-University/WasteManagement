@@ -171,17 +171,34 @@ namespace _project.Scripts.Tests
                 .GetField("roundToLevelOneToOne", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .SetValue(populationManager, true);
 
-            // Heavy pollution keeps population in the level-one band, so the level must come from rounds.
-            var first = populationManager.ApplyPostWaveGrowth(0);
-            populationManager.RecordLakePollution(100f);
-            var second = populationManager.ApplyPostWaveGrowth(0);
-            var third = populationManager.ApplyPostWaveGrowth(0);
+            // Pollution prevents population growth after onboarding, so only completed rounds advance levels.
+            for (var round = 1; round <= 6; round++)
+            {
+                populationManager.RecordLakePollution(100f);
+                var result = populationManager.ApplyPostWaveGrowth(0);
+                Assert.AreEqual(Mathf.Min(round, 5), result.LevelBefore);
+                Assert.AreEqual(Mathf.Min(round + 1, 5), result.LevelAfter);
+                Assert.AreEqual(round < 5, result.LeveledUp);
+            }
 
-            Assert.AreEqual((1, 2), (first.LevelBefore, first.LevelAfter));
-            Assert.AreEqual((2, 3), (second.LevelBefore, second.LevelAfter));
-            Assert.AreEqual((3, 3), (third.LevelBefore, third.LevelAfter));
-            Assert.IsFalse(third.LeveledUp);
-            Assert.AreEqual(3, populationManager.GetCurrentLevel());
+            Assert.AreEqual(5, populationManager.GetCurrentLevel());
+            Assert.AreEqual(1, populationManager.GetLevelByPopulationSize());
+        }
+
+        [TestCase(10, 1)]
+        [TestCase(11, 2)]
+        [TestCase(16, 2)]
+        [TestCase(17, 3)]
+        [TestCase(22, 3)]
+        [TestCase(23, 4)]
+        [TestCase(28, 4)]
+        [TestCase(29, 5)]
+        [TestCase(100, 5)]
+        public void PopulationProgression_ReachesLaterLevels_AndStopsAtFive(int population, int expectedLevel)
+        {
+            var populationManager = CreatePopulationManager();
+            populationManager.ChangePopulationSize(population - populationManager.GetPopulationSize());
+            Assert.AreEqual(expectedLevel, populationManager.GetCurrentLevel());
         }
 
         private static void IncreasePopulationAboveStart(PopulationManager populationManager)
