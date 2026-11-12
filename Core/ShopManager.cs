@@ -25,7 +25,7 @@ namespace _project.Scripts.Core
         [Header("Tower Item")] [SerializeField]
         private string towerDisplayName = "Processing Tower";
 
-        [SerializeField] private string towerDescription = "Intercepts issue objects on the pipeline.";
+        [SerializeField] private string towerDescription = "Treats organic waste that flows past it on the pipeline.";
         [SerializeField] private int towerRequiredLevel = 1;
         [SerializeField] private int towerInfraValue = 2;
         [SerializeField] private GameObject towerPrefab;
@@ -34,7 +34,7 @@ namespace _project.Scripts.Core
         [Header("Sifter Item")] [SerializeField]
         private string sifterDisplayName = "Waste Sifter";
 
-        [SerializeField] private string sifterDescription = "Filters the pipeline, reducing issue size.";
+        [SerializeField] private string sifterDescription = "Shrinks waste that flows through it and catches junk in its screen.";
         [SerializeField] private int sifterRequiredLevel = 1;
         [SerializeField] private int sifterInfraValue = 1;
         [SerializeField] private GameObject sifterPrefab;
@@ -44,7 +44,7 @@ namespace _project.Scripts.Core
         private string pathSplitterDisplayName = "Splitter Box";
 
         [SerializeField]
-        private string pathSplitterDescription = "Splits issues evenly between two connected path options.";
+        private string pathSplitterDescription = "Splits the flow between up to three pipes. Click it to set the shares or send each type down its own pipe.";
 
         [SerializeField] private int pathSplitterRequiredLevel = 1;
         [SerializeField] private int pathSplitterInfraValue = 1;
@@ -55,7 +55,7 @@ namespace _project.Scripts.Core
         private string cesspitDisplayName = "Cesspit";
 
         [SerializeField]
-        private string cesspitDescription = "Stores overflow and leaks runaway issues toward the destination.";
+        private string cesspitDescription = "Stores and processes waste. Once it fills up, runaway waste escapes from it.";
 
         [SerializeField] private int cesspitRequiredLevel = 1;
         [SerializeField] private int cesspitInfraValue = 2;
@@ -67,7 +67,7 @@ namespace _project.Scripts.Core
 
         [SerializeField] private string cesspitCapDisplayName = "Cesspit Cap";
         [SerializeField] private string cesspitCapDescription =
-            "Select, then click a cesspit to seal it and permanently stop runaways.";
+            "Select it, then click a cesspit to seal it. A sealed cesspit lets no runaways out.";
         [SerializeField] private int cesspitCapRequiredLevel = 1;
         [SerializeField] private DynamicSpriteSO cesspitCapSprite;
 
@@ -77,7 +77,7 @@ namespace _project.Scripts.Core
         [SerializeField] private string buryCesspitDisplayName = "Bury Cesspit";
 
         [SerializeField] private string buryCesspitDescription =
-            "Select, then click a cesspit to demolish it, leaving a debuff tile on its cell.";
+            "Select it, then click a cesspit to bury it. It leaves a debuff tile on its square.";
 
         [SerializeField] private int buryCesspitRequiredLevel = 3;
         [SerializeField] private DynamicSpriteSO buryCesspitSprite;
@@ -86,7 +86,7 @@ namespace _project.Scripts.Core
         private string treatmentTankDisplayName = "Treatment Tank";
 
         [SerializeField] private string treatmentTankDescription =
-            "Captures issues and emits clean effluent. Locks up when full.";
+            "Takes in waste and lets out clean water. Stops working when full.";
 
         [SerializeField] private int treatmentTankRequiredLevel = 4;
         [SerializeField] private int treatmentTankInfraValue = 8;
@@ -97,7 +97,7 @@ namespace _project.Scripts.Core
         private string limeSprinklerDisplayName = "Lime Sprinkler";
 
         [SerializeField] private string limeSprinklerDescription =
-            "Sprinkles lime over the pipeline. (Effect coming soon.)";
+            "Limes the cesspits around it, so they stink less and break down waste during waves. Covers more ground as the town grows.";
 
         [SerializeField] private int limeSprinklerRequiredLevel = 1;
         [SerializeField] private int limeSprinklerInfraValue = 2;

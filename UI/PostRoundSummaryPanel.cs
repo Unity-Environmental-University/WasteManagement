@@ -99,7 +99,7 @@ namespace _project.Scripts.UI
                 return $"{UnlocksHeader}No level up this round.";
 
             if (summary.UnlockedItems.Count == 0)
-                return $"{UnlocksHeader}No new shop unlocks registered for this level.";
+                return $"{UnlocksHeader}No new shop items at this level.";
 
             var unlockList = string.Join("\n", summary.UnlockedItems.Select(item => $"- {item}"));
             return $"{UnlocksHeader}Unlocked:\n{unlockList}";
