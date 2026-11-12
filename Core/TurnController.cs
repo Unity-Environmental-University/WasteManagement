@@ -1,6 +1,5 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using _project.Scripts.Object_Scripts;
 using UnityEngine;
@@ -103,7 +102,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Card;
             OnCardPhaseEntered?.Invoke();
             SwitchCamera();
-            ShowUtilityPhaseObjects();
+            RefreshUtilityPhaseObjects();
             _gm.placementInventory?.SelectFirstAvailable();
             _gm.deckManager?.DrawNewHand();
             _gm.interfaceManager?.ShowPrepUI();
@@ -230,7 +229,7 @@ namespace _project.Scripts.Core
             currentPhase = GamePhase.Tower;
             OnTowerPhaseEntered?.Invoke();
             SwitchCamera();
-            HideUtilityPhaseObjects();
+            RefreshUtilityPhaseObjects();
             _gm.placementInventory?.ClearSelection();
             if (_gm.pathBuildBoard) _gm.pathBuildBoard.ClearActivePiece();
             _gm.interfaceManager?.ClearHand();
@@ -248,36 +247,17 @@ namespace _project.Scripts.Core
             Debug.Log($"Beginning Wave! Duration: {scaledWaveDuration:F1}s, spawn rate: x{spawnRateMultiplier:F2}");
         }
 
-        private void HideUtilityPhaseObjects()
-        {
-            SetUtilityPhaseObjectsVisible(false);
-        }
-
-        private void ShowUtilityPhaseObjects()
-        {
-            SetUtilityPhaseObjectsVisible(true);
-        }
-
-        private void SetUtilityPhaseObjectsVisible(bool visible)
+        private void RefreshUtilityPhaseObjects()
         {
             if (!_gm || !_gm.tileSpawner) return;
 
             _gm.interfaceManager.HidePrepUI();
-            SetRenderersEnabled(_gm.tileSpawner.SpawnedUtilityTiles, visible);
+            // Each slot shows or hides itself from the current phase. Entries can be null:
+            // SpecialTileSpawner adds whatever GetComponent returns when it spawns.
+            // Buff/debuff tiles stay visible: the wave is when issues cross them.
             foreach (var slot in _gm.tileSpawner.SpawnedUtilityTiles)
                 if (slot)
                     slot.RefreshVisibility();
-            SetRenderersEnabled(_gm.tileSpawner.SpawnedBuffTiles, visible);
-        }
-
-        // Entries can be null: SpecialTileSpawner adds whatever GetComponent returns when it spawns.
-        private static void SetRenderersEnabled<T>(IEnumerable<T> tiles, bool enabled) where T : Component
-        {
-            if (tiles == null) return;
-
-            foreach (var tile in tiles)
-                if (tile && tile.TryGetComponent<Renderer>(out var tileRenderer))
-                    tileRenderer.enabled = enabled;
         }
 
         /// <summary>

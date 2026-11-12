@@ -160,6 +160,35 @@ namespace _project.Scripts.Tests
             Assert.AreSame(fixture.Path.Destination, GetField<Transform>(cesspit, "runawayDestination"));
         }
 
+        [UnityTest]
+        public IEnumerator PhaseChanges_HideUtilitySlotsForTheWave_ButKeepBuffTilesVisible()
+        {
+            var fixture = CreateTurnFixture(true);
+            // Disabled so its Start doesn't scatter random tiles; the phase code only reads its lists.
+            var tileSpawner = CreateGameObject("Tile Spawner").AddComponent<SpecialTileSpawner>();
+            tileSpawner.enabled = false;
+            fixture.GameMaster.tileSpawner = tileSpawner;
+
+            var slot = CreatePrimitive("Utility Slot").AddComponent<SpecialInteractController>();
+            var buffTile = CreatePrimitive("Buff Tile").AddComponent<BuffDebuffTileController>();
+            tileSpawner.SpawnedUtilityTiles.Add(slot);
+            tileSpawner.SpawnedBuffTiles.Add(buffTile);
+            var slotRenderer = slot.GetComponent<Renderer>();
+            var buffRenderer = buffTile.GetComponent<Renderer>();
+            yield return null;
+
+            fixture.TurnController.EndPhase();
+            Assert.AreEqual(GamePhase.Tower, fixture.TurnController.currentPhase);
+            Assert.IsFalse(slotRenderer.enabled, "Empty slots can't be used mid-wave, so they hide.");
+            // Issues cross buff/debuff tiles during the wave, so those must stay on screen.
+            Assert.IsTrue(buffRenderer.enabled, "Buff tiles stay visible while the wave runs.");
+
+            fixture.TurnController.EndPhase();
+            Assert.AreEqual(GamePhase.Card, fixture.TurnController.currentPhase);
+            Assert.IsTrue(slotRenderer.enabled, "Slots come back for the next setup phase.");
+            Assert.IsTrue(buffRenderer.enabled);
+        }
+
         private Cesspit CreateFullCesspit()
         {
             var cesspit = CreateGameObject("Cesspit").AddComponent<Cesspit>();
