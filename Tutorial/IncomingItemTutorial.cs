@@ -42,27 +42,16 @@ namespace _project.Scripts.Tutorial
         private void HandleCardPhaseEntered()
         {
             var gm = GameMaster.Instance;
-            if (!gm || !gm.turnController) return;
+            if (!gm) return;
 
             foreach (var alert in alerts)
-                if (alert && !_shown.Contains(alert.type) && CanSpawn(gm, alert.type))
+                if (alert && !_shown.Contains(alert.type) && gm.CanAnySpawnerSpawn(alert.type))
                 {
                     _shown.Add(alert.type);
                     _pending.Enqueue(alert);
                 }
 
             ShowNext();
-        }
-
-        private static bool CanSpawn(GameMaster gm, IssueType type)
-        {
-            if (gm.entitySpawners == null) return false;
-
-            foreach (var spawner in gm.entitySpawners)
-                if (spawner && spawner.CanSpawn(type, gm.turnController.currentLevel))
-                    return true;
-
-            return false;
         }
 
         private void ShowNext()

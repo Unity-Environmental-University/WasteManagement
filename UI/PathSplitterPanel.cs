@@ -91,9 +91,11 @@ namespace _project.Scripts.UI
             {
                 if (!Target) return;
                 Target.SetRule(IssueType.Organic, SplitterRule.MainOnly);
-                Target.SetRule(IssueType.Chemical, SplitterRule.MainOnly);
                 Target.SetRule(IssueType.NonWaste, SplitterRule.BranchOnly);
+                // Recyclables share output 3; another splitter down that line sorts them apart.
                 Target.SetRule(IssueType.Metal, SplitterRule.ThirdOnly);
+                Target.SetRule(IssueType.Plastic, SplitterRule.ThirdOnly);
+                Target.SetRule(IssueType.Paper, SplitterRule.ThirdOnly);
                 RefreshRules();
             });
             foreach (var row in typeRows)
@@ -272,8 +274,20 @@ namespace _project.Scripts.UI
             PlaceColumn(branchLabel, branchShareText, SliderOutput != 2, sliding ? 0.75f : 0.5f);
             PlaceColumn(thirdLabel, thirdShareText, SliderOutput != 1, sliding ? 0.75f : 5f / 6f);
 
+            RefreshRowVisibility();
             RefreshShare();
             RefreshRules();
+        }
+
+        // A type's row stays hidden until it can actually arrive down the pipe (recyclables unlock later).
+        private void RefreshRowVisibility()
+        {
+            var gm = GameMaster.Instance;
+            foreach (var row in typeRows)
+            {
+                var rowRoot = row.splitButton ? row.splitButton.transform.parent : null;
+                if (rowRoot) rowRoot.gameObject.SetActive(!gm || gm.CanAnySpawnerSpawn(row.type));
+            }
         }
 
         private static void PlaceColumn(TMP_Text label, TMP_Text share, bool shown, float x)

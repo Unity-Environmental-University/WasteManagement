@@ -24,6 +24,22 @@ namespace _project.Scripts.Object_Scripts
         [Min(1f)]
         private float metalDamageMultiplier = 15f;
 
+        [Tooltip("Plastic fills this pit by its normal deposit times this. It doesn't break down, so it piles up.")]
+        [SerializeField]
+        [Min(1f)]
+        private float plasticDamageMultiplier = 5f;
+
+        [Tooltip("Paper fills this pit by its normal deposit times this. It mostly pulps, so it's only a little worse than waste.")]
+        [SerializeField]
+        [Min(1f)]
+        private float paperDamageMultiplier = 2f;
+
+        [Tooltip(
+            "Extra deposit per town level above 1, as a fraction of the normal deposit. At 0.2, every issue fills this pit 20% more at level 2, 40% more at level 3, and so on, so pits fill faster as the town grows.")]
+        [SerializeField]
+        [Min(0f)]
+        private float depositGrowthPerLevel = 0.2f;
+
         [Tooltip(
             "A pit that has brimmed over stays full until it has drained to this fraction of its capacity. Without this margin, lime shaving a sliver off a full pit would let it swallow another whole issue.")]
         [SerializeField]
@@ -257,13 +273,30 @@ namespace _project.Scripts.Object_Scripts
             if (issue == null || !issue.TryRegisterSifter(GetEntityId())) return;
 
             var deposit = issue.SiftCost;
-            if (issue.GetIssueType() == IssueType.Metal)
+            var issueType = issue.GetIssueType();
+            if (issueType == IssueType.Metal)
                 deposit *= metalDamageMultiplier;
+            else if (issueType == IssueType.Plastic)
+                deposit *= plasticDamageMultiplier;
+            else if (issueType == IssueType.Paper)
+                deposit *= paperDamageMultiplier;
             else if (issue.WasFlushedFromSifter)
                 deposit *= flushedJunkDamageMultiplier;
+            deposit *= LevelDepositMultiplier;
 
             SetFullness(fullness + deposit);
             issue.Process(processPower, "Deposited into Cesspit");
+        }
+
+        /// <summary>How much harder every deposit hits this pit at the town's current level.</summary>
+        public float LevelDepositMultiplier
+        {
+            get
+            {
+                var gm = GameMaster.Instance;
+                var level = gm && gm.turnController ? Mathf.Max(1, gm.turnController.currentLevel) : 1;
+                return 1f + depositGrowthPerLevel * (level - 1);
+            }
         }
 
         private void OnTriggerExit(Collider other)

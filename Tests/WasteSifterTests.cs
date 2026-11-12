@@ -223,6 +223,94 @@ namespace _project.Scripts.Tests
         }
 
         [Test]
+        public void Plastic_IsScreenedLikeJunk_ButClogsTwiceAsFast()
+        {
+            var junkSifter = CreateGameObject("Junk Sifter").AddComponent<WasteSifter>();
+            var plasticSifter = CreateGameObject("Plastic Sifter").AddComponent<WasteSifter>();
+            junkSifter.maxDebrisAccumulation = plasticSifter.maxDebrisAccumulation = 1000f;
+            var plastic = CreateIssue("Plastic", IssueType.Plastic);
+            var junk = CreateJunk("Junk");
+            // Same load on the screen, so only the material differs.
+            junk.SetSize(Mathf.RoundToInt(plastic.ProcessCost));
+            Assert.AreEqual(junk.SiftCost, plastic.SiftCost, 0.001f);
+            var plasticSize = plastic.ProcessCost;
+
+            Enter(junkSifter, junk);
+            Enter(plasticSifter, plastic);
+
+            Assert.IsTrue(IsHeld(plastic), "Plastic stops at the screen like junk.");
+            Assert.AreEqual(plasticSize, plastic.ProcessCost, 0.001f, "The screen doesn't grind plastic.");
+            Assert.Greater(junkSifter.debrisAccumulation, 0f);
+            Assert.AreEqual(junkSifter.debrisAccumulation * 2f, plasticSifter.debrisAccumulation, 0.001f,
+                "Bags and wrappers mat over the screen twice as fast as junk.");
+        }
+
+        [Test]
+        public void Paper_PassesTheScreenAndIsSiftedLikeWaste()
+        {
+            var paperSifter = CreateGameObject("Paper Sifter").AddComponent<WasteSifter>();
+            var wasteSifter = CreateGameObject("Waste Sifter").AddComponent<WasteSifter>();
+            paperSifter.maxDebrisAccumulation = wasteSifter.maxDebrisAccumulation = 100f;
+            var paper = CreateIssue("Paper", IssueType.Paper);
+            var waste = CreateIssue("Waste", IssueType.Organic);
+            waste.SetSize(Mathf.RoundToInt(paper.ProcessCost));
+            var startSize = paper.ProcessCost;
+
+            Enter(paperSifter, paper);
+            Enter(wasteSifter, waste);
+
+            Assert.IsFalse(IsHeld(paper), "Paper isn't stopped at the screen.");
+            Assert.AreEqual(0f, paperSifter.debrisAccumulation, "Paper adds nothing to the clog.");
+            Assert.Less(paper.ProcessCost, startSize, "The sifter breaks paper down.");
+            Assert.AreEqual(waste.ProcessCost, paper.ProcessCost, 0.001f, "Exactly as it would waste.");
+        }
+
+        [TestCase(IssueType.Plastic, 5f)]
+        [TestCase(IssueType.Paper, 2f)]
+        public void Recyclables_FillACesspitFasterThanWaste(IssueType type, float multiplier)
+        {
+            var recyclable = CreateIssue(type.ToString(), type);
+            var waste = CreateIssue("Waste", IssueType.Organic);
+            waste.SetSize(Mathf.RoundToInt(recyclable.ProcessCost));
+            Assert.AreEqual(waste.SiftCost, recyclable.SiftCost, 0.001f);
+
+            var wastePit = CreateGameObject("Waste Cesspit").AddComponent<Cesspit>();
+            var recyclablePit = CreateGameObject($"{type} Cesspit").AddComponent<Cesspit>();
+            wastePit.maxFullness = recyclablePit.maxFullness = 1000f;
+
+            Enter(wastePit, waste);
+            Enter(recyclablePit, recyclable);
+
+            Assert.Greater(wastePit.fullness, 0f);
+            Assert.AreEqual(wastePit.fullness * multiplier, recyclablePit.fullness, 0.001f);
+        }
+
+        [Test]
+        public void Cesspit_FillsFasterAsTheTownLevelRises()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var levelOnePit = CreateGameObject("Level 1 Cesspit").AddComponent<Cesspit>();
+            var levelThreePit = CreateGameObject("Level 3 Cesspit").AddComponent<Cesspit>();
+            levelOnePit.maxFullness = levelThreePit.maxFullness = 1000f;
+            SetField(levelOnePit, "depositGrowthPerLevel", 0.25f);
+            SetField(levelThreePit, "depositGrowthPerLevel", 0.25f);
+
+            var first = CreateIssue("Level 1 Waste", IssueType.Organic);
+            var second = CreateIssue("Level 3 Waste", IssueType.Organic);
+            first.SetSize(2);
+            second.SetSize(2);
+
+            gameMaster.turnController.currentLevel = 1;
+            Enter(levelOnePit, first);
+            gameMaster.turnController.currentLevel = 3;
+            Enter(levelThreePit, second);
+
+            Assert.Greater(levelOnePit.fullness, 0f);
+            Assert.AreEqual(levelOnePit.fullness * 1.5f, levelThreePit.fullness, 0.001f,
+                "Two levels up at +25% a level, the same waste fills the pit 50% more.");
+        }
+
+        [Test]
         public void Minigame_SortingPiecesDrainsDebrisAndProgressSurvivesClosing()
         {
             var controller = CreateMinigame(4, out var pieces);

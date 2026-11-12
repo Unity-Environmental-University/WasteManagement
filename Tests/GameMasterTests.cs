@@ -608,6 +608,48 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(PointerUi.IsPointerOverInteractiveUi(), "The same graphic as a button blocks them.");
         }
 
+        [Test]
+        public void CanAnySpawnerSpawn_FollowsEachRecyclablesUnlockLevel()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var prefabIssue = CreatePrimitive("Issue Prefab").AddComponent<IssueObject>();
+            var spawner = CreateGameObject("Spawner").AddComponent<EntitySpawner>();
+            SetField(spawner, "spawnerObject", prefabIssue.gameObject);
+            // A destroyed or unassigned slot in the inspector list must be skipped, not fail the check.
+            gameMaster.entitySpawners = new List<EntitySpawner> { null, spawner };
+
+            foreach (var type in new[] { IssueType.Metal, IssueType.Plastic, IssueType.Paper })
+            {
+                var unlock = prefabIssue.GetUnlockLevel(type);
+                gameMaster.turnController.currentLevel = unlock - 1;
+                Assert.IsFalse(gameMaster.CanAnySpawnerSpawn(type), $"{type} before level {unlock}");
+                gameMaster.turnController.currentLevel = unlock;
+                Assert.IsTrue(gameMaster.CanAnySpawnerSpawn(type), $"{type} at level {unlock}");
+            }
+
+            gameMaster.turnController.currentLevel = 1;
+            Assert.IsTrue(gameMaster.CanAnySpawnerSpawn(IssueType.Organic));
+            Assert.IsTrue(gameMaster.CanAnySpawnerSpawn(IssueType.NonWaste));
+        }
+
+        [Test]
+        public void CanAnySpawnerSpawn_JunkOnlySpawnerSendsNothingElse()
+        {
+            var gameMaster = CreateGameObject("Game Master").AddComponent<GameMaster>();
+            var spawner = CreateGameObject("Junk Spawner").AddComponent<EntitySpawner>();
+            SetField(spawner, "spawnerObject", CreatePrimitive("Issue Prefab").AddComponent<IssueObject>().gameObject);
+            SetField(spawner, "nonWasteOnly", true);
+            gameMaster.turnController.currentLevel = 99;
+
+            Assert.IsFalse(gameMaster.CanAnySpawnerSpawn(IssueType.Metal));
+            gameMaster.entitySpawners = new List<EntitySpawner> { spawner };
+
+            Assert.IsTrue(gameMaster.CanAnySpawnerSpawn(IssueType.NonWaste));
+            Assert.IsFalse(gameMaster.CanAnySpawnerSpawn(IssueType.Organic));
+            Assert.IsFalse(gameMaster.CanAnySpawnerSpawn(IssueType.Metal),
+                "A junk-only spawner never sends recyclables, whatever the level.");
+        }
+
         /// <summary>A GameMaster whose Awake picks up the path board parented beneath it.</summary>
         private (GameMaster GameMaster, PathBuildBoard Board) CreateGameMasterWithBoard()
         {

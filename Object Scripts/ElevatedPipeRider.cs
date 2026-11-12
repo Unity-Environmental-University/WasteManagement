@@ -21,8 +21,9 @@ namespace _project.Scripts.Object_Scripts
         private const float BlockedPulseAmount = 0.15f;
 
         private static readonly Color MetalBulge = new(0.86f, 0.9f, 0.96f);
+        private static readonly Color PlasticBulge = new(0.45f, 0.82f, 0.98f);
+        private static readonly Color PaperBulge = new(0.97f, 0.94f, 0.84f);
         private static readonly Color OrganicBulge = new(0.66f, 0.52f, 0.36f);
-        private static readonly Color ChemicalBulge = new(0.52f, 0.74f, 0.44f);
         private static readonly Color JunkBulge = new(0.58f, 0.58f, 0.64f);
         private static readonly Color BlockedBulge = new(1f, 0.45f, 0.05f); // The block outline's default.
 
@@ -138,8 +139,9 @@ namespace _project.Scripts.Object_Scripts
         private static Color BulgeColor(IssueType type) => type switch
         {
             IssueType.Metal => MetalBulge,
+            IssueType.Plastic => PlasticBulge,
+            IssueType.Paper => PaperBulge,
             IssueType.Organic => OrganicBulge,
-            IssueType.Chemical => ChemicalBulge,
             _ => JunkBulge
         };
     }

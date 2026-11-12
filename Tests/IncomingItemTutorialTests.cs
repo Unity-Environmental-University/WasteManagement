@@ -107,7 +107,7 @@ namespace _project.Scripts.Tests
             foreach (var field in new[]
                      {
                          "titleLabel", "subheadLabel", "bodyLabel", "captionLabel", "datelineLabel", "sortDemo", "paper",
-                         "paperByEra", "mayorPortrait", "mayorByEra", "splitter", "splitterByEra"
+                         "paperByEra", "mayorPortrait", "mayorByEra", "splitter", "splitterByEra", "sortDemoBinLabel"
                      })
                 Assert.IsTrue(GetField<Object>(panel, field), $"{field} is not assigned.");
 
@@ -115,6 +115,25 @@ namespace _project.Scripts.Tests
             Assert.IsTrue(animator && animator.runtimeAnimatorController, "The sort demo needs its Animator.");
             Assert.AreEqual(AnimatorUpdateMode.UnscaledTime, animator.updateMode,
                 "The demo plays while the game is frozen, so it must run on unscaled time.");
+        }
+
+        [Test]
+        public void Show_LabelsTheSortDemoBinWithTheIncomingItem()
+        {
+            // The demo bin is shared by every alert, so its label must come from the alert's type
+            // rather than whatever text was authored into the prefab.
+            var prefab = AssetDatabase.LoadAssetAtPath<IncomingItemPanel>(PanelPrefabPath);
+            var panel = Track(Object.Instantiate(prefab.gameObject)).GetComponent<IncomingItemPanel>();
+            var alert = Track(ScriptableObject.CreateInstance<IncomingItemAlert>());
+            alert.type = IssueType.Plastic;
+            alert.showSortDemo = true;
+
+            panel.Show(alert, 1);
+
+            // The test assembly doesn't reference TextMeshPro, so read the label's text by name.
+            var label = GetField<Component>(panel, "sortDemoBinLabel");
+            Assert.IsTrue(label, "The sort demo's bin label is wired.");
+            Assert.AreEqual("PLASTIC BIN", label.GetType().GetProperty("text")!.GetValue(label));
         }
 
         [Test]

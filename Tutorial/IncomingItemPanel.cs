@@ -23,6 +23,9 @@ namespace _project.Scripts.Tutorial
         [SerializeField] private TMP_Text captionLabel;
         [SerializeField] private GameObject sortDemo;
 
+        [Tooltip("The bin's label in the sort demo, set to the incoming item's name.")]
+        [SerializeField] private TMP_Text sortDemoBinLabel;
+
         [Header("Era Look")]
         [SerializeField] private Image paper;
         [SerializeField] private DynamicSpriteSO paperByEra;
@@ -58,6 +61,7 @@ namespace _project.Scripts.Tutorial
             if (bodyLabel) bodyLabel.text = alert.body;
             if (captionLabel) captionLabel.text = alert.caption;
             if (sortDemo) sortDemo.SetActive(alert.showSortDemo);
+            if (sortDemoBinLabel) sortDemoBinLabel.text = $"{alert.type.ToString().ToUpperInvariant()} BIN";
 
             era = Mathf.Clamp(era, 1, 3);
             ApplySprite(paper, paperByEra, era);
