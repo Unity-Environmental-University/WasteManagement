@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - Elevated pipe (level 3): a slim metal tube that joins only other elevated pipe or a splitter, crosses regular pipe at right angles, and can drain into the main line through a clickable valve; issues inside it show as a bulge in the tube
 
 ### Changed
-- Chemical waste is folded into organic: issues are organic, non-waste, or metal, and towers have one organic processing power that the Chemical Solvent and Superior Maintenance cards now act on; the splitter panel drops its CHEMICAL row
+- Chemical waste is folded into organic: issues are organic, non-waste, metal, plastic, or paper, and towers have one organic processing power that the Chemical Solvent and Superior Maintenance cards now act on; the splitter panel drops its CHEMICAL row
 - Path splitter: larger model, placeable on any utility slot with or without pipe beneath it, and the route now divides at the splitter's cell; its branch preview appears as soon as a branch leaves the splitter instead of waiting for a complete route
 - Junk issues each show one of the assigned junk models at random, instead of every piece showing the model for its pinned size
 - Sifter minigame: each sorted piece drains its share of the screen's debris, so a partial sort can reopen a clogged screen; unsorted pieces and progress survive closing the window, per sifter, and the piece count follows the debris caught since the last visit
