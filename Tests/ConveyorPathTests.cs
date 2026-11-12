@@ -153,11 +153,13 @@ namespace _project.Scripts.Tests
         }
 
         [UnityTest]
-        public IEnumerator Expansion_RebuildsConveyorPreviewAtTheSameNumericCell()
+        public IEnumerator Expansion_RebuildsPreviewAtTheSameNumericCell(
+            [Values(PathKind.Pipe, PathKind.RecyclingBelt)] PathKind kind, [Values] bool vertical)
         {
-            _board.SetActivePiece(Piece(PathKind.RecyclingBelt, false));
+            _board.SetActivePiece(Piece(kind, vertical));
             _board.SetHoveredCell(Cell(0, 0));
-            var oldPreview = _board.transform.Find("PipeVisuals/Conveyor Preview");
+            var previewPath = kind == PathKind.RecyclingBelt ? "PipeVisuals/Conveyor Preview" : "PipeVisuals/Pipe Preview";
+            var oldPreview = _board.transform.Find(previewPath);
             Assert.IsNotNull(oldPreview);
             var oldCenter = oldPreview.GetComponentInChildren<Renderer>().bounds.center;
             var oldCellPosition = _board.GetCellTopPosition(Vector2Int.zero);
@@ -167,7 +169,7 @@ namespace _project.Scripts.Tests
             Assert.IsFalse(oldPreview, "Expansion discards geometry built for the old grid.");
 
             _board.SetHoveredCell(Cell(0, 0));
-            var newPreview = _board.transform.Find("PipeVisuals/Conveyor Preview");
+            var newPreview = _board.transform.Find(previewPath);
             Assert.IsNotNull(newPreview);
             var expectedShift = _board.GetCellTopPosition(Vector2Int.zero) - oldCellPosition;
             var actualShift = newPreview.GetComponentInChildren<Renderer>().bounds.center - oldCenter;
