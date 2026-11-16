@@ -17,6 +17,9 @@ namespace _project.Scripts.Object_Scripts
         /// <summary>Raised when a receptacle unlocks or locks, so routes can include or drop it.</summary>
         public static event Action AvailabilityChanged;
 
+        /// <summary>Raised after an accepted issue is counted, with the receptacle that collected it.</summary>
+        public static event Action<Receptacle> Collected;
+
         [SerializeField] private IssueType acceptedType = IssueType.Metal;
 
         [Tooltip("Town level at which this receptacle appears and pipe can end at it.")]
@@ -86,6 +89,7 @@ namespace _project.Scripts.Object_Scripts
             DeliveredCount++;
             RefreshLabel();
             PlayCollectEffect();
+            Collected?.Invoke(this);
         }
 
         /// <summary>A quick clank: the bin bounces and a burst of glints jumps out of its mouth.</summary>
