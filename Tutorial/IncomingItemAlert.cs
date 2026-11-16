@@ -3,10 +3,14 @@ using UnityEngine;
 
 namespace _project.Scripts.Tutorial
 {
-    /// <summary>The front-page story announcing one new item type. Add one asset per item.</summary>
+    /// <summary>
+    ///     A front-page story for the newspaper popup. Add one asset per new item type; the final
+    ///     goal's announcement and win stories use the same asset without the sort demo.
+    /// </summary>
     [CreateAssetMenu(fileName = "Alert", menuName = "WasteManagement/Incoming Item Alert", order = 2)]
     public class IncomingItemAlert : ScriptableObject
     {
+        [Tooltip("The new item type. Stories that are not item warnings, like the final goal, can leave it.")]
         public IssueType type;
         public string title;
         public string subhead;
