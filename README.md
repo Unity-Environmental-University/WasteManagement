@@ -4,6 +4,14 @@ A Waste Management card game / tower defense hybrid built in Unity.
 
 Enemies spawn and traverse waypoint paths toward a goal. Players use cards to place defenses and manage resources across turns and waves.
 
+## Documentation
+
+- [Architecture and interactive waypoint explainer](docs/index.md)
+- [Verify Summit analytics and Trailhead replay](docs/verify.md)
+
+To preview the docs, install the [portal's MkDocs requirements](https://github.com/Unity-Environmental-University/lt-tools-documentation/blob/main/requirements.txt)
+and run `mkdocs serve` from this repository.
+
 ## Structure
 
 ```
@@ -43,9 +51,9 @@ Configure the `SummitAnalytics` and `TrailheadRecorder` components beside it in 
 
 Unconfigured release builds skip capture and log one warning instead of attempting uploads. Editor play mode still captures locally while network uploads remain disabled by the client guards.
 
-Completed Trailhead payloads are saved to the application's persistent data directory before upload. If an upload is interrupted, it is retried on the next launch. Exiting Unity Play Mode also completes the active session so it enters that retry queue.
-
-On WebGL the browser tears the player down without raising `OnApplicationQuit`, so a closed or navigated-away tab used to end a session silently — Summit still showed it (it flushes incrementally) while Trailhead, which uploads only once from `FinishRecording`, received nothing at all. `Assets/Plugins/WebGL/SessionBeacon.jslib` closes that gap: it registers a `pagehide` / `visibilitychange` handler that calls `WasteBoardReplayRecorder.HandleBrowserUnload`, and uploads the payload with a `keepalive` fetch that outlives the document. Beacon uploads deliberately bypass the retry queue, because a queued copy would be re-sent on the next visit and duplicate the recording. Payloads above the browser's 64KB keepalive budget fall back to the ordinary coroutine upload.
+The Trailhead client sends incremental segments during play. The WebGL bridge
+asks for a checkpoint when a tab becomes hidden and a final segment when the
+page unloads. See the [browser recording behavior](docs/verify.md#what-happens-in-a-browser).
 
 Summit rejects a batch whose `events` array is empty (`400 — Array must contain at least 1 element(s)`), so performance-only flushes are held back until an event can travel with them rather than being cleared into a request that fails. `maxRetainedPerfSamples` caps that backlog for long idle sessions.
 
