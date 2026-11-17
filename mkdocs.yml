@@ -1,0 +1,12 @@
+site_name: Waste Management documentation
+theme:
+  name: material
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - Waste Management: index.md
+  - Verify analytics and replay: verify.md
