@@ -42,6 +42,12 @@ namespace _project.Scripts.Object_Scripts
             if (_visual) _visual.SetActive(false);
         }
 
+        public void Invalidate()
+        {
+            if (_visual) _board.DestroyVisual(_visual);
+            Forget();
+        }
+
         /// <summary>Drops the reference after the board has destroyed its children.</summary>
         public void Forget()
         {

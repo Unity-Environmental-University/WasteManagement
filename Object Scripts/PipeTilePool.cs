@@ -189,7 +189,7 @@ namespace _project.Scripts.Object_Scripts
             // Fallback cube models have no prefab key to pool under — destroy them outright.
             if (!Application.isPlaying || !prefab)
             {
-                PathBuildBoard.DestroyObject(model);
+                PathBuildBoard.DestroyForMode(model);
                 return;
             }
 

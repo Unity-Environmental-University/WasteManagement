@@ -60,7 +60,7 @@ namespace _project.Scripts.Object_Scripts
 
         private void OnDestroy()
         {
-            if (_bulge) PathBuildBoard.DestroyObject(_bulge.gameObject);
+            if (_bulge) PathBuildBoard.DestroyForMode(_bulge.gameObject);
         }
 
         private void SetInside(bool inside, PathBuildBoard board)
